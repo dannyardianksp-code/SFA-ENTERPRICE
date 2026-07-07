@@ -1,0 +1,596 @@
+'use client'
+
+import {
+    useState,
+    useEffect
+} from 'react'
+
+import {
+    useRouter
+} from 'next/navigation'
+
+export default function CreateUserPage() {
+
+    const router =
+        useRouter()
+
+    // ======================
+    // STATE
+    // ======================
+
+    const [areas, setAreas] =
+        useState<any[]>([])
+
+    const [channels, setChannels] =
+        useState<any[]>([])
+
+    const [supervisors, setSupervisors] =
+        useState<any[]>([])
+
+    const [form, setForm] =
+        useState({
+
+            code: '',
+
+            name: '',
+
+            email: '',
+
+            password: '',
+
+            role: 'SPG',
+
+            area_id: '',
+
+            channel_id: '',
+
+            supervisor_id: ''
+
+        })
+
+    // ======================
+    // FETCH MASTER DATA
+    // ======================
+
+    useEffect(() => {
+
+        const fetchMasters =
+            async () => {
+
+                try {
+
+                    const token =
+                        localStorage.getItem(
+                            'token'
+                        )
+
+                    // ======================
+                    // VALIDASI TOKEN
+                    // ======================
+
+                    if (!token) {
+
+                        alert(
+                            'Session habis, silahkan login ulang'
+                        )
+
+                        router.push('/login')
+
+                        return
+
+                    }
+
+                    // ======================
+                    // AREA
+                    // ======================
+
+                    const areaRes =
+                        await fetch(
+
+                            'http://localhost:1000/api/areas',
+
+                            {
+
+                                headers: {
+
+                                    Authorization:
+                                        `Bearer ${token}`
+
+                                }
+
+                            }
+
+                        )
+
+                    const areaData =
+                        await areaRes.json()
+
+                    setAreas(
+
+                        Array.isArray(areaData.data)
+
+                            ?
+
+                            areaData.data
+
+                            :
+
+                            Array.isArray(areaData)
+
+                                ?
+
+                                areaData
+
+                                :
+
+                                []
+
+                    )
+
+                    // ======================
+                    // CHANNEL
+                    // ======================
+
+                    const channelRes =
+                        await fetch(
+
+                            'http://localhost:1000/api/channels',
+
+                            {
+
+                                headers: {
+
+                                    Authorization:
+                                        `Bearer ${token}`
+
+                                }
+
+                            }
+
+                        )
+
+                    const channelData =
+                        await channelRes.json()
+
+                    setChannels(
+
+                        Array.isArray(channelData.data)
+
+                            ?
+
+                            channelData.data
+
+                            :
+
+                            Array.isArray(channelData)
+
+                                ?
+
+                                channelData
+
+                                :
+
+                                []
+
+                    )
+
+                    // ======================
+                    // USERS
+                    // ======================
+
+                    const userRes =
+                        await fetch(
+
+                            'http://localhost:1000/api/users',
+
+                            {
+
+                                headers: {
+
+                                    Authorization:
+                                        `Bearer ${token}`
+
+                                }
+
+                            }
+
+                        )
+
+                    const userData =
+                        await userRes.json()
+
+                    console.log(
+                        'USERS:',
+                        userData
+                    )
+
+                    // NORMALIZE ARRAY
+                    const users =
+
+                        Array.isArray(userData.data)
+
+                            ?
+
+                            userData.data
+
+                            :
+
+                            Array.isArray(userData)
+
+                                ?
+
+                                userData
+
+                                :
+
+                                []
+
+                    let filteredUsers: any[] = []
+
+                    // ======================
+                    // SPG -> SUPERVISOR
+                    // ======================
+
+                    if (
+
+                        form.role === 'SPG'
+
+                    ) {
+
+                        filteredUsers =
+
+                            users.filter(
+
+                                (u: any) =>
+
+                                    u.role ===
+                                    'SUPERVISOR'
+
+                            )
+
+                    }
+
+                    // ======================
+                    // SUPERVISOR -> MANAGER
+                    // ======================
+
+                    if (
+
+                        form.role === 'SUPERVISOR'
+
+                    ) {
+
+                        filteredUsers =
+
+                            users.filter(
+
+                                (u: any) =>
+
+                                    u.role ===
+                                    'MANAGER'
+
+                            )
+
+                    }
+
+                    setSupervisors(
+                        filteredUsers
+                    )
+
+                }
+
+                catch (err) {
+
+                    console.log(err)
+
+                }
+
+            }
+
+        fetchMasters()
+
+    }, [form.role])
+
+    // ======================
+    // HANDLE CHANGE
+    // ======================
+
+    const handleChange =
+        (e: any) => {
+
+            setForm({
+
+                ...form,
+
+                [e.target.name]:
+                    e.target.value
+
+            })
+
+        }
+
+    // ======================
+    // HANDLE SUBMIT
+    // ======================
+
+    const handleSubmit =
+        async (e: any) => {
+
+            e.preventDefault()
+
+            try {
+
+                const token =
+                    localStorage.getItem(
+                        'token'
+                    )
+
+                if (!token) {
+
+                    alert(
+                        'Session habis'
+                    )
+
+                    router.push('/login')
+
+                    return
+
+                }
+
+                const payload = {
+
+                    ...form,
+
+                    supervisor_id:
+
+                        form.supervisor_id || null
+
+                }
+
+                const res =
+                    await fetch(
+
+                        'http://localhost:1000/api/users',
+
+                        {
+
+                            method: 'POST',
+
+                            headers: {
+
+                                'Content-Type':
+                                    'application/json',
+
+                                Authorization:
+                                    `Bearer ${token}`
+
+                            },
+
+                            body:
+                                JSON.stringify(
+                                    payload
+                                )
+
+                        }
+
+                    )
+
+                const data =
+                    await res.json()
+
+                if (!res.ok) {
+
+                    alert(
+
+                        data.error ||
+
+                        'Gagal create user'
+
+                    )
+
+                    return
+
+                }
+
+                alert(
+                    'User berhasil dibuat'
+                )
+
+                router.push('/users')
+
+            }
+
+            catch (err) {
+
+                console.log(err)
+
+                alert(
+                    'Terjadi kesalahan'
+                )
+
+            }
+
+        }
+
+    // ======================
+    // RENDER
+    // ======================
+    return (
+        <div className="p-6 max-w-3xl mx-auto space-y-6">
+
+            {/* HEADER */}
+            <div className="bg-white rounded-3xl p-6 shadow-lg">
+                <h1 className="text-3xl font-bold text-slate-900">
+                    👤 Create User
+                </h1>
+                <p className="text-slate-500 mt-1">
+                    Add new user to system access management
+                </p>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+
+                {/* BASIC INFO */}
+                <div className="bg-white rounded-3xl p-6 shadow-lg space-y-4">
+
+                    <h2 className="font-bold text-slate-900">
+                        🧾 Basic Information
+                    </h2>
+
+                    <div className="grid md:grid-cols-2 gap-4">
+
+                        <div>
+                            <label className="text-sm text-slate-500">Code</label>
+                            <input
+                                name="code"
+                                value={form.code}
+                                onChange={handleChange}
+                                className="w-full mt-2 border rounded-xl p-3"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="text-sm text-slate-500">Name</label>
+                            <input
+                                name="name"
+                                value={form.name}
+                                onChange={handleChange}
+                                className="w-full mt-2 border rounded-xl p-3"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="text-sm text-slate-500">Email</label>
+                            <input
+                                name="email"
+                                value={form.email}
+                                onChange={handleChange}
+                                className="w-full mt-2 border rounded-xl p-3"
+                            />
+                        </div>
+
+                    </div>
+
+                    <div>
+                        <label className="text-sm text-slate-500">Password</label>
+                        <input
+                            type="password"
+                            name="password"
+                            value={form.password}
+                            onChange={handleChange}
+                            className="w-full mt-2 border rounded-xl p-3"
+                        />
+                    </div>
+
+                </div>
+
+                {/* ROLE & STRUCTURE */}
+                <div className="bg-white rounded-3xl p-6 shadow-lg space-y-4">
+
+                    <h2 className="font-bold text-slate-900">
+                        🧠 Role & Organization
+                    </h2>
+
+                    <div className="grid md:grid-cols-2 gap-4">
+
+                        <div>
+                            <label className="text-sm text-slate-500">Role</label>
+                            <select
+                                name="role"
+                                value={form.role}
+                                onChange={handleChange}
+                                className="w-full mt-2 border rounded-xl p-3"
+                            >
+                                <option value="ADMINISTRATOR">ADMINISTRATOR</option>
+                                <option value="MANAGER">MANAGER</option>
+                                <option value="SUPERVISOR">SUPERVISOR</option>
+                                <option value="SPG">SPG</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="text-sm text-slate-500">Area</label>
+                            <select
+                                name="area_id"
+                                value={form.area_id}
+                                onChange={handleChange}
+                                className="w-full mt-2 border rounded-xl p-3"
+                            >
+                                <option value="">Select Area</option>
+                                {areas.map((a: any) => (
+                                    <option key={a.id} value={a.id}>
+                                        {a.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                    </div>
+
+                    <div>
+                        <label className="text-sm text-slate-500">Channel</label>
+                        <select
+                            name="channel_id"
+                            value={form.channel_id}
+                            onChange={handleChange}
+                            className="w-full mt-2 border rounded-xl p-3"
+                        >
+                            <option value="">Select Channel</option>
+                            {channels.map((c: any) => (
+                                <option key={c.id} value={c.id}>
+                                    {c.name}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                </div>
+
+                {/* HIERARCHY */}
+                {(form.role === 'SPG' || form.role === 'SUPERVISOR') && (
+                    <div className="bg-white rounded-3xl p-6 shadow-lg space-y-4">
+
+                        <h2 className="font-bold text-slate-900">
+                            👥 Hierarchy Assignment
+                        </h2>
+
+                        <div>
+                            <label className="text-sm text-slate-500">
+                                {form.role === 'SPG' ? 'Supervisor' : 'Manager'}
+                            </label>
+
+                            <select
+                                name="supervisor_id"
+                                value={form.supervisor_id}
+                                onChange={handleChange}
+                                className="w-full mt-2 border rounded-xl p-3"
+                            >
+                                <option value="">
+                                    Select {form.role === 'SPG' ? 'Supervisor' : 'Manager'}
+                                </option>
+
+                                {supervisors.map((s: any) => (
+                                    <option key={s.id} value={s.id}>
+                                        {s.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                    </div>
+                )}
+
+                {/* SUBMIT */}
+                <button
+                    type="submit"
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-2xl font-bold shadow"
+                >
+                    Save User
+                </button>
+
+            </form>
+
+        </div>
+    )
+
+}
