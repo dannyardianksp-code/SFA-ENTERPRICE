@@ -6,6 +6,8 @@ const Customer = require('../models/customer.model')
 const { Op } = require('sequelize')
 const Visit = require('../models/visit.model')
 
+const { sendServerError } = require('../utils/response.util')
+
 // CREATE ORDER
 exports.create = async (req, res) => {
     try {
@@ -64,7 +66,7 @@ exports.create = async (req, res) => {
         })
 
     } catch (err) {
-        res.status(500).json({ error: err.message })
+        return sendServerError(res, err, 'CREATE ORDER')
     }
 }
 
@@ -80,6 +82,6 @@ exports.getAll = async (req, res) => {
 
         res.json(orders)
     } catch (err) {
-        res.status(500).json({ error: err.message })
+        return sendServerError(res, err, 'GET ALL ORDER')
     }
 }

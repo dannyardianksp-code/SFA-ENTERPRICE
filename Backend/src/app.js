@@ -17,6 +17,7 @@ const visitPlanRoutes = require('./routes/visitPlan.routes')
 const userRoutes = require('./routes/user.routes')
 const activityRoutes = require('./routes/activity.routes')
 const dashboardRoutes = require('./routes/dashboard.routes')
+const userAreaRoutes = require('./routes/userArea.routes')
 
 
 
@@ -43,6 +44,7 @@ app.use('/api/areas', require('./routes/area.routes'))
 app.use('/api/channels', require('./routes/channel.routes'))
 app.use('/api/activities', require('./routes/activity.routes'))
 app.use('/api/dashboard', dashboardRoutes)
+app.use('/api/users',userAreaRoutes)
 
 
 

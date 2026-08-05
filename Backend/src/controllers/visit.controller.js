@@ -6,6 +6,11 @@ const Product = require('../models/product.model')
 const { getDistance } = require('geolib')
 const VisitPlan = require('../models/visitPlan.model')
 
+const {
+    sendError,
+    sendServerError,
+} = require('../utils/response.util')
+
 
 
 // CHECK-IN
@@ -146,12 +151,11 @@ exports.checkIn = async (
 
         ) {
 
-            return res.status(403).json({
-
-                error:
-                    'Customer outside your territory'
-
-            })
+            return sendError(
+                res,
+                403,
+                'Customer ini berada di luar wilayah Anda.'
+            )
 
         }
         if (
@@ -247,9 +251,7 @@ exports.checkIn = async (
 
     } catch (err) {
 
-        res.status(500).json({
-            error: err.message
-        })
+        return sendServerError(res, err, 'VISIT CHECK-IN')
 
     }
 
@@ -316,13 +318,7 @@ exports.getAll = async (req, res) => {
 
     } catch (err) {
 
-        console.error(err)
-
-        res.status(500).json({
-
-            message: 'Server Error'
-
-        })
+        return sendServerError(res, err, 'GET VISIT')
 
     }
 
@@ -356,9 +352,7 @@ exports.getProducts = async (req, res) => {
 
     } catch (err) {
 
-        res.status(500).json({
-            error: err.message
-        })
+        return sendServerError(res, err, 'GET VISIT PRODUCTS')
 
     }
 
@@ -386,9 +380,7 @@ exports.getById = async (
 
     } catch (err) {
 
-        res.status(500).json({
-            error: err.message
-        })
+        return sendServerError(res, err, 'VISIT')
 
     }
 
@@ -449,11 +441,7 @@ exports.checkOut =
 
         } catch (err) {
 
-            res.status(500).json({
-
-                error: err.message
-
-            })
+            return sendServerError(res, err, 'VISIT CHECK-OUT')
 
         }
 

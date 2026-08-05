@@ -85,34 +85,25 @@ Area.hasMany(Customer, {
 
 })
 
+//Mobile user Area//
+User.belongsToMany(
+    Area,
+    {
+        through: UserArea,
+        foreignKey: 'user_id',
+        as:'AssignedAreas'
+    }
+)
 
-// User.belongsToMany(
 
-//     Area,
-
-//     {
-
-//         through: UserArea,
-
-//         foreignKey: 'user_id'
-
-//     }
-
-// )
-
-// Area.belongsToMany(
-
-//     User,
-
-//     {
-
-//         through: UserArea,
-
-//         foreignKey: 'area_id'
-
-//     }
-
-// )
+Area.belongsToMany(
+    User,
+    {
+        through: UserArea,
+        foreignKey: 'area_id',
+        as:'AssignedUsers'
+    }
+)
 
 
 

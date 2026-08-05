@@ -16,6 +16,9 @@ const User =
 const Activity =
     require('../models/activity.model')
 
+const { sendServerError } =
+    require('../utils/response.util')
+
 // ======================
 // CREATE
 // ======================
@@ -73,15 +76,11 @@ exports.create = async (req, res) => {
 
     catch (err) {
 
-
-
-        res.status(500).json({
-
-            error: err.message,
-
-            detail: err
-
-        })
+        return sendServerError(
+            res,
+            err,
+            'CREATE VISIT ACTIVITY'
+        )
 
     }
 
@@ -334,15 +333,11 @@ exports.getAll = async (req, res) => {
 
     catch (err) {
 
-        console.log(err)
-
-        res.status(500).json({
-
-            error: err.message,
-
-            detail: err
-
-        })
+        return sendServerError(
+            res,
+            err,
+            'GET ALL VISIT ACTIVITY'
+        )
 
     }
 
@@ -394,15 +389,11 @@ exports.getByVisit =
 
         catch (err) {
 
-            console.log(err)
-
-            res.status(500).json({
-
-                error: err.message,
-
-                detail: err
-
-            })
+            return sendServerError(
+                res,
+                err,
+                'VISIT ACTIVITY'
+            )
 
         }
 

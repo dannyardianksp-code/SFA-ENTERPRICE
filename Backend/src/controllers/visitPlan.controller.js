@@ -18,6 +18,9 @@ const Customer =
 const Visit =
     require('../models/visit.model')
 
+const { sendServerError } =
+    require('../utils/response.util')
+
 
 
 // ======================
@@ -245,12 +248,11 @@ exports.getAll =
 
         } catch (err) {
 
-            res.status(500).json({
-
-                error:
-                    err.message
-
-            })
+            return sendServerError(
+                res,
+                err,
+                'GET ALL VISIT PLAN'
+            )
 
         }
 
@@ -277,11 +279,12 @@ exports.create =
             res.json(data)
 
         } catch (err) {
-            console.log(err)
 
-            res.status(500).json({
-                error: err.message
-            })
+            return sendServerError(
+                res,
+                err,
+                'VISIT PLAN'
+            )
 
         }
 
@@ -464,12 +467,11 @@ exports.update =
 
         catch (err) {
 
-            res.status(500).json({
-
-                error:
-                    err.message
-
-            })
+            return sendServerError(
+                res,
+                err,
+                'UPDATE VISIT PLAN'
+            )
 
         }
 
@@ -636,12 +638,11 @@ exports.delete =
 
         catch (err) {
 
-            res.status(500).json({
-
-                error:
-                    err.message
-
-            })
+            return sendServerError(
+                res,
+                err,
+                'DELETE VISIT PLAN'
+            )
 
         }
 
@@ -833,14 +834,11 @@ exports.uploadExcel = async (req, res) => {
 
     catch (err) {
 
-        console.log(err)
-
-        res.status(500).json({
-
-            error:
-                err.message
-
-        })
+        return sendServerError(
+            res,
+            err,
+            'UPLOAD VISIT PLAN EXCEL'
+        )
 
     }
 

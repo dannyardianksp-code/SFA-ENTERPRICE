@@ -1,15 +1,25 @@
 const Product =
     require('../models/product.model')
 
+const { sendServerError } = require('../utils/response.util')
+
 // GET ALL
 exports.getAll = async (req, res) => {
 
-    const data =
-        await Product.findAll({
-            order: [['id', 'DESC']]
-        })
+    try {
 
-    res.json(data)
+        const data =
+            await Product.findAll({
+                order: [['id', 'DESC']]
+            })
+
+        res.json(data)
+
+    } catch (err) {
+
+        return sendServerError(res, err, 'GET ALL PRODUCT')
+
+    }
 
 }
 
@@ -25,9 +35,7 @@ exports.create = async (req, res) => {
 
     } catch (err) {
 
-        res.status(500).json({
-            error: err.message
-        })
+        return sendServerError(res, err, 'CREATE PRODUCT')
 
     }
 
@@ -48,14 +56,12 @@ exports.update = async (req, res) => {
         )
 
         res.json({
-            message: 'Updated'
+            message: 'Produk berhasil diperbarui.'
         })
 
     } catch (err) {
 
-        res.status(500).json({
-            error: err.message
-        })
+        return sendServerError(res, err, 'UPDATE PRODUCT')
 
     }
 
@@ -73,14 +79,12 @@ exports.remove = async (req, res) => {
         })
 
         res.json({
-            message: 'Deleted'
+            message: 'Produk berhasil dihapus.'
         })
 
     } catch (err) {
 
-        res.status(500).json({
-            error: err.message
-        })
+        return sendServerError(res, err, 'DELETE PRODUCT')
 
     }
 

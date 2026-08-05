@@ -2,10 +2,42 @@ const User = require('../models/user.model')
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 
+const {
+    sendError,
+    sendServerError,
+} = require('../utils/response.util')
+
+// Dipakai untuk email tidak terdaftar MAUPUN password salah.
+// Membedakan keduanya membocorkan email mana yang terdaftar
+// (user enumeration), sehingga penyerang bisa menyusun daftar
+// akun yang valid sebelum mencoba menebak password.
+const INVALID_CREDENTIALS_MESSAGE =
+    'Email atau password salah.'
+
 // REGISTER
 exports.register = async (req, res) => {
     try {
         const { name, email, password } = req.body
+
+        if (!name || !email || !password) {
+            return sendError(
+                res,
+                400,
+                'Nama, email, dan password wajib diisi.'
+            )
+        }
+
+        const existingUser = await User.findOne({
+            where: { email }
+        })
+
+        if (existingUser) {
+            return sendError(
+                res,
+                409,
+                'Email sudah terdaftar.'
+            )
+        }
 
         const hashPassword = await bcrypt.hash(password, 10)
 
@@ -15,9 +47,16 @@ exports.register = async (req, res) => {
             password: hashPassword
         })
 
-        res.json(user)
+        // Jangan balikkan object user mentah — di dalamnya ada
+        // kolom password (hash) dan kolom internal lain.
+        res.status(201).json({
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role
+        })
     } catch (err) {
-        res.status(500).json({ error: err.message })
+        return sendServerError(res, err, 'REGISTER')
     }
 }
 
@@ -26,25 +65,43 @@ exports.login = async (req, res) => {
     try {
         const { email, password } = req.body
 
+        if (!email || !password) {
+            return sendError(
+                res,
+                400,
+                'Email dan password wajib diisi.'
+            )
+        }
+
         const user = await User.findOne({ where: { email } })
-        if (!user) return res.status(404).json({ message: 'User not found' })
-        if (
-            user.status ===
-            'INACTIVE'
-        ) {
 
-            return res.status(403)
-                .json({
+        // 401, bukan 404: dari sisi client ini "kredensial ditolak",
+        // bukan "resource tidak ada".
+        if (!user) {
+            return sendError(
+                res,
+                401,
+                INVALID_CREDENTIALS_MESSAGE
+            )
+        }
 
-                    message:
-                        'User nonaktif'
-
-                })
-
+        if (user.status === 'INACTIVE') {
+            return sendError(
+                res,
+                403,
+                'Akun Anda tidak aktif. Silakan hubungi administrator.'
+            )
         }
 
         const isMatch = await bcrypt.compare(password, user.password)
-        if (!isMatch) return res.status(400).json({ message: 'Wrong password' })
+
+        if (!isMatch) {
+            return sendError(
+                res,
+                401,
+                INVALID_CREDENTIALS_MESSAGE
+            )
+        }
 
         const token = jwt.sign(
             { id: user.id, role: user.role },
@@ -68,6 +125,6 @@ exports.login = async (req, res) => {
 
         })
     } catch (err) {
-        res.status(500).json({ error: err.message })
+        return sendServerError(res, err, 'LOGIN')
     }
 }

@@ -1,6 +1,22 @@
 
 const { Op } = require('sequelize')
 
+const {
+    parseCoordinate,
+    isValidLatitude,
+    isValidLongitude,
+    withDistanceWithinRadius,
+} = require('../utils/geo.util')
+
+const {
+    sendError,
+    sendServerError,
+} = require('../utils/response.util')
+
+const {
+    resolveAccessibleAreaIds,
+} = require('../utils/area.util')
+
 const Customer =
     require('../models/customer.model')
 
@@ -27,9 +43,28 @@ exports.getAll =
 
                     req.user.id,
 
-                    { include: [Area] }
+                    {
+                        include: [
+                            {
+                                model: Area,
+                                as: 'AssignedAreas',
+                                attributes: ['id'],
+                                through: { attributes: [] }
+                            }
+                        ]
+                    }
 
                 )
+
+            if (!user) {
+
+                return sendError(
+                    res,
+                    404,
+                    'User tidak ditemukan.'
+                )
+
+            }
 
             let whereCondition = {}
 
@@ -50,10 +85,22 @@ exports.getAll =
 
             ) {
 
+                const areaIds =
+                    resolveAccessibleAreaIds(user)
+
+                // Tidak punya area sama sekali -> tidak berhak
+                // melihat customer mana pun.
+                if (areaIds.length === 0) {
+
+                    return res.json([])
+
+                }
+
                 whereCondition = {
 
-                    area_id:
-                        user.area_id,
+                    area_id: {
+                        [Op.in]: areaIds
+                    },
 
                     channel_id:
                         user.channel_id
@@ -61,25 +108,6 @@ exports.getAll =
                 }
 
             }
-
-            // if (
-
-            //     restrictedRoles.includes(
-            //         user.role
-            //     )
-
-            // ) {
-
-            //     whereCondition = {
-
-            //         area_id: { [Op.in]: areaIds },
-
-            //         channel_id:
-            //             user.channel_id
-
-            //     }
-
-            // }
 
             const data =
                 await Customer.findAll({
@@ -107,14 +135,11 @@ exports.getAll =
 
         catch (err) {
 
-            console.log(err)
-
-            res.status(500).json({
-
-                error:
-                    err.message
-
-            })
+            return sendServerError(
+                res,
+                err,
+                'GET ALL CUSTOMER'
+            )
 
         }
 
@@ -142,15 +167,247 @@ exports.create =
 
         catch (err) {
 
-            console.log(err)
-
-            res.status(500).json({
-
-                error:
-                    err.message
-
-            })
+            return sendServerError(
+                res,
+                err,
+                'CREATE CUSTOMER'
+            )
 
         }
 
     }
+
+   // ======================
+// GET CUSTOMER ID
+// ======================
+
+exports.getById = async (req, res) => {
+
+    try {
+
+        const customer = await Customer.findByPk(
+            req.params.id,
+            {
+
+                include: [
+                    Area,
+                    Channel,
+                ],
+
+            }
+        );
+
+        if (!customer) {
+
+            return sendError(
+                res,
+                404,
+                "Customer tidak ditemukan."
+            );
+
+        }
+
+        return res.json(customer);
+
+    } catch (error) {
+
+        return sendServerError(
+            res,
+            error,
+            'GET CUSTOMER BY ID'
+        );
+
+    }
+
+};
+
+
+// ======================
+// GET NEARBY CUSTOMER
+// ======================
+
+const DEFAULT_RADIUS_KM = 10;
+
+
+exports.getNearbyCustomers =
+async (req, res) => {
+
+    try {
+
+        const latitude =
+            parseCoordinate(req.query.latitude);
+
+        const longitude =
+            parseCoordinate(req.query.longitude);
+
+
+        if (
+            latitude === null ||
+            longitude === null
+        ) {
+
+            return sendError(
+                res,
+                400,
+                "Parameter latitude dan longitude wajib diisi berupa angka."
+            );
+
+        }
+
+
+        if (
+            !isValidLatitude(latitude) ||
+            !isValidLongitude(longitude)
+        ) {
+
+            return sendError(
+                res,
+                400,
+                "Koordinat berada di luar rentang yang valid."
+            );
+
+        }
+
+
+        const requestedRadius =
+            parseCoordinate(req.query.radius);
+
+        const radiusKm =
+            requestedRadius === null
+                ? DEFAULT_RADIUS_KM
+                : requestedRadius;
+
+
+        if (radiusKm <= 0) {
+
+            return sendError(
+                res,
+                400,
+                "Parameter radius harus lebih besar dari 0."
+            );
+
+        }
+
+
+        const user =
+            await User.findByPk(
+
+                req.user.id,
+
+                {
+                    include:[
+                        {
+                            model:Area,
+                            as:"AssignedAreas",
+                            attributes:[
+                                "id",
+                                "code",
+                                "name",
+
+                            ],
+
+                            through:{
+                                attributes:[]
+                            }
+                        }
+                    ]
+
+                }
+
+            );
+
+
+        if (!user) {
+
+            return sendError(
+                res,
+                404,
+                "User tidak ditemukan."
+            );
+
+        }
+
+
+        // Helper yang sama dipakai getAll, supaya hak akses area
+        // tidak pernah dihitung dengan dua cara berbeda.
+        const areaIds =
+            resolveAccessibleAreaIds(user);
+
+
+        // Selalu balas array telanjang. Sebelumnya cabang ini
+        // mengembalikan { success, message, data } sehingga bentuk
+        // responsnya berbeda dari cabang sukses dan memecahkan client.
+        if (areaIds.length === 0) {
+
+            return res.json([]);
+
+        }
+
+
+        const customers =
+            await Customer.findAll({
+
+                where:{
+                    area_id:{
+                        [Op.in]: areaIds
+                    }
+                },
+
+
+                include:[
+                    {
+                        model:Area,
+                        attributes:[
+                            "id",
+                            "code",
+                            "name"
+                        ]
+                    },
+
+                    {
+                        model:Channel,
+                        attributes:[
+                            "id",
+                            "code",
+                            "name"
+                        ]
+                    }
+                ]
+
+            });
+
+
+        const nearby =
+            withDistanceWithinRadius(
+
+                customers.map(
+                    customer => customer.toJSON()
+                ),
+
+                {
+                    latitude,
+                    longitude
+                },
+
+                radiusKm
+
+            );
+
+
+        res.json(nearby);
+
+
+
+    } catch(error){
+
+
+        return sendServerError(
+            res,
+            error,
+            'GET NEARBY CUSTOMER'
+        );
+
+
+    }
+
+};
