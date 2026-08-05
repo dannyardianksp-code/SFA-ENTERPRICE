@@ -29,6 +29,9 @@ const Channel =
 const User =
     require('../models/user.model')
 
+const CustomerGroup =
+    require('../models/customerGroup.model')
+
 // ======================
 // GET ALL CUSTOMER
 // ======================
@@ -407,6 +410,121 @@ async (req, res) => {
             'GET NEARBY CUSTOMER'
         );
 
+
+    }
+
+};
+
+
+// ======================
+// FORM OPTIONS
+// ======================
+
+/**
+ * Pilihan dropdown untuk form tambah customer, SUDAH tersaring sesuai
+ * hak akses pemanggil.
+ *
+ * Sengaja server yang menyaring: aturan hak akses area ada di
+ * resolveAccessibleAreaIds (termasuk fallback ke kolom area_id). Bila
+ * client menyusun daftarnya sendiri, aturan itu terduplikasi dan bisa
+ * menyimpang, sehingga dropdown menawarkan area yang lalu ditolak 403
+ * oleh POST-nya sendiri.
+ */
+exports.getFormOptions =
+async (req, res) => {
+
+    try {
+
+        const user =
+            await User.findByPk(
+
+                req.user.id,
+
+                {
+                    include: [
+                        {
+                            model: Area,
+                            as: 'AssignedAreas',
+                            attributes: ['id'],
+                            through: { attributes: [] }
+                        }
+                    ]
+                }
+
+            );
+
+
+        if (!user) {
+
+            return sendError(
+                res,
+                404,
+                'User tidak ditemukan.'
+            );
+
+        }
+
+
+        const isRestricted =
+            ['SPG', 'SUPERVISOR'].includes(user.role);
+
+
+        const areaWhere =
+            isRestricted
+                ? { id: { [Op.in]: resolveAccessibleAreaIds(user) } }
+                : {};
+
+        const channelWhere =
+            isRestricted && user.channel_id
+                ? { id: user.channel_id }
+                : {};
+
+
+        const [areas, channels, customerGroups] =
+            await Promise.all([
+
+                Area.findAll({
+                    where: areaWhere,
+                    attributes: ['id', 'code', 'name'],
+                    order: [['name', 'ASC']]
+                }),
+
+                Channel.findAll({
+                    where: channelWhere,
+                    attributes: ['id', 'code', 'name'],
+                    order: [['name', 'ASC']]
+                }),
+
+                // Hanya group yang punya code. Tanpa code, kode
+                // customer tidak bisa dibentuk dan POST akan menolak
+                // dengan 400 — menawarkannya di dropdown berarti
+                // menjanjikan pilihan yang pasti gagal.
+                //
+                // Op.not, BUKAN Op.ne: Op.ne menghasilkan `code != NULL`
+                // yang di SQL selalu false.
+                CustomerGroup.findAll({
+                    where: { code: { [Op.not]: null } },
+                    attributes: ['id', 'code', 'name'],
+                    order: [['name', 'ASC']]
+                }),
+
+            ]);
+
+
+        res.json({
+            areas,
+            channels,
+            customerGroups,
+        });
+
+
+    } catch (error) {
+
+        return sendServerError(
+            res,
+            error,
+            'GET CUSTOMER FORM OPTIONS'
+        );
 
     }
 

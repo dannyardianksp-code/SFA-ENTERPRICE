@@ -14,6 +14,14 @@ router.get(
     controller.getNearbyCustomers
 );
 
+// Form options — WAJIB di atas "/:id", kalau tidak "form-options"
+// akan tertangkap sebagai id.
+router.get(
+    "/form-options",
+    auth,
+    controller.getFormOptions
+);
+
 router.get("/:id", auth, controller.getById);
 
 // CREATE customer (protected)
