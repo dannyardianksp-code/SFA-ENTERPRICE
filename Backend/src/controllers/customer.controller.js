@@ -529,3 +529,95 @@ async (req, res) => {
     }
 
 };
+
+// ======================
+// CREATE — VALIDASI
+// ======================
+
+const MAX_LOCATION_ACCURACY_METERS = 50
+
+const FIELD_MAX_LENGTH = {
+    name: 100,
+    owner_name: 100,
+    phone: 30,
+}
+
+const parsePositiveInt = (value) => {
+    if (value === undefined || value === null || String(value).trim() === '') {
+        return null
+    }
+
+    const n = Number(value)
+
+    return Number.isInteger(n) && n > 0 ? n : null
+}
+
+/**
+ * Diekspor agar cabang validasinya bisa diuji tanpa database.
+ * Mengembalikan daftar pesan error (kosong = valid) dan nilai
+ * yang sudah diparse untuk dipakai controller.
+ */
+const validateCreatePayload = (body = {}) => {
+
+    const errors = []
+
+    const name = typeof body.name === 'string' ? body.name.trim() : ''
+
+    if (!name) {
+        errors.push('Nama toko wajib diisi.')
+    }
+
+    for (const [field, max] of Object.entries(FIELD_MAX_LENGTH)) {
+        const value = body[field]
+
+        if (typeof value === 'string' && value.trim().length > max) {
+            errors.push(`${field} maksimal ${max} karakter.`)
+        }
+    }
+
+    const customerGroupId = parsePositiveInt(body.customer_group_id)
+    const areaId = parsePositiveInt(body.area_id)
+    const channelId = parsePositiveInt(body.channel_id)
+
+    if (customerGroupId === null) errors.push('Customer group wajib dipilih.')
+    if (areaId === null) errors.push('Area wajib dipilih.')
+    if (channelId === null) errors.push('Channel wajib dipilih.')
+
+    const latitude = parseCoordinate(body.latitude)
+    const longitude = parseCoordinate(body.longitude)
+
+    if (!isValidLatitude(latitude) || !isValidLongitude(longitude)) {
+        errors.push('Koordinat lokasi tidak valid.')
+    }
+
+    const locationAccuracy = parseCoordinate(body.location_accuracy)
+
+    if (locationAccuracy === null || locationAccuracy < 0) {
+        errors.push('Akurasi lokasi wajib dikirim.')
+    } else if (locationAccuracy > MAX_LOCATION_ACCURACY_METERS) {
+        errors.push(
+            `Akurasi lokasi ±${locationAccuracy} m terlalu rendah ` +
+            `(maksimal ${MAX_LOCATION_ACCURACY_METERS} m).`
+        )
+    }
+
+    return {
+        errors,
+        values: {
+            name,
+            customerGroupId,
+            areaId,
+            channelId,
+            latitude,
+            longitude,
+            locationAccuracy,
+            address: body.address || null,
+            ownerName: body.owner_name || null,
+            phone: body.phone || null,
+        },
+    }
+
+}
+
+exports.validateCreatePayload = validateCreatePayload
+exports.MAX_LOCATION_ACCURACY_METERS = MAX_LOCATION_ACCURACY_METERS
