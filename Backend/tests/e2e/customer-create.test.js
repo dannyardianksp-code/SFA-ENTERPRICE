@@ -247,6 +247,19 @@ describe('POST /api/customers', () => {
         assert.strictEqual(seq(b.body.code), seq(a.body.code) + 1)
     })
 
+    // Cabang catch-and-retry (unique index) sengaja TIDAK diuji lewat
+    // insert manual + POST di sini: nextSequenceForYear di-query ULANG
+    // di awal setiap percobaan, jadi baris yang disisipkan SEBELUM
+    // request dikirim sudah ikut terhitung pada percobaan pertama —
+    // tidak pernah benar-benar menabrak unique index. Dibuktikan lewat
+    // reproduksi manual sebelum menulis tes ini (lihat laporan Task 5,
+    // bagian "Fix round 1"). Race sungguhan hanya terjadi bila baris lain
+    // masuk PERSIS di antara SELECT MAX dan INSERT milik satu request —
+    // tidak bisa dipaksa secara deterministik lewat HTTP end-to-end.
+    // Cabang ini diuji lewat monkey-patch di
+    // tests/unit/customer.controller.test.js, yang mengontrol persis
+    // kapan Customer.create gagal lalu berhasil.
+
     test('kolom channel legacy dibiarkan null', async () => {
         const res = await post('/api/customers', payloadValid())
         assert.strictEqual(res.status, 201)
