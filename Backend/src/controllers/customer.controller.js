@@ -17,6 +17,14 @@ const {
     resolveAccessibleAreaIds,
 } = require('../utils/area.util')
 
+const {
+    formatCustomerCode,
+} = require('../utils/customer-code.util')
+
+const db = require('../config/database')
+
+const { QueryTypes } = require('sequelize')
+
 const Customer =
     require('../models/customer.model')
 
@@ -152,33 +160,195 @@ exports.getAll =
 // CREATE CUSTOMER
 // ======================
 
+const MAX_CODE_ATTEMPTS = 3
+
+/**
+ * Nomor urut tertinggi untuk tahun tertentu, satu deret global.
+ *
+ * SUBSTRING_INDEX(code,'-',-1) mengambil segmen setelah tanda hubung
+ * terakhir. Kode lama (C001, TEST001) tidak punya tanda hubung sehingga
+ * mengembalikan kode utuh, tidak cocok pola '26%', dan otomatis
+ * terabaikan tanpa aturan khusus.
+ */
+const nextSequenceForYear = async (year) => {
+
+    const yy = String(year).padStart(2, '0')
+
+    const rows = await db.query(
+        `SELECT MAX(CAST(RIGHT(SUBSTRING_INDEX(code, '-', -1), 4) AS UNSIGNED)) AS maxSeq
+           FROM customers
+          WHERE SUBSTRING_INDEX(code, '-', -1) LIKE :pattern`,
+        {
+            replacements: { pattern: `${yy}%` },
+            type: QueryTypes.SELECT,
+        }
+    )
+
+    return Number(rows[0]?.maxSeq || 0) + 1
+
+}
+
 exports.create =
-    async (req, res) => {
+async (req, res) => {
 
-        try {
+    try {
 
-            const data =
-                await Customer.create(
+        const { errors, values } = validateCreatePayload(req.body)
 
-                    req.body
+        if (errors.length > 0) {
+            return sendError(res, 400, errors[0])
+        }
 
+
+        const user =
+            await User.findByPk(
+
+                req.user.id,
+
+                {
+                    include: [
+                        {
+                            model: Area,
+                            as: 'AssignedAreas',
+                            attributes: ['id'],
+                            through: { attributes: [] }
+                        }
+                    ]
+                }
+
+            );
+
+        if (!user) {
+            return sendError(res, 404, 'User tidak ditemukan.')
+        }
+
+
+        // Hak akses — pola sama dengan getAll
+        if (['SPG', 'SUPERVISOR'].includes(user.role)) {
+
+            if (!resolveAccessibleAreaIds(user).includes(values.areaId)) {
+                return sendError(
+                    res,
+                    403,
+                    'Area tersebut di luar wilayah Anda.'
                 )
+            }
 
-            res.json(data)
+            if (values.channelId !== user.channel_id) {
+                return sendError(
+                    res,
+                    403,
+                    'Channel tersebut di luar jangkauan Anda.'
+                )
+            }
 
         }
 
-        catch (err) {
 
-            return sendServerError(
+        // Referensi harus ada — tidak ada foreign key constraint di DB,
+        // jadi id yang salah akan tersimpan dan menghasilkan customer
+        // yatim yang tidak muncul di daftar siapa pun.
+        const [group, area, channel] = await Promise.all([
+            CustomerGroup.findByPk(values.customerGroupId),
+            Area.findByPk(values.areaId),
+            Channel.findByPk(values.channelId),
+        ])
+
+        if (!group) return sendError(res, 400, 'Customer group tidak ditemukan.')
+        if (!area) return sendError(res, 400, 'Area tidak ditemukan.')
+        if (!channel) return sendError(res, 400, 'Channel tidak ditemukan.')
+
+        if (!group.code) {
+            return sendError(
                 res,
-                err,
-                'CREATE CUSTOMER'
+                400,
+                `Customer group "${group.name}" belum punya kode.`
+            )
+        }
+
+
+        const year = new Date().getFullYear() % 100
+
+        let created = null
+        let lastError = null
+
+        for (let attempt = 1; attempt <= MAX_CODE_ATTEMPTS; attempt++) {
+
+            const sequence = await nextSequenceForYear(year)
+
+            const code = formatCustomerCode({
+                groupCode: group.code,
+                areaCode: area.code,
+                channelCode: channel.code,
+                year,
+                sequence,
+            })
+
+            try {
+
+                created = await Customer.create({
+                    code,
+                    name: values.name,
+                    address: values.address,
+                    owner_name: values.ownerName,
+                    phone: values.phone,
+                    latitude: String(values.latitude),
+                    longitude: String(values.longitude),
+                    location_accuracy: values.locationAccuracy,
+                    customer_group_id: values.customerGroupId,
+                    area_id: values.areaId,
+                    channel_id: values.channelId,
+                    // kolom `channel` (string legacy) sengaja dibiarkan NULL
+                })
+
+                break
+
+            } catch (err) {
+
+                lastError = err
+
+                // Dua sales menyimpan bersamaan menghitung nomor sama;
+                // unique index menolak yang kedua, lalu kita ulang.
+                if (err?.name !== 'SequelizeUniqueConstraintError') {
+                    throw err
+                }
+
+            }
+
+        }
+
+
+        if (!created) {
+
+            console.error('[CREATE CUSTOMER] gagal kode unik', lastError)
+
+            return sendError(
+                res,
+                409,
+                'Gagal membuat kode customer. Silakan coba simpan lagi.'
             )
 
         }
 
+
+        const full = await Customer.findByPk(created.id, {
+            include: [
+                { model: Area, attributes: ['id', 'code', 'name'] },
+                { model: Channel, attributes: ['id', 'code', 'name'] },
+                { model: CustomerGroup, attributes: ['id', 'code', 'name'] },
+            ],
+        })
+
+        res.status(201).json(full)
+
+
+    } catch (err) {
+
+        return sendServerError(res, err, 'CREATE CUSTOMER')
+
     }
+
+};
 
    // ======================
 // GET CUSTOMER ID

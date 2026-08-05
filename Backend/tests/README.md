@@ -47,6 +47,17 @@ Bisa diatur lewat environment variable:
 | `TEST_USER_ID` | `1` — harus user yang punya area (assigned atau `area_id`) |
 | `TEST_EMAIL` | `danny@mail.com` — hanya untuk tes password salah, tidak perlu password |
 
+## ⚠️ Tes e2e menulis ke database
+
+`tests/e2e/customer-create.test.js` membuat customer sungguhan lalu
+menghapusnya di hook `after()` (langsung lewat `mysql2`, karena tidak ada
+endpoint DELETE customer).
+
+Nomor urut kode yang terpakai **tidak kembali** setelah baris dihapus,
+sehingga deret kode akan berlubang. Aman di database dev.
+
+**Jangan jalankan `npm run test:e2e` menghadap database produksi.**
+
 ## Kenapa tes ini ada
 
 Beberapa di antaranya menjaga bug yang pernah benar-benar terjadi —

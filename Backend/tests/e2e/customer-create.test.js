@@ -118,3 +118,153 @@ describe('GET /api/customers/form-options', () => {
     })
 
 })
+
+const post = async (path, payload, withAuth = true) => {
+    const res = await fetch(BASE + path, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            ...(withAuth ? authHeader() : {}),
+        },
+        body: JSON.stringify(payload),
+    })
+    const text = await res.text()
+    let body
+    try { body = JSON.parse(text) } catch { body = text }
+    return { status: res.status, body }
+}
+
+describe('POST /api/customers', () => {
+
+    const dibuat = []
+    let opts
+
+    const payloadValid = (patch = {}) => ({
+        name: 'TES CLAUDE ' + Math.abs(Date.parse('2026-08-05')),
+        customer_group_id: opts.customerGroups[0].id,
+        area_id: opts.areas[0].id,
+        channel_id: opts.channels[0].id,
+        latitude: '-6.125722840252188',
+        longitude: '106.78554763944275',
+        location_accuracy: 12,
+        ...patch,
+    })
+
+    before(async () => {
+        const res = await get('/api/customers/form-options')
+        opts = res.body
+
+        assert.ok(opts.areas.length > 0, 'tidak ada area — tes tidak bisa jalan')
+        assert.ok(opts.channels.length > 0, 'tidak ada channel')
+        assert.ok(opts.customerGroups.length > 0, 'tidak ada customer group')
+    })
+
+    // Ini tes pertama yang MENULIS ke database. Baris yang dibuat harus
+    // dihapus, dan karena tidak ada endpoint DELETE customer,
+    // penghapusan dilakukan langsung lewat mysql2.
+    after(async () => {
+        if (dibuat.length === 0) return
+
+        const mysql = require('mysql2/promise')
+        const c = await mysql.createConnection({
+            host: process.env.DB_HOST,
+            user: process.env.DB_USER,
+            password: process.env.DB_PASS,
+            database: process.env.DB_NAME,
+        })
+        await c.query('DELETE FROM customers WHERE id IN (?)', [dibuat])
+        await c.end()
+
+        console.log(`  (bersih-bersih: ${dibuat.length} customer tes dihapus)`)
+    })
+
+    test('tanpa token ditolak 401', async () => {
+        const res = await post('/api/customers', payloadValid(), false)
+        assert.strictEqual(res.status, 401)
+    })
+
+    test('field wajib kurang ditolak 400', async () => {
+        const res = await post('/api/customers', { name: 'X' })
+        assert.strictEqual(res.status, 400)
+        assert.strictEqual(typeof res.body.message, 'string')
+    })
+
+    test('akurasi 80 m ditolak 400', async () => {
+        const res = await post('/api/customers', payloadValid({ location_accuracy: 80 }))
+        assert.strictEqual(res.status, 400)
+        assert.match(res.body.message, /[Aa]kurasi/)
+    })
+
+    test('area_id tidak ada ditolak', async () => {
+        const res = await post('/api/customers', payloadValid({ area_id: 999999 }))
+        assert.ok(
+            res.status === 400 || res.status === 403,
+            `harusnya 400/403, dapat ${res.status}`
+        )
+    })
+
+    test('payload valid menghasilkan 201 dengan kode', async () => {
+        const res = await post('/api/customers', payloadValid())
+
+        assert.strictEqual(res.status, 201, JSON.stringify(res.body))
+        assert.ok(res.body.id, 'tidak ada id')
+        dibuat.push(res.body.id)
+
+        assert.match(res.body.code, /^[A-Z]+-\d{6}$/)
+        assert.ok(res.body.Area, 'relasi Area tidak disertakan')
+        assert.ok(res.body.Channel, 'relasi Channel tidak disertakan')
+        assert.ok(res.body.CustomerGroup, 'relasi CustomerGroup tidak disertakan')
+    })
+
+    test('kode memuat prefix group+area+channel dan tahun', async () => {
+        const res = await post('/api/customers', payloadValid())
+        assert.strictEqual(res.status, 201)
+        dibuat.push(res.body.id)
+
+        const group = opts.customerGroups.find(g => g.id === res.body.customer_group_id)
+        const area = opts.areas.find(a => a.id === res.body.area_id)
+        const channel = opts.channels.find(c => c.id === res.body.channel_id)
+        const yy = String(new Date().getFullYear() % 100).padStart(2, '0')
+
+        assert.strictEqual(
+            res.body.code.split('-')[0],
+            `${group.code}${area.code}${channel.code}`
+        )
+        assert.ok(res.body.code.split('-')[1].startsWith(yy))
+    })
+
+    test('dua simpan berurutan menghasilkan nomor berbeda dan naik', async () => {
+        const a = await post('/api/customers', payloadValid())
+        const b = await post('/api/customers', payloadValid())
+
+        assert.strictEqual(a.status, 201)
+        assert.strictEqual(b.status, 201)
+        dibuat.push(a.body.id, b.body.id)
+
+        const seq = (code) => Number(code.split('-')[1].slice(2))
+
+        assert.notStrictEqual(a.body.code, b.body.code)
+        assert.strictEqual(seq(b.body.code), seq(a.body.code) + 1)
+    })
+
+    test('kolom channel legacy dibiarkan null', async () => {
+        const res = await post('/api/customers', payloadValid())
+        assert.strictEqual(res.status, 201)
+        dibuat.push(res.body.id)
+
+        assert.strictEqual(res.body.channel, null)
+    })
+
+    test('customer baru muncul di GET /api/customers', async () => {
+        const res = await post('/api/customers', payloadValid())
+        assert.strictEqual(res.status, 201)
+        dibuat.push(res.body.id)
+
+        const all = await get('/api/customers')
+        assert.ok(
+            all.body.some(c => c.id === res.body.id),
+            'customer baru tidak muncul di daftar — area/channel di luar cakupan?'
+        )
+    })
+
+})
