@@ -14,6 +14,7 @@ const Customer = db.define('Customer', {
     phone: DataTypes.STRING,
     latitude: DataTypes.STRING,
     longitude: DataTypes.STRING,
+    location_accuracy: DataTypes.DECIMAL(7, 2),
     channel: DataTypes.STRING,
     customer_group_id: DataTypes.INTEGER
 }, {
