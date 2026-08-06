@@ -27,6 +27,10 @@ router.get("/:id", auth, controller.getById);
 // CREATE customer (protected)
 router.post('/', auth, controller.create)
 
+// UPDATE field teks (protected). Kode, customer group, area, dan channel
+// tidak bisa diubah — lihat LOCKED_FIELDS di controller.
+router.put('/:id', auth, controller.update)
+
 
 
 module.exports = router

@@ -226,23 +226,7 @@ async (req, res) => {
         }
 
 
-        const user =
-            await User.findByPk(
-
-                req.user.id,
-
-                {
-                    include: [
-                        {
-                            model: Area,
-                            as: 'AssignedAreas',
-                            attributes: ['id'],
-                            through: { attributes: [] }
-                        }
-                    ]
-                }
-
-            );
+        const user = await findUserWithAreas(req.user.id);
 
         if (!user) {
             return sendError(res, 404, 'User tidak ditemukan.')
@@ -416,6 +400,85 @@ exports.getById = async (req, res) => {
     }
 
 };
+
+
+// ======================
+// UPDATE CUSTOMER (field teks)
+// ======================
+
+/**
+ * Mengambil user beserta area yang di-assign, bentuk yang dibutuhkan
+ * assertAreaChannelAccess. Dipakai create dan kedua endpoint update.
+ */
+const findUserWithAreas = (id) =>
+    User.findByPk(id, {
+        include: [
+            {
+                model: Area,
+                as: 'AssignedAreas',
+                attributes: ['id'],
+                through: { attributes: [] },
+            },
+        ],
+    })
+
+
+exports.update = async (req, res) => {
+
+    try {
+
+        const customer = await Customer.findByPk(req.params.id)
+
+        if (!customer) {
+            return sendError(res, 404, 'Customer tidak ditemukan.')
+        }
+
+        const user = await findUserWithAreas(req.user.id)
+
+        if (!user) {
+            return sendError(res, 404, 'User tidak ditemukan.')
+        }
+
+        // Hak akses diperiksa SEBELUM validasi: user yang tidak berhak
+        // tidak perlu diberi tahu field mana yang salah formatnya.
+        //
+        // Yang diperiksa adalah area dan channel milik customer yang
+        // TERSIMPAN, bukan dari body — keduanya memang tidak bisa
+        // diubah.
+        const ditolak = assertAreaChannelAccess(
+            user,
+            customer.area_id,
+            customer.channel_id
+        )
+
+        if (ditolak) {
+            return sendError(res, ditolak.status, ditolak.message)
+        }
+
+        const { errors, values } = validateUpdatePayload(req.body, customer)
+
+        if (errors.length > 0) {
+            return sendError(res, 400, errors[0])
+        }
+
+        await customer.update({
+            name: values.name,
+            address: values.address,
+            owner_name: values.ownerName,
+            phone: values.phone,
+            updated_at: new Date(),
+            updated_by: req.user.id,
+        })
+
+        res.json(await findCustomerWithRelations(customer.id))
+
+    } catch (err) {
+
+        return sendServerError(res, err, 'UPDATE CUSTOMER')
+
+    }
+
+}
 
 
 // ======================
@@ -843,5 +906,114 @@ const validateCreatePayload = (body = {}) => {
 
 }
 
+/**
+ * Field yang tidak bisa diubah karena kode customer dibentuk darinya.
+ *
+ * Dikirim dengan nilai SAMA -> dilewati; klien yang mengirim balik
+ * seluruh objek customer tidak perlu dihukum. Dikirim BERBEDA -> 400
+ * yang menyebut field mana.
+ *
+ * Mengabaikannya diam-diam adalah pilihan yang lebih buruk: klien
+ * menerima 200 dan menyangka perubahannya tersimpan.
+ */
+const LOCKED_FIELDS = [
+    {
+        key: 'customer_group_id',
+        numeric: true,
+        message: 'Customer group tidak bisa diubah karena kode customer dibentuk darinya.',
+    },
+    {
+        key: 'area_id',
+        numeric: true,
+        message: 'Area tidak bisa diubah karena kode customer dibentuk darinya.',
+    },
+    {
+        key: 'channel_id',
+        numeric: true,
+        message: 'Channel tidak bisa diubah karena kode customer dibentuk darinya.',
+    },
+    {
+        key: 'code',
+        numeric: false,
+        message: 'Kode customer tidak bisa diubah.',
+    },
+]
+
+
+/**
+ * Validasi body PUT /api/customers/:id.
+ *
+ * PUT berarti ganti seluruhnya: field opsional yang tidak dikirim
+ * DIKOSONGKAN. Klien mobile selalu mengirim keempat field teks, jadi
+ * ini aman untuknya — tapi integrasi lain yang mengirim hanya { name }
+ * akan menghapus alamat. Disengaja, dan diuji.
+ *
+ * @param {object} body req.body
+ * @param {object} current baris customer yang tersimpan, pembanding
+ *                 field terkunci
+ */
+const validateUpdatePayload = (body = {}, current = {}) => {
+
+    const errors = []
+
+    const name = typeof body.name === 'string' ? body.name.trim() : ''
+
+    if (!name) {
+        errors.push('Nama toko wajib diisi.')
+    }
+
+    for (const [field, { max, label }] of Object.entries(FIELD_MAX_LENGTH)) {
+        const value = body[field]
+
+        if (typeof value === 'string' && value.trim().length > max) {
+            errors.push(`${label} maksimal ${max} karakter.`)
+        }
+    }
+
+    for (const { key, numeric, message } of LOCKED_FIELDS) {
+
+        if (body[key] === undefined || body[key] === null) {
+            continue
+        }
+
+        const dikirim = numeric
+            ? parsePositiveInt(body[key])
+            : String(body[key]).trim()
+
+        const nilaiTersimpan = numeric
+            ? parsePositiveInt(current[key])
+            : String(current[key] ?? '').trim()
+
+        if (dikirim !== nilaiTersimpan) {
+            errors.push(message)
+        }
+
+    }
+
+    return {
+        errors,
+        values: {
+            name,
+            // typeof, bukan ?. — lihat komentar di validateCreatePayload.
+            address:
+                typeof body.address === 'string'
+                    ? body.address.trim() || null
+                    : null,
+            ownerName:
+                typeof body.owner_name === 'string'
+                    ? body.owner_name.trim() || null
+                    : null,
+            phone:
+                typeof body.phone === 'string'
+                    ? body.phone.trim() || null
+                    : null,
+        },
+    }
+
+}
+
+
 exports.validateCreatePayload = validateCreatePayload
+exports.validateUpdatePayload = validateUpdatePayload
+exports.LOCKED_FIELDS = LOCKED_FIELDS
 exports.MAX_LOCATION_ACCURACY_METERS = MAX_LOCATION_ACCURACY_METERS
