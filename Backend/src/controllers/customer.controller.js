@@ -18,6 +18,10 @@ const {
 } = require('../utils/area.util')
 
 const {
+    assertAreaChannelAccess,
+} = require('../utils/access.util')
+
+const {
     formatCustomerCode,
     isValidCodeSegment,
 } = require('../utils/customer-code.util')
@@ -245,25 +249,15 @@ async (req, res) => {
         }
 
 
-        // Hak akses — pola sama dengan getAll
-        if (['SPG', 'SUPERVISOR'].includes(user.role)) {
+        // Hak akses — aturan yang sama dipakai kedua endpoint update.
+        const ditolak = assertAreaChannelAccess(
+            user,
+            values.areaId,
+            values.channelId
+        )
 
-            if (!resolveAccessibleAreaIds(user).includes(values.areaId)) {
-                return sendError(
-                    res,
-                    403,
-                    'Area tersebut di luar wilayah Anda.'
-                )
-            }
-
-            if (values.channelId !== user.channel_id) {
-                return sendError(
-                    res,
-                    403,
-                    'Channel tersebut di luar jangkauan Anda.'
-                )
-            }
-
+        if (ditolak) {
+            return sendError(res, ditolak.status, ditolak.message)
         }
 
 
