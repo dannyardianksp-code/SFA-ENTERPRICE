@@ -45,6 +45,32 @@ describe('validateCreatePayload — payload valid', () => {
         assert.strictEqual(values.name, 'TOKO')
     })
 
+    // ?. hanya menjaga null/undefined, bukan tipe. Tanpa penjagaan
+    // typeof, nilai non-string melempar TypeError yang berakhir
+    // sebagai 500 opaque alih-alih 400 yang menjelaskan.
+    test('field opsional bertipe non-string tidak melempar', () => {
+        for (const nilai of [12345, true, {}, [], 0, false]) {
+            assert.doesNotThrow(
+                () => validateCreatePayload({ ...valid, address: nilai }),
+                `address = ${JSON.stringify(nilai)} seharusnya tidak melempar`
+            )
+            assert.doesNotThrow(
+                () => validateCreatePayload({ ...valid, owner_name: nilai }),
+                `owner_name = ${JSON.stringify(nilai)} seharusnya tidak melempar`
+            )
+            assert.doesNotThrow(
+                () => validateCreatePayload({ ...valid, phone: nilai }),
+                `phone = ${JSON.stringify(nilai)} seharusnya tidak melempar`
+            )
+        }
+    })
+
+    test('field opsional bertipe non-string menjadi null', () => {
+        const { values } = validateCreatePayload({ ...valid, address: 12345 })
+
+        assert.strictEqual(values.address, null)
+    })
+
 })
 
 describe('validateCreatePayload — field wajib', () => {

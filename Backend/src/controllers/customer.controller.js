@@ -787,9 +787,21 @@ const validateCreatePayload = (body = {}) => {
             latitude,
             longitude,
             locationAccuracy,
-            address: body.address?.trim() || null,
-            ownerName: body.owner_name?.trim() || null,
-            phone: body.phone?.trim() || null,
+            // ?. hanya menjaga null/undefined, bukan tipe. Tanpa penjagaan
+            // typeof, nilai non-string melempar TypeError. Lihat
+            // tests/unit/customer-create.test.js untuk contoh.
+            address:
+                typeof body.address === 'string'
+                    ? body.address.trim() || null
+                    : null,
+            ownerName:
+                typeof body.owner_name === 'string'
+                    ? body.owner_name.trim() || null
+                    : null,
+            phone:
+                typeof body.phone === 'string'
+                    ? body.phone.trim() || null
+                    : null,
         },
     }
 
