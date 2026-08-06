@@ -644,9 +644,13 @@ async (req, res) => {
                 ? { id: { [Op.in]: resolveAccessibleAreaIds(user) } }
                 : {};
 
+        // Fail-closed, simetris dengan areaWhere: role terbatas tanpa
+        // channel_id mendapat 0 channel, bukan semuanya. Kalau semuanya
+        // dikirim, setiap pilihan sales akan ditolak 403 oleh POST dan
+        // form jadi jalan buntu.
         const channelWhere =
-            isRestricted && user.channel_id
-                ? { id: user.channel_id }
+            isRestricted
+                ? { id: user.channel_id ?? -1 }
                 : {};
 
 
@@ -707,9 +711,9 @@ async (req, res) => {
 const MAX_LOCATION_ACCURACY_METERS = 50
 
 const FIELD_MAX_LENGTH = {
-    name: 100,
-    owner_name: 100,
-    phone: 30,
+    name: { max: 100, label: 'Nama toko' },
+    owner_name: { max: 100, label: 'Nama pemilik' },
+    phone: { max: 30, label: 'Nomor telepon' },
 }
 
 const parsePositiveInt = (value) => {
@@ -737,11 +741,11 @@ const validateCreatePayload = (body = {}) => {
         errors.push('Nama toko wajib diisi.')
     }
 
-    for (const [field, max] of Object.entries(FIELD_MAX_LENGTH)) {
+    for (const [field, { max, label }] of Object.entries(FIELD_MAX_LENGTH)) {
         const value = body[field]
 
         if (typeof value === 'string' && value.trim().length > max) {
-            errors.push(`${field} maksimal ${max} karakter.`)
+            errors.push(`${label} maksimal ${max} karakter.`)
         }
     }
 
@@ -762,8 +766,10 @@ const validateCreatePayload = (body = {}) => {
 
     const locationAccuracy = parseCoordinate(body.location_accuracy)
 
-    if (locationAccuracy === null || locationAccuracy < 0) {
+    if (locationAccuracy === null) {
         errors.push('Akurasi lokasi wajib dikirim.')
+    } else if (locationAccuracy < 0) {
+        errors.push('Akurasi lokasi tidak valid. Ambil ulang lokasi.')
     } else if (locationAccuracy > MAX_LOCATION_ACCURACY_METERS) {
         errors.push(
             `Akurasi lokasi ±${locationAccuracy} m terlalu rendah ` +
@@ -781,9 +787,9 @@ const validateCreatePayload = (body = {}) => {
             latitude,
             longitude,
             locationAccuracy,
-            address: body.address || null,
-            ownerName: body.owner_name || null,
-            phone: body.phone || null,
+            address: body.address?.trim() || null,
+            ownerName: body.owner_name?.trim() || null,
+            phone: body.phone?.trim() || null,
         },
     }
 

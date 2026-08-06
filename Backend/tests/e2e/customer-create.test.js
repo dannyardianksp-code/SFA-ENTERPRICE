@@ -88,8 +88,8 @@ describe('GET /api/customers/form-options', () => {
 
     test('role terbatas hanya dapat satu channel', async () => {
         const res = await get('/api/customers/form-options')
-        assert.ok(res.body.channels.length <= 1,
-            `SPG seharusnya dapat maksimal 1 channel, dapat ${res.body.channels.length}`)
+        assert.strictEqual(res.body.channels.length, 1,
+            `SPG seharusnya dapat tepat 1 channel, dapat ${res.body.channels.length}`)
     })
 
     // Database dev punya 53 customer_group, hanya 6 yang diberi code
@@ -203,12 +203,37 @@ describe('POST /api/customers', () => {
         )
     })
 
+    test('channel di luar jangkauan sales ditolak 403', async () => {
+        // Cari channel yang BUKAN milik sales ini.
+        const mysql = require('mysql2/promise')
+        const conn = await mysql.createConnection({
+            host: process.env.DB_HOST,
+            user: process.env.DB_USER,
+            password: process.env.DB_PASS,
+            database: process.env.DB_NAME,
+        })
+        const [rows] = await conn.query(
+            'SELECT id FROM channels WHERE id != ? LIMIT 1',
+            [opts.channels[0].id]
+        )
+        await conn.end()
+
+        if (rows.length === 0) return
+
+        const res = await post('/api/customers', payloadValid({
+            channel_id: rows[0].id,
+        }))
+
+        assert.strictEqual(res.status, 403, JSON.stringify(res.body))
+        assert.match(res.body.message, /[Cc]hannel/)
+    })
+
     test('payload valid menghasilkan 201 dengan kode', async () => {
         const res = await post('/api/customers', payloadValid())
+        if (res.body?.id) dibuat.push(res.body.id)
 
         assert.strictEqual(res.status, 201, JSON.stringify(res.body))
         assert.ok(res.body.id, 'tidak ada id')
-        dibuat.push(res.body.id)
 
         assert.match(res.body.code, /^[A-Z]+-\d{6}$/)
         assert.ok(res.body.Area, 'relasi Area tidak disertakan')
@@ -218,8 +243,8 @@ describe('POST /api/customers', () => {
 
     test('kode memuat prefix group+area+channel dan tahun', async () => {
         const res = await post('/api/customers', payloadValid())
+        if (res.body?.id) dibuat.push(res.body.id)
         assert.strictEqual(res.status, 201)
-        dibuat.push(res.body.id)
 
         const group = opts.customerGroups.find(g => g.id === res.body.customer_group_id)
         const area = opts.areas.find(a => a.id === res.body.area_id)
@@ -235,11 +260,12 @@ describe('POST /api/customers', () => {
 
     test('dua simpan berurutan menghasilkan nomor berbeda dan naik', async () => {
         const a = await post('/api/customers', payloadValid())
+        if (a.body?.id) dibuat.push(a.body.id)
         const b = await post('/api/customers', payloadValid())
+        if (b.body?.id) dibuat.push(b.body.id)
 
         assert.strictEqual(a.status, 201)
         assert.strictEqual(b.status, 201)
-        dibuat.push(a.body.id, b.body.id)
 
         const seq = (code) => Number(code.split('-')[1].slice(2))
 
@@ -262,16 +288,16 @@ describe('POST /api/customers', () => {
 
     test('kolom channel legacy dibiarkan null', async () => {
         const res = await post('/api/customers', payloadValid())
+        if (res.body?.id) dibuat.push(res.body.id)
         assert.strictEqual(res.status, 201)
-        dibuat.push(res.body.id)
 
         assert.strictEqual(res.body.channel, null)
     })
 
     test('customer baru muncul di GET /api/customers', async () => {
         const res = await post('/api/customers', payloadValid())
+        if (res.body?.id) dibuat.push(res.body.id)
         assert.strictEqual(res.status, 201)
-        dibuat.push(res.body.id)
 
         const all = await get('/api/customers')
         assert.ok(
