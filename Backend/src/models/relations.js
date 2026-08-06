@@ -137,6 +137,16 @@ Customer.belongsTo(Channel, {
 
 })
 
+// Siapa yang terakhir mengubah customer ini. Alias PascalCase supaya
+// bentuk JSON-nya konsisten dengan Area / Channel / CustomerGroup.
+Customer.belongsTo(User, {
+
+    foreignKey: 'updated_by',
+
+    as: 'UpdatedBy'
+
+})
+
 User.hasMany(User, {
 
     foreignKey: 'supervisor_id',

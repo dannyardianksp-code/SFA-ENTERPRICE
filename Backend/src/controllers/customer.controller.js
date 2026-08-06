@@ -41,6 +41,27 @@ const User =
 const CustomerGroup =
     require('../models/customerGroup.model')
 
+/**
+ * Relasi yang selalu disertakan pada respons satu customer.
+ *
+ * Dipakai bersama oleh getById, create, dan kedua endpoint update
+ * supaya keempatnya mengembalikan bentuk identik — mobile bisa
+ * memasukkan hasilnya langsung ke state tanpa memeriksa apa saja
+ * yang ada.
+ *
+ * attributes UpdatedBy dibatasi dengan sengaja: tabel users punya
+ * kolom password.
+ */
+const CUSTOMER_RELATIONS = [
+    { model: Area, attributes: ['id', 'code', 'name'] },
+    { model: Channel, attributes: ['id', 'code', 'name'] },
+    { model: CustomerGroup, attributes: ['id', 'code', 'name'] },
+    { model: User, as: 'UpdatedBy', attributes: ['id', 'name'] },
+]
+
+const findCustomerWithRelations = (id) =>
+    Customer.findByPk(id, { include: CUSTOMER_RELATIONS })
+
 // ======================
 // GET ALL CUSTOMER
 // ======================
@@ -353,13 +374,7 @@ async (req, res) => {
         }
 
 
-        const full = await Customer.findByPk(created.id, {
-            include: [
-                { model: Area, attributes: ['id', 'code', 'name'] },
-                { model: Channel, attributes: ['id', 'code', 'name'] },
-                { model: CustomerGroup, attributes: ['id', 'code', 'name'] },
-            ],
-        })
+        const full = await findCustomerWithRelations(created.id)
 
         res.status(201).json(full)
 
@@ -380,22 +395,9 @@ exports.getById = async (req, res) => {
 
     try {
 
-        const customer = await Customer.findByPk(
-            req.params.id,
-            {
-
-                // CustomerGroup ikut disertakan supaya layar detail bisa
-                // menampilkan group tanpa request tambahan. Bentuknya
-                // sengaja disamakan dengan POST /api/customers yang juga
-                // mengembalikan ketiga relasi ini.
-                include: [
-                    Area,
-                    Channel,
-                    CustomerGroup,
-                ],
-
-            }
-        );
+        // Bentuk respons dipakai bersama create dan kedua endpoint
+        // update — lihat CUSTOMER_RELATIONS di atas.
+        const customer = await findCustomerWithRelations(req.params.id);
 
         if (!customer) {
 
