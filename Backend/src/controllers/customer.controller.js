@@ -384,9 +384,14 @@ exports.getById = async (req, res) => {
             req.params.id,
             {
 
+                // CustomerGroup ikut disertakan supaya layar detail bisa
+                // menampilkan group tanpa request tambahan. Bentuknya
+                // sengaja disamakan dengan POST /api/customers yang juga
+                // mengembalikan ketiga relasi ini.
                 include: [
                     Area,
                     Channel,
+                    CustomerGroup,
                 ],
 
             }
