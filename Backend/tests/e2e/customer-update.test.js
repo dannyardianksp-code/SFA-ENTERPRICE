@@ -247,4 +247,91 @@ describe('PUT /api/customers/:id', () => {
         assert.strictEqual(res.body.phone, null)
     })
 
+    describe('PUT /api/customers/:id/location', () => {
+
+        test('id tidak ada ditolak 404', async () => {
+            const res = await kirim('PUT', '/api/customers/99999999/location', {
+                latitude: '-6.2',
+                longitude: '106.8',
+                location_accuracy: 5,
+            })
+
+            assert.strictEqual(res.status, 404)
+        })
+
+        test('akurasi hilang ditolak 400', async () => {
+            const res = await kirim('PUT', `/api/customers/${target.id}/location`, {
+                latitude: '-6.2',
+                longitude: '106.8',
+            })
+
+            assert.strictEqual(res.status, 400)
+            assert.match(res.body.message, /Akurasi lokasi wajib/)
+        })
+
+        test('akurasi 51 m ditolak 400', async () => {
+            const res = await kirim('PUT', `/api/customers/${target.id}/location`, {
+                latitude: '-6.2',
+                longitude: '106.8',
+                location_accuracy: 51,
+            })
+
+            assert.strictEqual(res.status, 400)
+            assert.match(res.body.message, /terlalu rendah/)
+        })
+
+        test('koordinat kosong ditolak 400', async () => {
+            const res = await kirim('PUT', `/api/customers/${target.id}/location`, {
+                latitude: '',
+                longitude: '106.8',
+                location_accuracy: 5,
+            })
+
+            assert.strictEqual(res.status, 400)
+            assert.match(res.body.message, /Koordinat lokasi tidak valid/)
+        })
+
+        test('perbaikan lokasi berhasil', async () => {
+            const res = await kirim('PUT', `/api/customers/${target.id}/location`, {
+                latitude: '-6.175392',
+                longitude: '106.827153',
+                location_accuracy: 7.5,
+            })
+
+            assert.strictEqual(res.status, 200, JSON.stringify(res.body))
+            assert.strictEqual(Number(res.body.latitude), -6.175392)
+            assert.strictEqual(Number(res.body.longitude), 106.827153)
+            assert.strictEqual(Number(res.body.location_accuracy), 7.5)
+        })
+
+        test('nama dan kode tidak tersentuh oleh perbaikan lokasi', async () => {
+            const sebelum = (await get(`/api/customers/${target.id}`)).body
+
+            await kirim('PUT', `/api/customers/${target.id}/location`, {
+                latitude: '-6.200000',
+                longitude: '106.816666',
+                location_accuracy: 5,
+            })
+
+            const sesudah = (await get(`/api/customers/${target.id}`)).body
+
+            assert.strictEqual(sesudah.name, sebelum.name)
+            assert.strictEqual(sesudah.code, sebelum.code)
+        })
+
+        test('updated_at dan updated_by ikut terisi', async () => {
+            await kirim('PUT', `/api/customers/${target.id}/location`, {
+                latitude: '-6.200000',
+                longitude: '106.816666',
+                location_accuracy: 5,
+            })
+
+            const res = await get(`/api/customers/${target.id}`)
+
+            assert.ok(res.body.updated_at)
+            assert.strictEqual(res.body.updated_by, USER_ID)
+        })
+
+    })
+
 })

@@ -482,6 +482,69 @@ exports.update = async (req, res) => {
 
 
 // ======================
+// UPDATE LOKASI CUSTOMER
+// ======================
+
+/**
+ * Terpisah dari update field teks karena aturan akurasi hanya berlaku
+ * di sini. Digabung, validatornya harus bercabang "kalau lokasi ada
+ * maka…", dan jadi mungkin mengirim teks + lokasi sekaligus — yang
+ * justru dilarang oleh desainnya.
+ */
+exports.updateLocation = async (req, res) => {
+
+    try {
+
+        const customer = await Customer.findByPk(req.params.id)
+
+        if (!customer) {
+            return sendError(res, 404, 'Customer tidak ditemukan.')
+        }
+
+        const user = await findUserWithAreas(req.user.id)
+
+        if (!user) {
+            return sendError(res, 404, 'User tidak ditemukan.')
+        }
+
+        const ditolak = assertAreaChannelAccess(
+            user,
+            customer.area_id,
+            customer.channel_id
+        )
+
+        if (ditolak) {
+            return sendError(res, ditolak.status, ditolak.message)
+        }
+
+        const { errors, values } = validateLocationPayload(req.body)
+
+        if (errors.length > 0) {
+            return sendError(res, 400, errors[0])
+        }
+
+        // Koordinat disimpan sebagai varchar di skema ini — String()
+        // eksplisit supaya Sequelize tidak mengirim angka.
+        await customer.update({
+            latitude: String(values.latitude),
+            longitude: String(values.longitude),
+            location_accuracy: values.locationAccuracy,
+            updated_at: new Date(),
+            updated_by: req.user.id,
+        })
+
+        res.json(await findCustomerWithRelations(customer.id))
+
+    } catch (err) {
+
+        return sendServerError(res, err, 'UPDATE CUSTOMER LOCATION')
+
+    }
+
+}
+
+
+// ======================
 // GET NEARBY CUSTOMER
 // ======================
 
@@ -826,6 +889,46 @@ const parsePositiveInt = (value) => {
 }
 
 /**
+ * Validasi koordinat + akurasi.
+ *
+ * Dipakai bersama oleh validateCreatePayload dan endpoint perbaiki
+ * lokasi, supaya ambang MAX_LOCATION_ACCURACY_METERS hanya hidup di
+ * satu tempat. Kalau disalin, dua jalur bisa lama-lama berbeda
+ * ambangnya tanpa ada yang sadar.
+ */
+const validateLocationPayload = (body = {}) => {
+
+    const errors = []
+
+    const latitude = parseCoordinate(body.latitude)
+    const longitude = parseCoordinate(body.longitude)
+
+    if (!isValidLatitude(latitude) || !isValidLongitude(longitude)) {
+        errors.push('Koordinat lokasi tidak valid.')
+    }
+
+    const locationAccuracy = parseCoordinate(body.location_accuracy)
+
+    if (locationAccuracy === null) {
+        errors.push('Akurasi lokasi wajib dikirim.')
+    } else if (locationAccuracy < 0) {
+        errors.push('Akurasi lokasi tidak valid. Ambil ulang lokasi.')
+    } else if (locationAccuracy > MAX_LOCATION_ACCURACY_METERS) {
+        errors.push(
+            `Akurasi lokasi ±${locationAccuracy} m terlalu rendah ` +
+            `(maksimal ${MAX_LOCATION_ACCURACY_METERS} m).`
+        )
+    }
+
+    return {
+        errors,
+        values: { latitude, longitude, locationAccuracy },
+    }
+
+}
+
+
+/**
  * Diekspor agar cabang validasinya bisa diuji tanpa database.
  * Mengembalikan daftar pesan error (kosong = valid) dan nilai
  * yang sudah diparse untuk dipakai controller.
@@ -856,25 +959,9 @@ const validateCreatePayload = (body = {}) => {
     if (areaId === null) errors.push('Area wajib dipilih.')
     if (channelId === null) errors.push('Channel wajib dipilih.')
 
-    const latitude = parseCoordinate(body.latitude)
-    const longitude = parseCoordinate(body.longitude)
+    const lokasi = validateLocationPayload(body)
 
-    if (!isValidLatitude(latitude) || !isValidLongitude(longitude)) {
-        errors.push('Koordinat lokasi tidak valid.')
-    }
-
-    const locationAccuracy = parseCoordinate(body.location_accuracy)
-
-    if (locationAccuracy === null) {
-        errors.push('Akurasi lokasi wajib dikirim.')
-    } else if (locationAccuracy < 0) {
-        errors.push('Akurasi lokasi tidak valid. Ambil ulang lokasi.')
-    } else if (locationAccuracy > MAX_LOCATION_ACCURACY_METERS) {
-        errors.push(
-            `Akurasi lokasi ±${locationAccuracy} m terlalu rendah ` +
-            `(maksimal ${MAX_LOCATION_ACCURACY_METERS} m).`
-        )
-    }
+    errors.push(...lokasi.errors)
 
     return {
         errors,
@@ -883,9 +970,9 @@ const validateCreatePayload = (body = {}) => {
             customerGroupId,
             areaId,
             channelId,
-            latitude,
-            longitude,
-            locationAccuracy,
+            latitude: lokasi.values.latitude,
+            longitude: lokasi.values.longitude,
+            locationAccuracy: lokasi.values.locationAccuracy,
             // ?. hanya menjaga null/undefined, bukan tipe. Tanpa penjagaan
             // typeof, nilai non-string melempar TypeError. Lihat
             // tests/unit/customer-create.test.js untuk contoh.
@@ -1015,5 +1102,6 @@ const validateUpdatePayload = (body = {}, current = {}) => {
 
 exports.validateCreatePayload = validateCreatePayload
 exports.validateUpdatePayload = validateUpdatePayload
+exports.validateLocationPayload = validateLocationPayload
 exports.LOCKED_FIELDS = LOCKED_FIELDS
 exports.MAX_LOCATION_ACCURACY_METERS = MAX_LOCATION_ACCURACY_METERS

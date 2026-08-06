@@ -3,6 +3,8 @@ const assert = require('node:assert')
 
 const {
     validateUpdatePayload,
+    validateLocationPayload,
+    MAX_LOCATION_ACCURACY_METERS,
 } = require('../../src/controllers/customer.controller')
 
 
@@ -198,6 +200,118 @@ describe('validateUpdatePayload — field terkunci', () => {
         }, tersimpan)
 
         assert.ok(errors.some(e => /^Kode customer tidak bisa diubah/.test(e)), errors.join(' | '))
+    })
+
+})
+
+
+describe('validateLocationPayload', () => {
+
+    const sah = {
+        latitude: '-6.200000',
+        longitude: '106.816666',
+        location_accuracy: 8,
+    }
+
+    test('payload sah', () => {
+        const { errors, values } = validateLocationPayload(sah)
+
+        assert.deepStrictEqual(errors, [])
+        assert.strictEqual(values.latitude, -6.2)
+        assert.strictEqual(values.longitude, 106.816666)
+        assert.strictEqual(values.locationAccuracy, 8)
+    })
+
+    // Number("") === 0. Koordinat kosong pernah terbaca sebagai titik
+    // 0°,0° di Samudra Atlantik.
+    test('koordinat kosong ditolak, bukan dianggap 0', () => {
+        for (const kosong of ['', '   ', null, undefined]) {
+            const { errors } = validateLocationPayload({
+                ...sah,
+                latitude: kosong,
+            })
+
+            assert.ok(
+                errors.some(e => /Koordinat lokasi tidak valid/.test(e)),
+                `latitude=${JSON.stringify(kosong)} seharusnya ditolak`
+            )
+        }
+    })
+
+    test('koordinat di luar rentang ditolak', () => {
+        const kasus = [
+            { latitude: '91', longitude: '106' },
+            { latitude: '-91', longitude: '106' },
+            { latitude: '-6', longitude: '181' },
+            { latitude: '-6', longitude: '-181' },
+        ]
+
+        for (const k of kasus) {
+            const { errors } = validateLocationPayload({ ...sah, ...k })
+
+            assert.ok(
+                errors.some(e => /Koordinat lokasi tidak valid/.test(e)),
+                `${JSON.stringify(k)} seharusnya ditolak`
+            )
+        }
+    })
+
+    test('akurasi wajib dikirim', () => {
+        const { location_accuracy, ...tanpaAkurasi } = sah
+        const { errors } = validateLocationPayload(tanpaAkurasi)
+
+        assert.ok(errors.some(e => /Akurasi lokasi wajib/.test(e)))
+    })
+
+    test('akurasi negatif ditolak', () => {
+        const { errors } = validateLocationPayload({
+            ...sah,
+            location_accuracy: -1,
+        })
+
+        assert.ok(errors.some(e => /Akurasi lokasi tidak valid/.test(e)))
+    })
+
+    test('akurasi tepat di batas diterima', () => {
+        const { errors } = validateLocationPayload({
+            ...sah,
+            location_accuracy: MAX_LOCATION_ACCURACY_METERS,
+        })
+
+        assert.deepStrictEqual(errors, [])
+    })
+
+    test('akurasi satu meter di atas batas ditolak', () => {
+        const { errors } = validateLocationPayload({
+            ...sah,
+            location_accuracy: MAX_LOCATION_ACCURACY_METERS + 1,
+        })
+
+        assert.ok(errors.some(e => /terlalu rendah/.test(e)), errors.join(' | '))
+    })
+
+    // Akurasi datang sebagai string dari DECIMAL(7,2) maupun dari JSON.
+    test('akurasi berupa string tetap dibaca sebagai angka', () => {
+        const { errors, values } = validateLocationPayload({
+            ...sah,
+            location_accuracy: '12.50',
+        })
+
+        assert.deepStrictEqual(errors, [])
+        assert.strictEqual(values.locationAccuracy, 12.5)
+    })
+
+    test('tidak menyentuh field teks sama sekali', () => {
+        const { values } = validateLocationPayload({
+            ...sah,
+            name: 'TOKO',
+            address: 'ALAMAT',
+        })
+
+        assert.deepStrictEqual(
+            Object.keys(values).sort(),
+            ['latitude', 'locationAccuracy', 'longitude']
+        )
     })
 
 })
