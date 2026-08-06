@@ -22,6 +22,15 @@ const assertLetters = (value, label) => {
     }
 }
 
+/**
+ * Cek satu segmen kode (group/area/channel) tanpa melempar — dipakai di
+ * controller SEBELUM formatCustomerCode dipanggil di dalam loop retry,
+ * supaya kode tidak valid ditolak dengan 400 yang jelas, bukan lolos
+ * jadi Error yang tertangkap sebagai 500 opaque.
+ */
+const isValidCodeSegment = (value) =>
+    typeof value === 'string' && LETTERS_ONLY.test(value)
+
 const formatCustomerCode = ({
     groupCode,
     areaCode,
@@ -56,5 +65,6 @@ const formatCustomerCode = ({
 
 module.exports = {
     formatCustomerCode,
+    isValidCodeSegment,
     CUSTOMER_CODE_PATTERN,
 }

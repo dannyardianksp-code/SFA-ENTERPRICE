@@ -3,6 +3,7 @@ const assert = require('node:assert')
 
 const {
     formatCustomerCode,
+    isValidCodeSegment,
     CUSTOMER_CODE_PATTERN,
 } = require('../../src/utils/customer-code.util')
 
@@ -95,6 +96,40 @@ describe('formatCustomerCode', () => {
     test('menolak tahun di luar 0..99', () => {
         assert.throws(() => formatCustomerCode({ ...valid, year: 100 }), /tahun/)
         assert.throws(() => formatCustomerCode({ ...valid, year: -1 }), /tahun/)
+    })
+
+})
+
+// isValidCodeSegment adalah versi TANPA-melempar dari pengecekan yang
+// sama di formatCustomerCode. Dipakai controller SEBELUM loop retry,
+// supaya kode tidak valid bisa dibalas 400, bukan lolos jadi Error
+// yang tertangkap sebagai 500 opaque (lihat customer.controller.js).
+describe('isValidCodeSegment', () => {
+
+    test('menerima huruf A-Z murni', () => {
+        assert.strictEqual(isValidCodeSegment('IDM'), true)
+        assert.strictEqual(isValidCodeSegment('MT'), true)
+        assert.strictEqual(isValidCodeSegment('IND'), true)
+    })
+
+    test('menolak yang mengandung angka', () => {
+        assert.strictEqual(isValidCodeSegment('99'), false)
+        assert.strictEqual(isValidCodeSegment('M9'), false)
+        assert.strictEqual(isValidCodeSegment(123), false)
+    })
+
+    test('menolak huruf kecil', () => {
+        assert.strictEqual(isValidCodeSegment('idm'), false)
+    })
+
+    test('menolak tanda hubung', () => {
+        assert.strictEqual(isValidCodeSegment('HARI-HARI'), false)
+    })
+
+    test('menolak string kosong, null, dan undefined', () => {
+        assert.strictEqual(isValidCodeSegment(''), false)
+        assert.strictEqual(isValidCodeSegment(null), false)
+        assert.strictEqual(isValidCodeSegment(undefined), false)
     })
 
 })

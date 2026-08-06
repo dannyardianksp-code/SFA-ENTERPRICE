@@ -117,6 +117,58 @@ describe('GET /api/customers/form-options', () => {
         )
     })
 
+    // Kode "99" bukan huruf A-Z, tetapi tetap NOT NULL — filter lama
+    // ({ code: { [Op.not]: null } }) meloloskannya ke dropdown, lalu
+    // POST menolaknya dengan 400. Group tersebut harus disaring di sini
+    // juga. Kode asli DIPULIHKAN di finally supaya database tidak
+    // tertinggal rusak.
+    test('group berkode tidak valid (bukan A-Z) tidak ikut ditawarkan', async () => {
+        const mysql = require('mysql2/promise')
+        const conn = await mysql.createConnection({
+            host: process.env.DB_HOST,
+            user: process.env.DB_USER,
+            password: process.env.DB_PASS,
+            database: process.env.DB_NAME,
+        })
+
+        const before = await get('/api/customers/form-options')
+        const groupId = before.body.customerGroups[0].id
+
+        const [[asli]] = await conn.query(
+            'SELECT code FROM customer_groups WHERE id = ?', [groupId]
+        )
+
+        try {
+            await conn.query(
+                'UPDATE customer_groups SET code = ? WHERE id = ?',
+                ['99', groupId]
+            )
+
+            const res = await get('/api/customers/form-options')
+
+            assert.strictEqual(res.status, 200)
+            assert.ok(
+                !res.body.customerGroups.some(g => g.id === groupId),
+                'group berkode "99" seharusnya tidak ditawarkan di dropdown'
+            )
+        } finally {
+            await conn.query(
+                'UPDATE customer_groups SET code = ? WHERE id = ?',
+                [asli.code, groupId]
+            )
+
+            const [[dipulihkan]] = await conn.query(
+                'SELECT code FROM customer_groups WHERE id = ?', [groupId]
+            )
+            assert.strictEqual(
+                dipulihkan.code, asli.code,
+                'kode group gagal dipulihkan — database tertinggal rusak'
+            )
+
+            await conn.end()
+        }
+    })
+
 })
 
 const post = async (path, payload, withAuth = true) => {
@@ -304,6 +356,58 @@ describe('POST /api/customers', () => {
             all.body.some(c => c.id === res.body.id),
             'customer baru tidak muncul di daftar — area/channel di luar cakupan?'
         )
+    })
+
+    // Bug nyata: group code "99" (bukan huruf A-Z) membuat
+    // formatCustomerCode melempar DI LUAR try dalam loop retry, lolos
+    // ke catch terluar, dan menghasilkan 500 opaque — tanpa petunjuk
+    // sama sekali bahwa masalahnya di kode group. Pemeriksaan baru
+    // SEBELUM loop harus menangkapnya sebagai 400 yang menyebut kode.
+    // Kode asli DIPULIHKAN di finally supaya database tidak tertinggal
+    // rusak.
+    test('kode group tidak valid ditolak 400, bukan 500', async () => {
+        const mysql = require('mysql2/promise')
+        const conn = await mysql.createConnection({
+            host: process.env.DB_HOST,
+            user: process.env.DB_USER,
+            password: process.env.DB_PASS,
+            database: process.env.DB_NAME,
+        })
+
+        const groupId = opts.customerGroups[0].id
+        const [[asli]] = await conn.query(
+            'SELECT code FROM customer_groups WHERE id = ?', [groupId]
+        )
+
+        try {
+            await conn.query(
+                'UPDATE customer_groups SET code = ? WHERE id = ?',
+                ['99', groupId]
+            )
+
+            const res = await post('/api/customers', payloadValid({
+                customer_group_id: groupId,
+            }))
+            if (res.body?.id) dibuat.push(res.body.id)
+
+            assert.strictEqual(res.status, 400, JSON.stringify(res.body))
+            assert.match(res.body.message, /tidak valid/)
+        } finally {
+            await conn.query(
+                'UPDATE customer_groups SET code = ? WHERE id = ?',
+                [asli.code, groupId]
+            )
+
+            const [[dipulihkan]] = await conn.query(
+                'SELECT code FROM customer_groups WHERE id = ?', [groupId]
+            )
+            assert.strictEqual(
+                dipulihkan.code, asli.code,
+                'kode group gagal dipulihkan — database tertinggal rusak'
+            )
+
+            await conn.end()
+        }
     })
 
 })

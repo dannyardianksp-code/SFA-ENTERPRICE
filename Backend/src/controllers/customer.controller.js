@@ -19,6 +19,7 @@ const {
 
 const {
     formatCustomerCode,
+    isValidCodeSegment,
 } = require('../utils/customer-code.util')
 
 const db = require('../config/database')
@@ -263,6 +264,27 @@ async (req, res) => {
                 res,
                 400,
                 `Customer group "${group.name}" belum punya kode.`
+            )
+        }
+
+        // formatCustomerCode melempar bila kode bukan huruf A-Z murni.
+        // Ia dipanggil di dalam loop retry, di luar try-nya, sehingga
+        // lemparannya akan lolos jadi 500 opaque. Diperiksa di sini
+        // supaya sales dapat 400 yang menyebut kode mana yang salah.
+        const kodeTidakValid = [
+            ['Customer group', group.name, group.code],
+            ['Area', area.name, area.code],
+            ['Channel', channel.name, channel.code],
+        ].find(([, , code]) => !isValidCodeSegment(code))
+
+        if (kodeTidakValid) {
+            const [label, nama, code] = kodeTidakValid
+
+            return sendError(
+                res,
+                400,
+                `Kode ${label} "${nama}" tidak valid (${JSON.stringify(code)}). ` +
+                `Kode hanya boleh huruf A-Z. Hubungi administrator.`
             )
         }
 
@@ -684,11 +706,24 @@ async (req, res) => {
 
             ]);
 
+        // Kode yang bukan huruf A-Z murni (mis. "99") membuat
+        // formatCustomerCode melempar dan POST menolak dengan 400 —
+        // menawarkannya di dropdown berarti menjanjikan pilihan yang
+        // pasti gagal, kelas bug yang sama dengan group tanpa code.
+        //
+        // Disaring di JS, bukan di SQL: MySQL tidak punya operator
+        // regex portabel yang enak dipakai di WHERE (REGEXP ada tapi
+        // perilakunya berbeda antar versi/collation), dan daftar
+        // customer group kecil sehingga menyaring di JS setelah query
+        // jauh lebih sederhana dan jelas dibaca.
+        const validCustomerGroups = customerGroups.filter(
+            (g) => isValidCodeSegment(g.code)
+        )
 
         res.json({
             areas,
             channels,
-            customerGroups,
+            customerGroups: validCustomerGroups,
         });
 
 
