@@ -6,6 +6,8 @@ const auth =
 
 const { Op } = require('sequelize')
 
+const { localDateString } = require('../utils/date.util')
+
 const VisitPlan =
     require('../models/visitPlan.model')
 
@@ -30,13 +32,7 @@ router.get(
 
             const now = new Date()
 
-            const today =
-                now.toLocaleDateString(
-                    'en-CA',
-                    {
-                        timeZone: 'Asia/Jakarta'
-                    }
-                )
+            const today = localDateString(now)
 
             const firstDay =
                 new Date(
