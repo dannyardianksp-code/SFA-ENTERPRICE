@@ -27,6 +27,8 @@ tests/
 | `area.util.test.js` | resolusi hak akses area (multi-area + fallback `area_id`) |
 | `response.util.test.js` | bentuk error `{ message }`, penyembunyian detail saat production |
 | `customer.controller.test.js` | cabang validasi `getNearbyCustomers` lewat `req`/`res` palsu |
+| `access.util.test.js` | aturan hak akses area + channel, termasuk gagal-tertutup untuk user kosong |
+| `customer-update.test.js` | validasi field teks, field terkunci, dan koordinat pada jalur update |
 
 `customer.controller.test.js` bisa jalan tanpa database karena seluruh
 validasi parameter terjadi **sebelum** `User.findByPk` dipanggil.
@@ -46,6 +48,22 @@ Bisa diatur lewat environment variable:
 | `TEST_BASE_URL` | `http://localhost:1000` |
 | `TEST_USER_ID` | `1` — harus user yang punya area (assigned atau `area_id`) |
 | `TEST_EMAIL` | `danny@mail.com` — hanya untuk tes password salah, tidak perlu password |
+
+## ⚠️ Tes e2e menulis ke database
+
+`tests/e2e/customer-create.test.js` dan
+`tests/e2e/customer-update.test.js` membuat customer sungguhan lalu
+menghapusnya di hook `after()` (langsung lewat `mysql2`, karena tidak
+ada endpoint DELETE customer).
+
+`customer-update.test.js` sengaja **membuat customer sendiri** untuk
+diedit dan tidak pernah menyentuh customer yang sudah ada — mengedit
+data nyata di database dev sama saja merusaknya.
+
+Nomor urut kode yang terpakai **tidak kembali** setelah baris dihapus,
+sehingga deret kode akan berlubang. Aman di database dev.
+
+**Jangan jalankan `npm run test:e2e` menghadap database produksi.**
 
 ## Kenapa tes ini ada
 
@@ -68,3 +86,24 @@ jangan dihapus tanpa membaca komentarnya:
   melihat kumpulan customer berbeda di dua layar.
 - **relasi `Channel`** — pernah tidak di-include di `/customers/nearby`,
   membuat kolom channel di mobile tampil `-`.
+- **field terkunci diabaikan diam-diam** — kode customer dibentuk dari
+  group, area, dan channel. Klien yang mencoba mengubah salah satunya
+  harus mendapat 400, bukan 200 yang membuatnya menyangka perubahannya
+  tersimpan.
+- **`"1"` vs `1`** — JSON tidak menjamin tipe. Perbandingan field
+  terkunci yang tidak meng-koersi tipe akan menolak klien yang
+  mengirim balik objek customer apa adanya.
+- **kolom `password` ikut terkirim** — relasi `UpdatedBy` mengambil dari
+  tabel `users`. Tanpa `attributes` yang dibatasi, seluruh baris user
+  termasuk password hash-nya masuk ke respons.
+
+## Urutan rilis
+
+Migration harus dijalankan **sebelum** backend versi baru dideploy:
+
+1. `migrations/001-add-customer-code-fields.sql`
+2. `migrations/002-add-customer-audit-fields.sql`
+
+Backend yang dideploy lebih dulu akan mencoba menulis `updated_at` dan
+`updated_by` ke kolom yang belum ada, dan setiap penyimpanan hasil edit
+gagal dengan 500.

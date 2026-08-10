@@ -3,6 +3,8 @@ const db = require('../config/database')
 
 const CustomerGroup = db.define('CustomerGroup', {
 
+    code: DataTypes.STRING,
+
     name: DataTypes.STRING
 
 }, {
