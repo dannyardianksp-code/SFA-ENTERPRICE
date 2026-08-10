@@ -29,6 +29,8 @@ tests/
 | `customer.controller.test.js` | cabang validasi `getNearbyCustomers` lewat `req`/`res` palsu |
 | `access.util.test.js` | aturan hak akses area + channel, termasuk gagal-tertutup untuk user kosong |
 | `customer-update.test.js` | validasi field teks, field terkunci, dan koordinat pada jalur update |
+| `date.util.test.js` | tanggal lokal Asia/Jakarta, termasuk jam malam UTC yang sudah tanggal berikutnya |
+| `visit-plan.test.js` | rentang tanggal SPG, batas bulan dan batas tahun |
 
 `customer.controller.test.js` bisa jalan tanpa database karena seluruh
 validasi parameter terjadi **sebelum** `User.findByPk` dipanggil.
@@ -63,6 +65,10 @@ data nyata di database dev sama saja merusaknya.
 Nomor urut kode yang terpakai **tidak kembali** setelah baris dihapus,
 sehingga deret kode akan berlubang. Aman di database dev.
 
+`tests/e2e/visit-plan.test.js` membuat dua visit plan (hari ini dan
+lusa) lalu menghapusnya di `after()`. Yang lusa ada supaya batas atas
+rentang benar-benar diuji, bukan diasumsikan.
+
 **Jangan jalankan `npm run test:e2e` menghadap database produksi.**
 
 ## Kenapa tes ini ada
@@ -96,6 +102,9 @@ jangan dihapus tanpa membaca komentarnya:
 - **kolom `password` ikut terkirim** — relasi `UpdatedBy` mengambil dari
   tabel `users`. Tanpa `attributes` yang dibatasi, seluruh baris user
   termasuk password hash-nya masuk ke respons.
+- **`toISOString()` untuk tanggal lokal** — itu UTC. Di WIB setiap pagi
+  antara 00:00 dan 07:00 hasilnya tanggal kemarin, sehingga SPG yang
+  membuka aplikasi jam 6 pagi melihat rencana kunjungan kemarin.
 
 ## Urutan rilis
 
