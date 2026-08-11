@@ -28,6 +28,7 @@ const {
 
 const {
     resolveSubordinateUserIds,
+    PLAN_WRITER_ROLES,
 } = require('../utils/access.util')
 
 
@@ -62,6 +63,10 @@ exports.getAll =
                     req.user.id
 
                 )
+
+            if (!loginUser) {
+                return sendError(res, 404, 'User tidak ditemukan.')
+            }
 
             let whereCondition = {}
 
@@ -240,11 +245,14 @@ exports.update =
 
             // Jadwal adalah target. Target yang bisa diubah sendiri oleh
             // yang ditarget berhenti berfungsi sebagai target.
-            if (loginUser.role === 'SPG') {
+            //
+            // Allowlist, bukan blacklist: role NULL, nilai warisan, atau
+            // role baru apa pun tidak otomatis mendapat hak tulis.
+            if (!PLAN_WRITER_ROLES.includes(loginUser.role)) {
                 return sendError(
                     res,
                     403,
-                    'SPG tidak boleh mengubah visit plan.'
+                    'Hanya supervisor ke atas yang boleh mengubah visit plan.'
                 )
             }
 
@@ -344,11 +352,13 @@ exports.delete =
                 return sendError(res, 404, 'User tidak ditemukan.')
             }
 
-            if (loginUser.role === 'SPG') {
+            // Allowlist, bukan blacklist: role NULL, nilai warisan, atau
+            // role baru apa pun tidak otomatis mendapat hak tulis.
+            if (!PLAN_WRITER_ROLES.includes(loginUser.role)) {
                 return sendError(
                     res,
                     403,
-                    'SPG tidak boleh menghapus visit plan.'
+                    'Hanya supervisor ke atas yang boleh mengubah visit plan.'
                 )
             }
 

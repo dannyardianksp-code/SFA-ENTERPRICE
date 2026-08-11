@@ -745,6 +745,8 @@ Failed : ${result.failed}`
 
                                         onChange={handleChange}
 
+                                        disabled={!!editId}
+
                                     >
 
                                         <option value="">
@@ -774,6 +776,24 @@ Failed : ${result.failed}`
                                         }
 
                                     </select>
+
+                                    {
+
+                                        editId
+
+                                        &&
+
+                                        (
+
+                                            <p className="text-xs text-slate-400 mt-1">
+
+                                                Sales tidak bisa diubah. Hapus rencana ini lalu buat yang baru.
+
+                                            </p>
+
+                                        )
+
+                                    }
 
                                 </div>
 

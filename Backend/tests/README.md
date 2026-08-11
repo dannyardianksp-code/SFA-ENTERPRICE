@@ -74,7 +74,10 @@ termasuk **milik user lain** (Tino, SUBUR, Tria) karena itu yang
 membuktikan cakupan subtree — lalu menghapus semuanya di `after()`. Satu
 di antaranya diubah statusnya menjadi `'ON VISIT'` langsung lewat
 `mysql2`, karena `create` memaksa `'PENDING'` sehingga status non-PENDING
-tidak bisa dibuat lewat API.
+tidak bisa dibuat lewat API. Berkas ini juga menyisipkan satu baris
+`visit_activities` **yatim** (menunjuk `visit_id` yang tidak ada) langsung
+lewat `mysql2` untuk menguji `required: true` pada include `Visit`, lalu
+menghapusnya lagi di `after()` lokal blok itu.
 
 **Jangan jalankan `npm run test:e2e` menghadap database produksi.**
 

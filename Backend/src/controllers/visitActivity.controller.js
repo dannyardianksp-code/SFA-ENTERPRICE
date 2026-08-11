@@ -16,7 +16,7 @@ const User =
 const Activity =
     require('../models/activity.model')
 
-const { sendServerError } =
+const { sendError, sendServerError } =
     require('../utils/response.util')
 
 const {
@@ -107,6 +107,10 @@ exports.getAll = async (req, res) => {
 
             )
 
+        if (!loginUser) {
+            return sendError(res, 404, 'User tidak ditemukan.')
+        }
+
         // Satu aturan: rantai supervisor_id. null berarti tidak
         // dibatasi, jadi visitWhere dibiarkan kosong — tapi
         // `required: true` pada include Visit di bawah TETAP, karena itu
@@ -132,9 +136,7 @@ exports.getAll = async (req, res) => {
 
             endDate,
 
-            product,
-
-            sales
+            product
 
         } = req.query
 
@@ -206,7 +208,8 @@ exports.getAll = async (req, res) => {
                             },
 
                             {
-                                model: User
+                                model: User,
+                                attributes: ['id', 'name']
                             }
 
                         ]

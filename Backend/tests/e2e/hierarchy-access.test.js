@@ -172,8 +172,9 @@ describe('GET /api/visit-plans — cakupan hierarki', () => {
         )
     })
 
-    // Kasus yang sekarang mengembalikan kosong: filter area_id manager
-    // bernilai NULL sehingga tidak cocok dengan sales mana pun.
+    // Sebelum perbaikan ini, kasus ini mengembalikan kosong: filter
+    // area_id manager bernilai NULL sehingga tidak cocok dengan sales
+    // mana pun.
     test('manager melihat rencana seluruh subtree, termasuk dua tingkat ke bawah', async () => {
         const res = await get('/api/visit-plans', MANAGER, 'MANAGER')
 
@@ -254,9 +255,9 @@ describe('GET /api/visit-activities — cakupan hierarki', () => {
         }
     })
 
-    // Supervisor melihat miliknya sendiri DAN bawahannya. Sekarang
-    // cabangnya hanya mengambil bawahan, jadi activity supervisor
-    // sendiri tidak pernah terlihat olehnya.
+    // Supervisor melihat miliknya sendiri DAN bawahannya. Sebelum
+    // perbaikan ini, cabangnya hanya mengambil bawahan, jadi activity
+    // supervisor sendiri tidak pernah terlihat olehnya.
     test('supervisor melihat minimal semua yang dilihat SPG bawahannya', async () => {
         const spg = await get('/api/visit-activities', DANNY, 'SPG')
         const spv = await get('/api/visit-activities', JAKARTA, 'SUPERVISOR')
@@ -273,17 +274,27 @@ describe('GET /api/visit-activities — cakupan hierarki', () => {
         }
     })
 
-    test('administrator melihat minimal sebanyak manager', async () => {
+    // Sebelumnya ini membandingkan panjang array dengan `>=`, yang juga
+    // lulus bila keduanya nol. Sekarang dibuktikan lewat keanggotaan id
+    // seperti tes supervisor di atas: setiap activity yang terlihat
+    // manager (role dibatasi subtree) harus ikut terlihat administrator
+    // (role tak terbatas) — ini benar secara logika akses, bukan
+    // kebetulan jumlah.
+    test('administrator melihat semua yang dilihat manager', async () => {
         const mgr = await get('/api/visit-activities', MANAGER, 'MANAGER')
         const adm = await get('/api/visit-activities', ADMIN, 'ADMINISTRATOR')
 
         assert.strictEqual(mgr.status, 200)
         assert.strictEqual(adm.status, 200)
 
-        assert.ok(
-            adm.body.length >= mgr.body.length,
-            `administrator ${adm.body.length} < manager ${mgr.body.length}`
-        )
+        const idsAdm = adm.body.map(a => a.id)
+
+        for (const a of mgr.body) {
+            assert.ok(
+                idsAdm.includes(a.id),
+                `activity ${a.id} terlihat manager tapi tidak terlihat administrator`
+            )
+        }
     })
 
     // idYatim (dibuat before() di atas) menunjuk visit_id yang tidak ada
@@ -344,10 +355,19 @@ describe('GET /api/visits — cakupan hierarki', () => {
         }
     })
 
-    // Sekarang MANAGER tidak punya cabang sama sekali sehingga
-    // where = {} dan ia melihat SEMUA kunjungan. Setelah perubahan ini
-    // aksesnya menyempit ke subtree-nya — pengetatan yang disengaja.
-    test('manager melihat kunjungan subtree-nya', async () => {
+    // Sebelum perbaikan ini, MANAGER tidak punya cabang sama sekali
+    // sehingga where = {} dan ia melihat SEMUA kunjungan. Setelah
+    // perubahan ini aksesnya menyempit ke subtree-nya — pengetatan yang
+    // disengaja.
+    //
+    // Tes ini HANYA menjaga bentuk respons (200 + array), bukan
+    // cakupannya. Membuktikan cakupan butuh sebuah kunjungan yang
+    // diketahui milik user DI LUAR subtree MANAGER, tapi kunjungan hanya
+    // bisa dibuat lewat check-in yang memvalidasi jarak GPS — di luar
+    // cakupan sub-proyek ini — dan seluruh id user yang diketahui berkas
+    // ini (Danny, Tino, SUBUR, Tria) ada DI DALAM subtree MANAGER,
+    // sehingga tidak ada kandidat untuk membuktikan pengecualian.
+    test('manager melihat kunjungan subtree-nya (bentuk respons saja)', async () => {
         const res = await get('/api/visits', MANAGER, 'MANAGER')
 
         assert.strictEqual(res.status, 200)
@@ -405,8 +425,8 @@ describe('GET /api/visits/:id — kepemilikan', () => {
         assert.strictEqual(res.body.id, visitId)
     })
 
-    // Sekarang endpoint ini tidak memeriksa apa pun: siapa saja bisa
-    // membaca kunjungan siapa saja dengan menebak id.
+    // Sebelum perbaikan ini, endpoint ini tidak memeriksa apa pun: siapa
+    // saja bisa membaca kunjungan siapa saja dengan menebak id.
     test('user di luar subtree ditolak 403', async (t) => {
         if (visitId === null) {
             t.skip('database dev tidak punya kunjungan untuk diuji')
@@ -544,7 +564,7 @@ describe('PUT dan DELETE /api/visit-plans/:id', () => {
         assert.strictEqual(res.status, 404)
     })
 
-    // INI bug yang diperbaiki: sekarang datanya diubah dulu, baru
+    // INI bug yang diperbaiki: sebelumnya datanya diubah dulu, baru
     // statusnya diperiksa, sehingga penolakan 400 datang setelah
     // datanya sudah rusak.
     test('rencana non-PENDING ditolak 400 DAN datanya tidak berubah', async () => {

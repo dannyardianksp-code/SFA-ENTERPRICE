@@ -70,6 +70,10 @@ const assertAreaChannelAccess = (user, areaId, channelId) => {
 const UNRESTRICTED_ROLES = ['ADMINISTRATOR']
 
 
+/** Role yang boleh mengubah dan menghapus jadwal kunjungan. */
+const PLAN_WRITER_ROLES = ['SUPERVISOR', 'MANAGER', 'ADMINISTRATOR']
+
+
 /**
  * Pengaman terakhir kalau data supervisor_id sampai melingkar.
  * Penyaring id yang sudah terkumpul sudah menangani lingkaran; batas ini
@@ -179,7 +183,7 @@ const resolveSubordinateUserIds = async (user) => {
 module.exports = {
     assertAreaChannelAccess,
     RESTRICTED_ROLES,
-    UNRESTRICTED_ROLES,
+    PLAN_WRITER_ROLES,
     MAX_HIERARCHY_DEPTH,
     collectSubtreeIds,
     resolveSubordinateUserIds,

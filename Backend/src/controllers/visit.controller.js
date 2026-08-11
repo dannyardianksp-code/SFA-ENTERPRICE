@@ -363,7 +363,7 @@ exports.getById = async (
                 {
                     include: [
                         Customer,
-                        User
+                        { model: User, attributes: ['id', 'name'] }
                     ]
                 }
             )
