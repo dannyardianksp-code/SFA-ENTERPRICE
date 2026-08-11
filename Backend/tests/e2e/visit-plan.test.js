@@ -181,8 +181,11 @@ describe('GET /api/visit-plans (SPG)', () => {
         assert.ok('address' in plan.Customer, 'address tidak di-include')
     })
 
-    // Dipakai layar untuk menentukan sudah/belum dikunjungi, karena
-    // kolom status selalu 'PENDING'.
+    // Dipakai layar untuk menentukan sudah/belum dikunjungi. Kolom
+    // status memang berubah (checkIn -> 'ON VISIT', checkOut ->
+    // 'COMPLETED'), tapi baris `visits` adalah faktanya sedangkan
+    // status hanya turunan yang bisa menyimpang kalau update-nya gagal
+    // separuh jalan.
     test('setiap item memuat key Visit', async () => {
         const res = await get('/api/visit-plans')
 
