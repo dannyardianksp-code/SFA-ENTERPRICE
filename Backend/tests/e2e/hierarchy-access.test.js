@@ -197,3 +197,81 @@ describe('GET /api/visit-plans — cakupan hierarki', () => {
     })
 
 })
+
+describe('GET /api/visit-activities — cakupan hierarki', () => {
+
+    // Berkas ini tidak membuat visit maupun activity — keduanya butuh
+    // check-in yang divalidasi jarak GPS, di luar cakupan plan ini.
+    // Yang diuji adalah bentuk dan arah penyaringannya terhadap 10
+    // activity yang sudah ada di database dev.
+
+    test('SPG mendapat array, bukan objek berbungkus', async () => {
+        const res = await get('/api/visit-activities', DANNY, 'SPG')
+
+        assert.strictEqual(res.status, 200)
+        assert.ok(
+            Array.isArray(res.body),
+            `respons bukan array: ${JSON.stringify(res.body).slice(0, 120)}`
+        )
+    })
+
+    test('setiap activity yang terlihat SPG milik kunjungan SPG itu', async () => {
+        const res = await get('/api/visit-activities', DANNY, 'SPG')
+
+        for (const a of res.body) {
+            assert.ok(a.Visit, 'relasi Visit tidak di-include')
+            assert.strictEqual(
+                a.Visit.user_id,
+                DANNY,
+                `activity ${a.id} milik user ${a.Visit.user_id}, bukan Danny`
+            )
+        }
+    })
+
+    // Supervisor melihat miliknya sendiri DAN bawahannya. Sekarang
+    // cabangnya hanya mengambil bawahan, jadi activity supervisor
+    // sendiri tidak pernah terlihat olehnya.
+    test('supervisor melihat minimal semua yang dilihat SPG bawahannya', async () => {
+        const spg = await get('/api/visit-activities', DANNY, 'SPG')
+        const spv = await get('/api/visit-activities', JAKARTA, 'SUPERVISOR')
+
+        assert.strictEqual(spv.status, 200)
+
+        const idsSpv = spv.body.map(a => a.id)
+
+        for (const a of spg.body) {
+            assert.ok(
+                idsSpv.includes(a.id),
+                `activity ${a.id} terlihat Danny tapi tidak terlihat atasannya`
+            )
+        }
+    })
+
+    test('administrator melihat minimal sebanyak manager', async () => {
+        const mgr = await get('/api/visit-activities', MANAGER, 'MANAGER')
+        const adm = await get('/api/visit-activities', ADMIN, 'ADMINISTRATOR')
+
+        assert.strictEqual(mgr.status, 200)
+        assert.strictEqual(adm.status, 200)
+
+        assert.ok(
+            adm.body.length >= mgr.body.length,
+            `administrator ${adm.body.length} < manager ${mgr.body.length}`
+        )
+    })
+
+    // required: true pada include Visit yang menjamin ini. Kalau
+    // hilang saat where dihapus untuk role tak terbatas, activity tanpa
+    // kunjungan induk akan ikut terkirim dengan Visit null.
+    test('tidak ada activity tanpa kunjungan induk, bahkan untuk administrator', async () => {
+        const res = await get('/api/visit-activities', ADMIN, 'ADMINISTRATOR')
+
+        for (const a of res.body) {
+            assert.ok(
+                a.Visit,
+                `activity ${a.id} terkirim tanpa relasi Visit`
+            )
+        }
+    })
+
+})
