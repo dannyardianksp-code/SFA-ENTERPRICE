@@ -27,7 +27,7 @@ tests/
 | `area.util.test.js` | resolusi hak akses area (multi-area + fallback `area_id`) |
 | `response.util.test.js` | bentuk error `{ message }`, penyembunyian detail saat production |
 | `customer.controller.test.js` | cabang validasi `getNearbyCustomers` lewat `req`/`res` palsu |
-| `access.util.test.js` | aturan hak akses area + channel, termasuk gagal-tertutup untuk user kosong |
+| `access.util.test.js` | aturan hak akses area + channel, cakupan hierarki subtree, termasuk gagal-tertutup untuk user kosong |
 | `customer-update.test.js` | validasi field teks, field terkunci, dan koordinat pada jalur update |
 | `date.util.test.js` | tanggal lokal Asia/Jakarta, termasuk jam malam UTC yang sudah tanggal berikutnya |
 | `visit-plan.test.js` | rentang tanggal SPG, batas bulan dan batas tahun |
@@ -69,6 +69,13 @@ sehingga deret kode akan berlubang. Aman di database dev.
 lusa) lalu menghapusnya di `after()`. Yang lusa ada supaya batas atas
 rentang benar-benar diuji, bukan diasumsikan.
 
+`tests/e2e/hierarchy-access.test.js` membuat beberapa visit plan —
+termasuk **milik user lain** (Tino, SUBUR, Tria) karena itu yang
+membuktikan cakupan subtree — lalu menghapus semuanya di `after()`. Satu
+di antaranya diubah statusnya menjadi `'ON VISIT'` langsung lewat
+`mysql2`, karena `create` memaksa `'PENDING'` sehingga status non-PENDING
+tidak bisa dibuat lewat API.
+
 **Jangan jalankan `npm run test:e2e` menghadap database produksi.**
 
 ## Kenapa tes ini ada
@@ -105,6 +112,15 @@ jangan dihapus tanpa membaca komentarnya:
 - **`toISOString()` untuk tanggal lokal** — itu UTC. Di WIB setiap pagi
   antara 00:00 dan 07:00 hasilnya tanggal kemarin, sehingga SPG yang
   membuka aplikasi jam 6 pagi melihat rencana kunjungan kemarin.
+- **`null` vs `[]` pada hak akses** — `null` berarti "tidak dibatasi",
+  array kosong berarti "tidak ada siapa pun". Membalik keduanya mengubah
+  administrator dari melihat segalanya menjadi melihat nol, tanpa error.
+- **penurunan satu tingkat** — anak langsung MANAGER semuanya SUPERVISOR,
+  nol SPG. Helper yang hanya mengambil satu tingkat membuat manager tidak
+  melihat kunjungan SPG mana pun.
+- **mengubah data sebelum memeriksa status** — `update` dan `delete`
+  visit plan pernah mengubah atau menghapus baris lalu mengembalikan 400.
+  Datanya sudah rusak saat penolakannya dikirim.
 
 ## Urutan rilis
 
@@ -116,3 +132,16 @@ Migration harus dijalankan **sebelum** backend versi baru dideploy:
 Backend yang dideploy lebih dulu akan mencoba menulis `updated_at` dan
 `updated_by` ke kolom yang belum ada, dan setiap penyimpanan hasil edit
 gagal dengan 500.
+
+## Perubahan perilaku yang disengaja
+
+Dicatat supaya tidak terbaca sebagai regresi:
+
+- `GET /api/visits` untuk MANAGER **menyempit** dari semua kunjungan
+  menjadi subtree-nya. Sebelumnya MANAGER tidak punya cabang sama sekali
+  sehingga filternya kosong.
+- `GET /api/visits/:id` yang tadinya **terbuka** kini menolak `403` di
+  luar subtree pemanggil.
+- `PUT` dan `DELETE /api/visit-plans/:id` **kini terdaftar**. Tombol Edit
+  dan Hapus di `sfa-web` yang sebelumnya no-op sekarang benar-benar
+  bekerja.
