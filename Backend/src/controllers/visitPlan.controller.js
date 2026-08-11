@@ -18,7 +18,7 @@ const Customer =
 const Visit =
     require('../models/visit.model')
 
-const { sendServerError } =
+const { sendError, sendServerError } =
     require('../utils/response.util')
 
 const {
@@ -212,175 +212,98 @@ exports.create =
 // UPDATE
 // ======================
 
+/** Field visit plan yang boleh diubah. Sisanya diabaikan. */
+const UPDATABLE_FIELDS = ['customer_id', 'visit_date']
+
 exports.update =
     async (req, res) => {
 
         try {
 
-            const loginUser =
-                await User.findByPk(
-                    req.user.id
-                )
-
             const visitPlan =
-                await VisitPlan.findByPk(
-
-                    req.params.id,
-
-                    {
-
-                        include: [User]
-
-                    }
-
-                )
-
-            // NOT FOUND
+                await VisitPlan.findByPk(req.params.id)
 
             if (!visitPlan) {
-
-                return res.status(404).json({
-
-                    message:
-                        'Visit Plan tidak ditemukan'
-
-                })
-
+                return sendError(
+                    res,
+                    404,
+                    'Visit Plan tidak ditemukan.'
+                )
             }
 
-            // ======================
-            // SPG
-            // ======================
+            const loginUser =
+                await User.findByPk(req.user.id)
+
+            if (!loginUser) {
+                return sendError(res, 404, 'User tidak ditemukan.')
+            }
+
+            // Jadwal adalah target. Target yang bisa diubah sendiri oleh
+            // yang ditarget berhenti berfungsi sebagai target.
+            if (loginUser.role === 'SPG') {
+                return sendError(
+                    res,
+                    403,
+                    'SPG tidak boleh mengubah visit plan.'
+                )
+            }
+
+            const bolehDilihat =
+                await resolveSubordinateUserIds(loginUser)
 
             if (
 
-                loginUser.role ===
-                'SPG'
+                bolehDilihat !== null
+                &&
+                !bolehDilihat.includes(visitPlan.user_id)
 
             ) {
 
-                return res.status(403).json({
-
-                    message:
-                        'SPG tidak boleh edit visit plan'
-
-                })
+                return sendError(
+                    res,
+                    403,
+                    'Visit plan ini di luar jangkauan Anda.'
+                )
 
             }
 
-            // ======================
-            // SUPERVISOR
-            // ======================
+            // Status diperiksa SEBELUM data disentuh. Sebelumnya
+            // datanya diubah dulu lalu 400 dikirim — penolakan datang
+            // setelah datanya rusak.
+            if (visitPlan.status !== 'PENDING') {
+                return sendError(
+                    res,
+                    400,
+                    `Visit plan yang berstatus ${visitPlan.status} tidak bisa diubah.`
+                )
+            }
 
-            if (
+            // Hanya field yang benar-benar dikirim. Sebelumnya `notes`
+            // ikut ditulis — kolom yang tidak ada di tabel maupun model,
+            // jadi Sequelize mengabaikannya diam-diam.
+            const perubahan = {}
 
-                loginUser.role ===
-                'SUPERVISOR'
-
-            ) {
-
-                if (
-
-                    visitPlan.User.supervisor_id
-                    !==
-                    loginUser.id
-
-                ) {
-
-                    return res.status(403).json({
-
-                        message:
-                            'Visit plan bukan bawahan supervisor ini'
-
-                    })
-
+            for (const field of UPDATABLE_FIELDS) {
+                if (req.body[field] !== undefined) {
+                    perubahan[field] = req.body[field]
                 }
-
             }
 
-            // ======================
-            // MANAGER
-            // ======================
-
-            if (
-
-                loginUser.role ===
-                'MANAGER'
-
-            ) {
-
-                if (
-
-                    visitPlan.User.area_id
-                    !==
-                    loginUser.area_id
-
-                    ||
-
-                    visitPlan.User.channel_id
-                    !==
-                    loginUser.channel_id
-
-                ) {
-
-                    return res.status(403).json({
-
-                        message:
-                            'Visit plan bukan area/channel manager'
-
-                    })
-
-                }
-
+            if (Object.keys(perubahan).length === 0) {
+                return sendError(
+                    res,
+                    400,
+                    'Tidak ada field yang bisa diubah pada permintaan ini.'
+                )
             }
 
-            // ======================
-            // UPDATE
-            // ======================
-
-            await visitPlan.update({
-
-                customer_id:
-                    req.body.customer_id,
-
-                visit_date:
-                    req.body.visit_date,
-
-                notes:
-                    req.body.notes
-
-            })
-
-
-            if (
-
-                visitPlan.status
-                !==
-                'PENDING'
-
-            ) {
-
-                return res.status(400).json({
-
-                    message:
-                        'Visit plan tidak bisa diedit'
-
-                })
-
-            }
-
-
+            await visitPlan.update(perubahan)
 
             res.json({
-
-                message:
-                    'Visit Plan berhasil diupdate'
-
+                message: 'Visit Plan berhasil diupdate'
             })
 
         }
-
-
 
         catch (err) {
 
@@ -403,152 +326,65 @@ exports.delete =
 
         try {
 
-            const loginUser =
-                await User.findByPk(
-                    req.user.id
-                )
-
             const visitPlan =
-                await VisitPlan.findByPk(
-
-                    req.params.id,
-
-                    {
-
-                        include: [User]
-
-                    }
-
-                )
+                await VisitPlan.findByPk(req.params.id)
 
             if (!visitPlan) {
-
-                return res.status(404).json({
-
-                    message:
-                        'Visit Plan tidak ditemukan'
-
-                })
-
+                return sendError(
+                    res,
+                    404,
+                    'Visit Plan tidak ditemukan.'
+                )
             }
 
-            // ======================
-            // SPG
-            // ======================
+            const loginUser =
+                await User.findByPk(req.user.id)
+
+            if (!loginUser) {
+                return sendError(res, 404, 'User tidak ditemukan.')
+            }
+
+            if (loginUser.role === 'SPG') {
+                return sendError(
+                    res,
+                    403,
+                    'SPG tidak boleh menghapus visit plan.'
+                )
+            }
+
+            const bolehDilihat =
+                await resolveSubordinateUserIds(loginUser)
 
             if (
 
-                loginUser.role ===
-                'SPG'
+                bolehDilihat !== null
+                &&
+                !bolehDilihat.includes(visitPlan.user_id)
 
             ) {
 
-                return res.status(403).json({
-
-                    message:
-                        'SPG tidak boleh delete visit plan'
-
-                })
-
-            }
-
-            // ======================
-            // SUPERVISOR
-            // ======================
-
-            if (
-
-                loginUser.role ===
-                'SUPERVISOR'
-
-            ) {
-
-                if (
-
-                    visitPlan.User.supervisor_id
-                    !==
-                    loginUser.id
-
-                ) {
-
-                    return res.status(403).json({
-
-                        message:
-                            'Visit plan bukan bawahan supervisor ini'
-
-                    })
-
-                }
+                return sendError(
+                    res,
+                    403,
+                    'Visit plan ini di luar jangkauan Anda.'
+                )
 
             }
 
-            // ======================
-            // MANAGER
-            // ======================
-
-            if (
-
-                loginUser.role ===
-                'MANAGER'
-
-            ) {
-
-                if (
-
-                    visitPlan.User.area_id
-                    !==
-                    loginUser.area_id
-
-                    ||
-
-                    visitPlan.User.channel_id
-                    !==
-                    loginUser.channel_id
-
-                ) {
-
-                    return res.status(403).json({
-
-                        message:
-                            'Visit plan bukan area/channel manager'
-
-                    })
-
-                }
-
+            // Diperiksa SEBELUM destroy. Sebelumnya barisnya dihapus
+            // dulu, lalu 400 dikirim — datanya sudah hilang.
+            if (visitPlan.status !== 'PENDING') {
+                return sendError(
+                    res,
+                    400,
+                    `Visit plan yang berstatus ${visitPlan.status} tidak bisa dihapus.`
+                )
             }
-
-            // ======================
-            // DELETE
-            // ======================
 
             await visitPlan.destroy()
 
-
-            if (
-
-                visitPlan.status
-                !==
-                'PENDING'
-
-            ) {
-
-                return res.status(400).json({
-
-                    message:
-                        'Visit plan tidak bisa dihapus'
-
-                })
-
-            }
-
-
-
             res.json({
-
-                message:
-                    'Visit Plan berhasil dihapus'
-
+                message: 'Visit Plan berhasil dihapus'
             })
 
         }

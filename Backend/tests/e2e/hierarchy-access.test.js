@@ -443,3 +443,195 @@ describe('GET /api/visits/:id — kepemilikan', () => {
     })
 
 })
+
+describe('PUT dan DELETE /api/visit-plans/:id', () => {
+
+    let rencanaDanny = null
+    let rencanaTria = null
+    let rencanaBerjalan = null
+
+    before(async () => {
+        rencanaDanny = await buatRencana(DANNY)
+        rencanaTria = await buatRencana(TRIA)
+        rencanaBerjalan = await buatRencana(DANNY)
+
+        // Status non-PENDING tidak bisa dibuat lewat POST karena create
+        // memaksa 'PENDING'. Diubah langsung, pada baris yang dibuat
+        // tes ini sendiri.
+        const c = await db()
+        await c.query(
+            "UPDATE visit_plans SET status = 'ON VISIT' WHERE id = ?",
+            [rencanaBerjalan]
+        )
+        await c.end()
+    })
+
+    const besok = () => {
+        const d = new Date()
+        d.setDate(d.getDate() + 1)
+        return localDateString(d)
+    }
+
+    test('SPG ditolak 403 saat mengubah', async () => {
+        const res = await kirim(
+            'PUT',
+            `/api/visit-plans/${rencanaDanny}`,
+            DANNY,
+            'SPG',
+            { visit_date: besok() }
+        )
+
+        assert.strictEqual(res.status, 403)
+    })
+
+    test('SPG ditolak 403 saat menghapus', async () => {
+        const res = await kirim(
+            'DELETE',
+            `/api/visit-plans/${rencanaDanny}`,
+            DANNY,
+            'SPG'
+        )
+
+        assert.strictEqual(res.status, 403)
+    })
+
+    test('supervisor pemiliknya boleh mengubah', async () => {
+        const res = await kirim(
+            'PUT',
+            `/api/visit-plans/${rencanaDanny}`,
+            JAKARTA,
+            'SUPERVISOR',
+            { visit_date: besok() }
+        )
+
+        assert.strictEqual(res.status, 200, JSON.stringify(res.body))
+    })
+
+    test('supervisor lain ditolak 403', async () => {
+        // rencanaTria milik Tria, di bawah BANDUNG (31), bukan JAKARTA.
+        const res = await kirim(
+            'PUT',
+            `/api/visit-plans/${rencanaTria}`,
+            JAKARTA,
+            'SUPERVISOR',
+            { visit_date: besok() }
+        )
+
+        assert.strictEqual(res.status, 403)
+    })
+
+    test('manager boleh mengubah rencana dua tingkat di bawahnya', async () => {
+        const res = await kirim(
+            'PUT',
+            `/api/visit-plans/${rencanaTria}`,
+            MANAGER,
+            'MANAGER',
+            { visit_date: besok() }
+        )
+
+        assert.strictEqual(res.status, 200, JSON.stringify(res.body))
+    })
+
+    test('id tidak ada ditolak 404', async () => {
+        const res = await kirim(
+            'PUT',
+            '/api/visit-plans/99999999',
+            ADMIN,
+            'ADMINISTRATOR',
+            { visit_date: besok() }
+        )
+
+        assert.strictEqual(res.status, 404)
+    })
+
+    // INI bug yang diperbaiki: sekarang datanya diubah dulu, baru
+    // statusnya diperiksa, sehingga penolakan 400 datang setelah
+    // datanya sudah rusak.
+    test('rencana non-PENDING ditolak 400 DAN datanya tidak berubah', async () => {
+        const c = await db()
+
+        const [sebelum] = await c.query(
+            'SELECT visit_date FROM visit_plans WHERE id = ?',
+            [rencanaBerjalan]
+        )
+
+        const res = await kirim(
+            'PUT',
+            `/api/visit-plans/${rencanaBerjalan}`,
+            ADMIN,
+            'ADMINISTRATOR',
+            { visit_date: '2030-01-01' }
+        )
+
+        const [sesudah] = await c.query(
+            'SELECT visit_date FROM visit_plans WHERE id = ?',
+            [rencanaBerjalan]
+        )
+
+        await c.end()
+
+        assert.strictEqual(res.status, 400)
+        assert.strictEqual(
+            String(sesudah[0].visit_date),
+            String(sebelum[0].visit_date),
+            'tanggalnya berubah padahal permintaannya ditolak'
+        )
+    })
+
+    test('rencana non-PENDING ditolak 400 dan barisnya MASIH ADA', async () => {
+        const res = await kirim(
+            'DELETE',
+            `/api/visit-plans/${rencanaBerjalan}`,
+            ADMIN,
+            'ADMINISTRATOR'
+        )
+
+        assert.strictEqual(res.status, 400)
+
+        const c = await db()
+        const [rows] = await c.query(
+            'SELECT id FROM visit_plans WHERE id = ?',
+            [rencanaBerjalan]
+        )
+        await c.end()
+
+        assert.strictEqual(
+            rows.length,
+            1,
+            'barisnya terhapus padahal permintaannya ditolak'
+        )
+    })
+
+    test('body tanpa field yang bisa diubah ditolak 400', async () => {
+        const res = await kirim(
+            'PUT',
+            `/api/visit-plans/${rencanaDanny}`,
+            ADMIN,
+            'ADMINISTRATOR',
+            { notes: 'kolom ini tidak ada di tabel' }
+        )
+
+        assert.strictEqual(res.status, 400)
+    })
+
+    test('administrator boleh menghapus rencana PENDING', async () => {
+        const res = await kirim(
+            'DELETE',
+            `/api/visit-plans/${rencanaDanny}`,
+            ADMIN,
+            'ADMINISTRATOR'
+        )
+
+        assert.strictEqual(res.status, 200, JSON.stringify(res.body))
+
+        const c = await db()
+        const [rows] = await c.query(
+            'SELECT id FROM visit_plans WHERE id = ?',
+            [rencanaDanny]
+        )
+        await c.end()
+
+        assert.strictEqual(rows.length, 0, 'barisnya masih ada')
+    })
+
+})

@@ -59,5 +59,12 @@ router.get(
     controller.downloadTemplate
 )
 
+// UPDATE dan DELETE (protected). Keduanya memeriksa status SEBELUM
+// menyentuh data, dan menolak SPG — jadwal adalah target, bukan milik
+// yang ditarget.
+router.put('/:id', auth, controller.update)
+
+router.delete('/:id', auth, controller.delete)
+
 
 module.exports = router
