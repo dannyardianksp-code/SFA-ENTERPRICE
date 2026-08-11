@@ -204,6 +204,32 @@ describe('GET /api/visit-activities — cakupan hierarki', () => {
     // check-in yang divalidasi jarak GPS, di luar cakupan plan ini.
     // Yang diuji adalah bentuk dan arah penyaringannya terhadap 10
     // activity yang sudah ada di database dev.
+    //
+    // Satu pengecualian: tes "tidak ada activity tanpa kunjungan induk"
+    // di bawah membuat satu baris yatim sendiri lewat before/after lokal
+    // ini, supaya required: true pada include Visit benar-benar
+    // teruji — lihat komentar di tes itu.
+
+    let idYatim = null
+
+    before(async () => {
+        const c = await db()
+        const [hasil] = await c.query(
+            'INSERT INTO visit_activities (visit_id, created_at) VALUES (?, NOW())',
+            [99999999]
+        )
+        await c.end()
+
+        idYatim = hasil.insertId
+    })
+
+    after(async () => {
+        const c = await db()
+        await c.query('DELETE FROM visit_activities WHERE id = ?', [idYatim])
+        await c.end()
+
+        console.log(`  (bersih-bersih: 1 visit activity yatim dihapus)`)
+    })
 
     test('SPG mendapat array, bukan objek berbungkus', async () => {
         const res = await get('/api/visit-activities', DANNY, 'SPG')
@@ -260,9 +286,12 @@ describe('GET /api/visit-activities — cakupan hierarki', () => {
         )
     })
 
-    // required: true pada include Visit yang menjamin ini. Kalau
-    // hilang saat where dihapus untuk role tak terbatas, activity tanpa
-    // kunjungan induk akan ikut terkirim dengan Visit null.
+    // idYatim (dibuat before() di atas) menunjuk visit_id yang tidak ada
+    // di tabel visits. required: true pada include Visit yang menjamin
+    // baris ini tidak ikut terkirim; kalau dihapus saat where kosong
+    // untuk role tak terbatas, baris ini akan lolos dengan Visit
+    // bernilai null — assertion kedua di bawah yang menangkapnya secara
+    // langsung, bukan lewat data dev yang kebetulan bersih.
     test('tidak ada activity tanpa kunjungan induk, bahkan untuk administrator', async () => {
         const res = await get('/api/visit-activities', ADMIN, 'ADMINISTRATOR')
 
@@ -272,6 +301,11 @@ describe('GET /api/visit-activities — cakupan hierarki', () => {
                 `activity ${a.id} terkirim tanpa relasi Visit`
             )
         }
+
+        assert.ok(
+            !res.body.some(a => a.id === idYatim),
+            `activity yatim ${idYatim} seharusnya tidak ikut terkirim ke administrator`
+        )
     })
 
 })
