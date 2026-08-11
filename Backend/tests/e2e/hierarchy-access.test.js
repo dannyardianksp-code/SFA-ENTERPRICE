@@ -142,9 +142,15 @@ describe('GET /api/visit-plans — cakupan hierarki', () => {
         assert.ok(!ids.includes(rencanaTria), 'rencana Tria seharusnya tidak terlihat')
     })
 
-    // Sekarang cabang SUPERVISOR juga menyaring area_id dan channel_id
-    // supervisor, sehingga SPG multi-area bisa lenyap dari daftar
-    // atasannya sendiri.
+    // Tes ini membuktikan supervisor melihat rencana seluruh SPG di
+    // bawahnya. Ia TIDAK membedakan aturan lama dari aturan baru: di
+    // database dev, Danny, Tino, dan SUBUR semuanya punya area_id dan
+    // channel_id yang sama dengan supervisornya JAKARTA, jadi filter
+    // lama (yang juga menyaring area_id/channel_id) kebetulan
+    // menghasilkan himpunan yang sama persis. Daya beda terhadap aturan
+    // lama ada di tes unit collectSubtreeIds pada
+    // tests/unit/access.util.test.js, yang membuktikan penurunannya
+    // hanya memakai supervisor_id.
     test('supervisor melihat rencana seluruh SPG di bawahnya', async () => {
         const res = await get('/api/visit-plans', JAKARTA, 'SUPERVISOR')
 
