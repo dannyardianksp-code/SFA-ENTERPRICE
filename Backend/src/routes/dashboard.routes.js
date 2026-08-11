@@ -6,6 +6,10 @@ const auth =
 
 const { Op } = require('sequelize')
 
+const { localDateString } = require('../utils/date.util')
+
+const { sendServerError } = require('../utils/response.util')
+
 const VisitPlan =
     require('../models/visitPlan.model')
 
@@ -30,13 +34,7 @@ router.get(
 
             const now = new Date()
 
-            const today =
-                now.toLocaleDateString(
-                    'en-CA',
-                    {
-                        timeZone: 'Asia/Jakarta'
-                    }
-                )
+            const today = localDateString(now)
 
             const firstDay =
                 new Date(
@@ -351,14 +349,12 @@ router.get(
 
         catch (err) {
 
-            console.log(err)
-
-            res.status(500).json({
-
-                error:
-                    err.message
-
-            })
+            // Key `error` tidak dibaca mobile — ia hanya melihat
+            // `message`, jadi sales dapat pesan generik untuk error yang
+            // sebenarnya sudah dijelaskan. sendServerError juga
+            // menyembunyikan detail exception saat production, yang bisa
+            // membocorkan struktur tabel.
+            return sendServerError(res, err, 'DASHBOARD SPG')
 
         }
 

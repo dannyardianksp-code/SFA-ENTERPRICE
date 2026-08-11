@@ -21,11 +21,31 @@ const Visit =
 const { sendServerError } =
     require('../utils/response.util')
 
+const {
+    localDateString,
+    addDaysLocal,
+} = require('../utils/date.util')
+
 
 
 // ======================
 // GET ALL
 // ======================
+
+/**
+ * Rentang tanggal yang dilihat SPG: hari ini dan besok.
+ *
+ * Dua hari, bukan satu — sales perlu bisa bersiap untuk besok. Ini
+ * keputusan produk yang sebelumnya terjadi secara kebetulan lewat
+ * Op.between; sekarang eksplisit dan dijaga tes.
+ *
+ * Fungsi murni dan diekspor supaya batas bulan serta batas tahun bisa
+ * diuji tanpa database.
+ */
+const spgDateRange = (now = new Date()) => [
+    localDateString(now),
+    addDaysLocal(now, 1),
+]
 
 exports.getAll =
     async (req, res) => {
@@ -40,26 +60,6 @@ exports.getAll =
                 )
 
             let whereCondition = {}
-
-            // ======================
-            // SPG
-            // ======================
-
-            if (
-
-                loginUser.role ===
-                'SPG'
-
-            ) {
-
-                whereCondition = {
-
-                    user_id:
-                        loginUser.id
-
-                }
-
-            }
 
             // ======================
             // SUPERVISOR
@@ -163,20 +163,13 @@ exports.getAll =
 
 
 
-            // SPG hanya lihat hari ini
+            // SPG melihat rencana hari ini dan besok. Rentangnya
+            // eksplisit lewat spgDateRange — sebelumnya tanggalnya
+            // dihitung UTC, sehingga tiap pagi 00:00-07:00 WIB yang
+            // muncul adalah kemarin + hari ini.
             if (loginUser.role === 'SPG') {
 
-                const today = new Date()
-
-                const tomorrow = new Date()
-
-                tomorrow.setDate(today.getDate() + 1)
-
-                const todayStr =
-                    today.toISOString().split('T')[0]
-
-                const tomorrowStr =
-                    tomorrow.toISOString().split('T')[0]
+                const [hariIni, besok] = spgDateRange()
 
                 whereCondition = {
 
@@ -184,13 +177,7 @@ exports.getAll =
 
                     visit_date: {
 
-                        [Op.between]: [
-
-                            todayStr,
-
-                            tomorrowStr
-
-                        ]
+                        [Op.between]: [hariIni, besok]
 
                     }
 
@@ -219,6 +206,13 @@ exports.getAll =
 
                                 'name',
 
+                                // code & address dipakai baris daftar
+                                // di mobile — tanpa keduanya layar
+                                // perlu request kedua per baris.
+                                'code',
+
+                                'address',
+
                                 'latitude',
 
                                 'longitude'
@@ -240,11 +234,10 @@ exports.getAll =
 
                 })
 
-            res.json({
-
-                data
-
-            })
+            // Array telanjang, sama dengan /api/customers. Tidak ada
+            // konsumen yang memakai bentuk { data } — modul visit di
+            // mobile masih kosong saat perubahan ini dibuat.
+            res.json(data)
 
         } catch (err) {
 
@@ -870,3 +863,5 @@ exports.downloadTemplate = (req, res) => {
     res.download(filePath)
 
 }
+
+exports.spgDateRange = spgDateRange

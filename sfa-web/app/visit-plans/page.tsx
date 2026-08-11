@@ -118,9 +118,9 @@ export default function VisitPlansPage() {
 
         const pData = await pRes.json()
 
-        setPlans(Array.isArray(pData.data)
+        setPlans(Array.isArray(pData)
 
-            ? pData.data
+            ? pData
 
             : []
         )
