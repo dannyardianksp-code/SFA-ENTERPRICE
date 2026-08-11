@@ -309,3 +309,137 @@ describe('GET /api/visit-activities — cakupan hierarki', () => {
     })
 
 })
+
+
+describe('GET /api/visits — cakupan hierarki', () => {
+
+    test('SPG mendapat array dan semuanya miliknya', async () => {
+        const res = await get('/api/visits', DANNY, 'SPG')
+
+        assert.strictEqual(res.status, 200)
+        assert.ok(Array.isArray(res.body))
+
+        for (const v of res.body) {
+            assert.strictEqual(
+                v.user_id,
+                DANNY,
+                `visit ${v.id} milik user ${v.user_id}`
+            )
+        }
+    })
+
+    test('supervisor melihat minimal semua yang dilihat bawahannya', async () => {
+        const spg = await get('/api/visits', DANNY, 'SPG')
+        const spv = await get('/api/visits', JAKARTA, 'SUPERVISOR')
+
+        assert.strictEqual(spv.status, 200)
+
+        const idsSpv = spv.body.map(v => v.id)
+
+        for (const v of spg.body) {
+            assert.ok(
+                idsSpv.includes(v.id),
+                `visit ${v.id} terlihat Danny tapi tidak terlihat atasannya`
+            )
+        }
+    })
+
+    // Sekarang MANAGER tidak punya cabang sama sekali sehingga
+    // where = {} dan ia melihat SEMUA kunjungan. Setelah perubahan ini
+    // aksesnya menyempit ke subtree-nya — pengetatan yang disengaja.
+    test('manager melihat kunjungan subtree-nya', async () => {
+        const res = await get('/api/visits', MANAGER, 'MANAGER')
+
+        assert.strictEqual(res.status, 200)
+        assert.ok(Array.isArray(res.body))
+    })
+
+    // Role diambil dari database, bukan dari token. Token yang mengaku
+    // ADMINISTRATOR untuk user yang sebenarnya SPG tidak boleh dipercaya.
+    test('role dari token yang dipalsukan tidak dipercaya', async () => {
+        const jujur = await get('/api/visits', DANNY, 'SPG')
+        const palsu = await get('/api/visits', DANNY, 'ADMINISTRATOR')
+
+        assert.strictEqual(palsu.status, 200)
+        assert.strictEqual(
+            palsu.body.length,
+            jujur.body.length,
+            'token yang mengaku ADMINISTRATOR mendapat lebih banyak data'
+        )
+    })
+
+})
+
+
+describe('GET /api/visits/:id — kepemilikan', () => {
+
+    let visitId = null
+    let pemilikId = null
+
+    before(async () => {
+        const res = await get('/api/visits', ADMIN, 'ADMINISTRATOR')
+
+        if (res.body.length === 0) return
+
+        visitId = res.body[0].id
+
+        const c = await db()
+        const [rows] = await c.query(
+            'SELECT user_id FROM visits WHERE id = ?',
+            [visitId]
+        )
+        await c.end()
+
+        pemilikId = rows[0].user_id
+    })
+
+    test('pemiliknya boleh membaca', async (t) => {
+        if (visitId === null) {
+            t.skip('database dev tidak punya kunjungan untuk diuji')
+            return
+        }
+
+        const res = await get(`/api/visits/${visitId}`, pemilikId, 'SPG')
+
+        assert.strictEqual(res.status, 200)
+        assert.strictEqual(res.body.id, visitId)
+    })
+
+    // Sekarang endpoint ini tidak memeriksa apa pun: siapa saja bisa
+    // membaca kunjungan siapa saja dengan menebak id.
+    test('user di luar subtree ditolak 403', async (t) => {
+        if (visitId === null) {
+            t.skip('database dev tidak punya kunjungan untuk diuji')
+            return
+        }
+
+        // Tria (32) ada di bawah BANDUNG, bukan atasan siapa pun.
+        if (pemilikId === TRIA) {
+            t.skip('kunjungan pertama justru milik Tria')
+            return
+        }
+
+        const res = await get(`/api/visits/${visitId}`, TRIA, 'SPG')
+
+        assert.strictEqual(res.status, 403)
+        assert.match(res.body.message, /jangkauan|akses|berhak/i)
+    })
+
+    test('administrator boleh membaca kunjungan siapa pun', async (t) => {
+        if (visitId === null) {
+            t.skip('database dev tidak punya kunjungan untuk diuji')
+            return
+        }
+
+        const res = await get(`/api/visits/${visitId}`, ADMIN, 'ADMINISTRATOR')
+
+        assert.strictEqual(res.status, 200)
+    })
+
+    test('id tidak ada ditolak 404', async () => {
+        const res = await get('/api/visits/99999999', ADMIN, 'ADMINISTRATOR')
+
+        assert.strictEqual(res.status, 404)
+    })
+
+})
