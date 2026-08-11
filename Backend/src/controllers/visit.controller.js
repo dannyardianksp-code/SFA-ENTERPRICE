@@ -5,11 +5,16 @@ const CustomerGroup = require('../models/customerGroup.model')
 const Product = require('../models/product.model')
 const { getDistance } = require('geolib')
 const VisitPlan = require('../models/visitPlan.model')
+const { Op } = require('sequelize')
 
 const {
     sendError,
     sendServerError,
 } = require('../utils/response.util')
+
+const {
+    resolveSubordinateUserIds,
+} = require('../utils/access.util')
 
 
 
@@ -257,46 +262,33 @@ exports.checkIn = async (
 
 }
 
-const { Op } = require('sequelize')
-
 // GET VISIT HISTORY
 exports.getAll = async (req, res) => {
 
     try {
 
+        // User dimuat dari database, bukan dipercaya dari token: token
+        // yang rolenya sudah berubah di database tidak boleh menentukan
+        // apa yang terlihat.
+        const loginUser = await User.findByPk(req.user.id)
 
-        const where = {}
-
-        // Jika SPG, hanya tampilkan visit miliknya
-
-        if (req.user.role === 'SPG') {
-
-            where.user_id = req.user.id
-
+        if (!loginUser) {
+            return sendError(res, 404, 'User tidak ditemukan.')
         }
 
-        else if (req.user.role === 'SUPERVISOR') {
+        const bolehDilihat =
+            await resolveSubordinateUserIds(loginUser)
 
-            const bawahanSupervisor =
-                await User.findAll({
-                    where: {
-                        supervisor_id: req.user.id
-                    },
-                    attributes: ['id']
-                })
+        const where =
+            bolehDilihat === null
 
-            const bawahanIds =
-                bawahanSupervisor.map(
-                    u => u.id
-                )
+                ? {}
 
-            where.user_id = {
-
-                [Op.in]: bawahanIds
-
-            }
-
-        }
+                : {
+                    user_id: {
+                        [Op.in]: bolehDilihat
+                    }
+                }
 
         const data = await Visit.findAll({
 
@@ -371,10 +363,41 @@ exports.getById = async (
                 {
                     include: [
                         Customer,
-                        User
+                        { model: User, attributes: ['id', 'name'] }
                     ]
                 }
             )
+
+        if (!data) {
+            return sendError(res, 404, 'Kunjungan tidak ditemukan.')
+        }
+
+        const loginUser = await User.findByPk(req.user.id)
+
+        if (!loginUser) {
+            return sendError(res, 404, 'User tidak ditemukan.')
+        }
+
+        // null berarti tidak dibatasi. Untuk yang lain: pemilik atau
+        // siapa pun di dalam subtree-nya.
+        const bolehDilihat =
+            await resolveSubordinateUserIds(loginUser)
+
+        if (
+
+            bolehDilihat !== null
+            &&
+            !bolehDilihat.includes(data.user_id)
+
+        ) {
+
+            return sendError(
+                res,
+                403,
+                'Kunjungan ini di luar jangkauan Anda.'
+            )
+
+        }
 
         res.json(data)
 

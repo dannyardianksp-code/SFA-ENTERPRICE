@@ -16,8 +16,12 @@ const User =
 const Activity =
     require('../models/activity.model')
 
-const { sendServerError } =
+const { sendError, sendServerError } =
     require('../utils/response.util')
+
+const {
+    resolveSubordinateUserIds,
+} = require('../utils/access.util')
 
 // ======================
 // CREATE
@@ -103,115 +107,28 @@ exports.getAll = async (req, res) => {
 
             )
 
-        let visitWhere = {}
-
-        // ======================
-        // SPG
-        // ======================
-
-        if (
-
-            loginUser.role === 'SPG'
-
-        ) {
-
-            visitWhere = {
-
-                user_id:
-                    loginUser.id
-
-            }
-
+        if (!loginUser) {
+            return sendError(res, 404, 'User tidak ditemukan.')
         }
 
-        // ======================
-        // SUPERVISOR
-        // ======================
+        // Satu aturan: rantai supervisor_id. null berarti tidak
+        // dibatasi, jadi visitWhere dibiarkan kosong — tapi
+        // `required: true` pada include Visit di bawah TETAP, karena itu
+        // yang menjamin activity tanpa kunjungan induk tidak ikut
+        // terkirim.
+        const bolehDilihat =
+            await resolveSubordinateUserIds(loginUser)
 
-        if (
+        const visitWhere =
+            bolehDilihat === null
 
-            loginUser.role === 'SUPERVISOR'
+                ? {}
 
-        ) {
-
-            const spgIds =
-
-                await User.findAll({
-
-                    where: {
-
-                        supervisor_id:
-                            loginUser.id
-
-                    },
-
-                    attributes: ['id']
-
-                })
-
-            visitWhere = {
-
-                user_id: {
-
-                    [Op.in]:
-
-                        spgIds.map(
-
-                            u => u.id
-
-                        )
-
+                : {
+                    user_id: {
+                        [Op.in]: bolehDilihat
+                    }
                 }
-
-            }
-
-        }
-
-        // ======================
-        // MANAGER
-        // ======================
-
-        if (
-
-            loginUser.role === 'MANAGER'
-
-        ) {
-
-            const users =
-
-                await User.findAll({
-
-                    where: {
-
-                        area_id:
-                            loginUser.area_id,
-
-                        channel_id:
-                            loginUser.channel_id
-
-                    },
-
-                    attributes: ['id']
-
-                })
-
-            visitWhere = {
-
-                user_id: {
-
-                    [Op.in]:
-
-                        users.map(
-
-                            u => u.id
-
-                        )
-
-                }
-
-            }
-
-        }
 
         const {
 
@@ -219,9 +136,7 @@ exports.getAll = async (req, res) => {
 
             endDate,
 
-            product,
-
-            sales
+            product
 
         } = req.query
 
@@ -293,7 +208,8 @@ exports.getAll = async (req, res) => {
                             },
 
                             {
-                                model: User
+                                model: User,
+                                attributes: ['id', 'name']
                             }
 
                         ]

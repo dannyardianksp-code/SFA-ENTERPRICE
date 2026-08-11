@@ -204,7 +204,7 @@ export default function VisitPlansPage() {
 
         if (editId) {
 
-            await fetch(
+            const res = await fetch(
 
                 `http://localhost:1000/api/visit-plans/${editId}`,
 
@@ -227,6 +227,21 @@ export default function VisitPlansPage() {
                 }
 
             )
+
+            // Tanpa pemeriksaan ini, penolakan server tampil sebagai
+            // "berhasil" dan supervisor menyangka aplikasinya rusak,
+            // bukan bahwa tindakannya ditolak.
+            if (!res.ok) {
+
+                const err = await res.json().catch(() => ({}))
+
+                alert(
+                    err.message || 'Gagal mengubah visit plan'
+                )
+
+                return
+
+            }
 
             alert(
                 'Visit plan updated'
@@ -395,7 +410,7 @@ export default function VisitPlansPage() {
                     'token'
                 )
 
-            await fetch(
+            const res = await fetch(
 
                 `http://localhost:1000/api/visit-plans/${id}`,
 
@@ -413,6 +428,18 @@ export default function VisitPlansPage() {
                 }
 
             )
+
+            if (!res.ok) {
+
+                const err = await res.json().catch(() => ({}))
+
+                alert(
+                    err.message || 'Gagal menghapus visit plan'
+                )
+
+                return
+
+            }
 
             alert(
                 'Visit plan deleted'
@@ -718,6 +745,8 @@ Failed : ${result.failed}`
 
                                         onChange={handleChange}
 
+                                        disabled={!!editId}
+
                                     >
 
                                         <option value="">
@@ -747,6 +776,24 @@ Failed : ${result.failed}`
                                         }
 
                                     </select>
+
+                                    {
+
+                                        editId
+
+                                        &&
+
+                                        (
+
+                                            <p className="text-xs text-slate-400 mt-1">
+
+                                                Sales tidak bisa diubah. Hapus rencana ini lalu buat yang baru.
+
+                                            </p>
+
+                                        )
+
+                                    }
 
                                 </div>
 
