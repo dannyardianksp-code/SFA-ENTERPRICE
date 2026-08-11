@@ -26,6 +26,10 @@ const {
     addDaysLocal,
 } = require('../utils/date.util')
 
+const {
+    resolveSubordinateUserIds,
+} = require('../utils/access.util')
+
 
 
 // ======================
@@ -61,107 +65,27 @@ exports.getAll =
 
             let whereCondition = {}
 
-            // ======================
-            // SUPERVISOR
-            // ======================
+            // Satu aturan untuk "data siapa yang boleh saya lihat":
+            // rantai supervisor_id, bukan area. SPG boleh punya berapa
+            // pun area — ikatan ke atasannya tetap satu.
+            //
+            // null berarti tidak dibatasi, jadi kunci user_id tidak
+            // dipasang sama sekali. Memasangnya dengan array kosong akan
+            // membuat administrator melihat nol.
+            const bolehDilihat =
+                await resolveSubordinateUserIds(loginUser)
 
-            if (
-
-                loginUser.role ===
-                'SUPERVISOR'
-
-            ) {
-
-                const spgUsers =
-
-                    await User.findAll({
-
-                        where: {
-
-                            supervisor_id:
-                                loginUser.id,
-
-                            area_id:
-                                loginUser.area_id,
-
-                            channel_id:
-                                loginUser.channel_id
-
-                        },
-
-                        attributes: ['id']
-
-                    })
-
-                const spgIds =
-
-                    spgUsers.map(
-                        (u) => u.id
-                    )
+            if (bolehDilihat !== null) {
 
                 whereCondition = {
 
                     user_id: {
-
-                        [Op.in]:
-                            spgIds
-
+                        [Op.in]: bolehDilihat
                     }
 
                 }
 
             }
-
-            // ======================
-            // MANAGER
-            // ======================
-
-            if (
-
-                loginUser.role ===
-                'MANAGER'
-
-            ) {
-
-                const users =
-
-                    await User.findAll({
-
-                        where: {
-
-                            area_id:
-                                loginUser.area_id,
-
-                            channel_id:
-                                loginUser.channel_id
-
-                        },
-
-                        attributes: ['id']
-
-                    })
-
-                const userIds =
-
-                    users.map(
-                        (u) => u.id
-                    )
-
-                whereCondition = {
-
-                    user_id: {
-
-                        [Op.in]:
-                            userIds
-
-                    }
-
-                }
-
-            }
-
-
-
 
             // SPG melihat rencana hari ini dan besok. Rentangnya
             // eksplisit lewat spgDateRange — sebelumnya tanggalnya
