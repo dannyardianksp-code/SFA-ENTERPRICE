@@ -12,6 +12,7 @@ const {
 
 router.get(
     "/:id/areas",
+    auth,
     getUserAreas
 );
 

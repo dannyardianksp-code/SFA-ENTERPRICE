@@ -31,6 +31,7 @@ tests/
 | `customer-update.test.js` | validasi field teks, field terkunci, dan koordinat pada jalur update |
 | `date.util.test.js` | tanggal lokal Asia/Jakarta, termasuk jam malam UTC yang sudah tanggal berikutnya |
 | `visit-plan.test.js` | rentang tanggal SPG, batas bulan dan batas tahun |
+| `password.util.test.js` | alfabet tanpa karakter yang mudah tertukar, panjang, dan keacakan password sementara |
 
 `customer.controller.test.js` bisa jalan tanpa database karena seluruh
 validasi parameter terjadi **sebelum** `User.findByPk` dipanggil.
@@ -79,6 +80,14 @@ tidak bisa dibuat lewat API. Berkas ini juga menyisipkan satu baris
 lewat `mysql2` untuk menguji `required: true` pada include `Visit`, lalu
 menghapusnya lagi di `after()` lokal blok itu.
 
+`tests/e2e/user-auth.test.js` menyisipkan **satu user sementara** lewat
+`mysql2` sebagai sasaran reset password, lalu menghapusnya di `after()`.
+
+Ia sengaja tidak mereset password user sungguhan: mereset password Danny
+membuat aplikasi mobile tidak bisa login, dan tes yang mati di tengah akan
+meninggalkan akun itu dengan password acak yang tidak diketahui siapa pun —
+termasuk tesnya sendiri.
+
 **Jangan jalankan `npm run test:e2e` menghadap database produksi.**
 
 ## Kenapa tes ini ada
@@ -86,6 +95,10 @@ menghapusnya lagi di `after()` lokal blok itu.
 Beberapa di antaranya menjaga bug yang pernah benar-benar terjadi —
 jangan dihapus tanpa membaca komentarnya:
 
+- **reset password tanpa gerbang role** — endpoint ini pernah memakai
+  middleware `auth` saja, menyetel password user mana pun menjadi
+  `123456`, dan mengembalikannya di respons. SPG mana pun bisa mereset
+  password administrator lalu login sebagai administrator.
 - **`Number("") === 0`** — koordinat kosong pernah terbaca sebagai
   titik 0°,0° di Samudra Atlantik, membuat customer tanpa koordinat
   muncul dengan jarak ~5.000 km.
