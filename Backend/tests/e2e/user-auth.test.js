@@ -322,3 +322,30 @@ describe('PUT /api/users/:id/reset-password', () => {
     })
 
 })
+
+describe('GET /api/users/:id/areas', () => {
+
+    // Route ini sebelumnya didaftarkan TANPA middleware auth sama
+    // sekali, jadi siapa pun tanpa token bisa membaca penugasan area
+    // user mana pun. Dari 40 pendaftaran route di src/routes, hanya
+    // register, login, dan route ini yang tanpa auth — dua yang pertama
+    // memang seharusnya.
+    test('tanpa token ditolak 401', async () => {
+        const res = await fetch(`${BASE}/api/users/${DANNY}/areas`)
+
+        assert.strictEqual(res.status, 401)
+    })
+
+    // Jalur yang benar tidak boleh rusak oleh penambahan middleware.
+    test('dengan token yang sah tetap berhasil', async () => {
+        const res = await kirim(
+            'GET',
+            `/api/users/${DANNY}/areas`,
+            DANNY,
+            'SPG'
+        )
+
+        assert.strictEqual(res.status, 200, JSON.stringify(res.body))
+    })
+
+})
