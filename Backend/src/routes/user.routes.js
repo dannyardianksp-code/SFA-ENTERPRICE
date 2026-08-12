@@ -18,6 +18,15 @@ const auth =
 
 require('../models/relations')
 
+const {
+    sendError,
+    sendServerError,
+} = require('../utils/response.util')
+
+const {
+    generateTempPassword,
+} = require('../utils/password.util')
+
 
 
 
@@ -529,35 +538,56 @@ router.put(
 
         try {
 
-            const user =
-                await User.findByPk(
+            // Role diambil dari database, bukan dari token: token yang
+            // rolenya sudah berubah di database tidak boleh menentukan
+            // wewenang.
+            const loginUser =
+                await User.findByPk(req.user.id)
 
-                    req.params.id
+            if (!loginUser) {
 
+                return sendError(
+                    res,
+                    404,
+                    'Akun Anda tidak ditemukan.'
                 )
-
-            if (!user) {
-
-                return res.status(404).json({
-
-                    message:
-                        'User tidak ditemukan'
-
-                })
 
             }
 
-            const hash =
-                await bcrypt.hash(
+            // Allowlist, bukan blacklist: role NULL, nilai warisan, atau
+            // role baru apa pun ditolak secara bawaan.
+            //
+            // Reset password adalah pengambilalihan akun yang sah —
+            // siapa pun yang bisa melakukannya bisa menjadi orang itu.
+            if (loginUser.role !== 'ADMINISTRATOR') {
 
-                    '123456',
-
-                    10
-
+                return sendError(
+                    res,
+                    403,
+                    'Hanya administrator yang boleh mereset password.'
                 )
 
+            }
+
+            // Diperiksa SETELAH otorisasi: pemanggil yang tidak berhak
+            // tidak perlu diberi tahu apakah id targetnya ada.
+            const user =
+                await User.findByPk(req.params.id)
+
+            if (!user) {
+
+                return sendError(
+                    res,
+                    404,
+                    'User tidak ditemukan.'
+                )
+
+            }
+
+            const password = generateTempPassword()
+
             user.password =
-                hash
+                await bcrypt.hash(password, 10)
 
             await user.save()
 
@@ -566,8 +596,7 @@ router.put(
                 message:
                     'Password berhasil direset',
 
-                password:
-                    '123456'
+                password
 
             })
 
@@ -575,14 +604,11 @@ router.put(
 
         catch (err) {
 
-            console.log(err)
-
-            res.status(500).json({
-
-                error:
-                    err.message
-
-            })
+            return sendServerError(
+                res,
+                err,
+                'RESET PASSWORD'
+            )
 
         }
 
