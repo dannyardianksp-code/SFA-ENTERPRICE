@@ -37,7 +37,7 @@ describe('PASSWORD_ALPHABET', () => {
         )
     })
 
-    test('cukup besar untuk password yang tidak mudah ditebak', () => {
+    test('alfabetnya tepat 53 karakter', () => {
         assert.strictEqual(
             PASSWORD_ALPHABET.length,
             53,

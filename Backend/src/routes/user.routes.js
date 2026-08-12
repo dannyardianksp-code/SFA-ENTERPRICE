@@ -249,12 +249,21 @@ router.post(
 
                 })
 
+            // Password TIDAK BOLEH ikut terkirim: instance dari create()
+            // memuat hash bcrypt-nya, dan toJSON() menyertakan seluruh
+            // kolom.
+            const {
+                password: _password,
+                ...userWithoutPassword
+            } = user.toJSON()
+
             res.json({
 
                 message:
                     'User berhasil dibuat',
 
-                user
+                user:
+                    userWithoutPassword
 
             })
 
@@ -327,13 +336,20 @@ router.put(
 
             await user.save()
 
+            // Password TIDAK BOLEH ikut terkirim: toJSON() Sequelize
+            // menyertakan seluruh kolom, termasuk hash bcrypt.
+            const {
+                password: _password,
+                ...userWithoutPassword
+            } = user.toJSON()
+
             res.json({
 
                 message:
                     'Status user berhasil diupdate',
 
                 data:
-                    user
+                    userWithoutPassword
 
             })
 

@@ -136,6 +136,19 @@ export default function UsersPage() {
             const data =
                 await res.json()
 
+            // Tanpa pemeriksaan ini, penolakan server (misalnya 403
+            // untuk non-administrator) tampil sebagai "Password baru:
+            // undefined" alih-alih alasan penolakannya.
+            if (!res.ok) {
+
+                alert(
+                    data.message || 'Gagal mereset password'
+                )
+
+                return
+
+            }
+
             alert(
 
                 `Password baru: ${data.password}`

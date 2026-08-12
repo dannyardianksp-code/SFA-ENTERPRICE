@@ -327,7 +327,7 @@ describe('GET /api/users/:id/areas', () => {
 
     // Route ini sebelumnya didaftarkan TANPA middleware auth sama
     // sekali, jadi siapa pun tanpa token bisa membaca penugasan area
-    // user mana pun. Dari 40 pendaftaran route di src/routes, hanya
+    // user mana pun. Dari 42 pendaftaran route di src/routes, hanya
     // register, login, dan route ini yang tanpa auth — dua yang pertama
     // memang seharusnya.
     test('tanpa token ditolak 401', async () => {
