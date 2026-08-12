@@ -38,9 +38,10 @@ describe('PASSWORD_ALPHABET', () => {
     })
 
     test('cukup besar untuk password yang tidak mudah ditebak', () => {
-        assert.ok(
-            PASSWORD_ALPHABET.length >= 50,
-            `alfabet hanya ${PASSWORD_ALPHABET.length} karakter`
+        assert.strictEqual(
+            PASSWORD_ALPHABET.length,
+            53,
+            `alfabet harus tepat 53 karakter, bukan ${PASSWORD_ALPHABET.length}`
         )
     })
 
@@ -93,9 +94,10 @@ describe('generateTempPassword', () => {
         }
     })
 
-    // Kalau indeksnya tidak pernah mencapai ujung alfabet, karakter
-    // terakhir tidak akan pernah muncul. 2000 pengambilan dari 53
-    // karakter membuat itu praktis mustahil terjadi secara kebetulan.
+    // Seluruh karakter alfabet harus terpakai. 2000 pengambilan dari 53
+    // karakter membuat praktis mustahil satu karakter tidak muncul
+    // (peluang: (52/53)^2000). Tes ini menangkap kesalahan di index
+    // selection: randomInt(len - 1) atau randomInt(1, len) akan gagal sini.
     test('seluruh rentang alfabet terpakai', () => {
         const terpakai = new Set()
 
@@ -113,6 +115,12 @@ describe('generateTempPassword', () => {
         assert.ok(
             terpakai.has(PASSWORD_ALPHABET[PASSWORD_ALPHABET.length - 1]),
             'karakter terakhir alfabet tidak pernah muncul'
+        )
+
+        assert.strictEqual(
+            terpakai.size,
+            PASSWORD_ALPHABET.length,
+            `hanya ${terpakai.size} dari ${PASSWORD_ALPHABET.length} karakter alfabet yang pernah muncul`
         )
     })
 
