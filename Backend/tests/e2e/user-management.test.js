@@ -481,6 +481,21 @@ describe('administrator tidak boleh mengubah role dirinya sendiri', () => {
 
 describe('gerbang pada penonaktifan akun', () => {
 
+    // Administrator sekali pakai, dibuat khusus untuk dua tes larangan
+    // diri sendiri di bawah. assertUserManagement hanya memeriksa role,
+    // jadi administrator sekali pakai ini lolos gerbang yang sama persis
+    // seperti akun ADMIN sungguhan — tapi kalau larangan diri sendirinya
+    // pernah rusak (regresi), yang ternonaktifkan hanya baris sekali
+    // pakai ini, bukan akun administrator sungguhan. ADMIN dan SPG
+    // sungguhan di berkas ini hanya dipakai sebagai pemanggil baca-saja
+    // pada tes lain, tidak pernah sebagai sasaran tulis.
+    const ADMIN_SEMENTARA = {
+        code: 'UJI-AUTHZ-STATUS-14082026',
+        email: 'uji.authz.status.14082026@contoh.invalid',
+    }
+
+    let idAdminSementara
+
     const statusDi = async (id) => {
         const [baris] = await db.query(
             'SELECT status FROM users WHERE id = ?',
@@ -490,16 +505,51 @@ describe('gerbang pada penonaktifan akun', () => {
         return baris[0].status
     }
 
+    before(async () => {
+        // Sisa dari tes yang pernah mati di tengah harus dibersihkan
+        // dulu, sama seperti pembersihan SEMENTARA di level berkas.
+        await db.query(
+            'DELETE FROM users WHERE code = ? OR email = ?',
+            [ADMIN_SEMENTARA.code, ADMIN_SEMENTARA.email]
+        )
+
+        const [hasil] = await db.query(
+            `INSERT INTO users (code, name, email, password, role, status)
+             VALUES (?, ?, ?, ?, 'ADMINISTRATOR', 'ACTIVE')`,
+            [
+                ADMIN_SEMENTARA.code,
+                'Admin Uji Gerbang Status',
+                ADMIN_SEMENTARA.email,
+                await bcrypt.hash('RahasiaUjiAdminStatus123', 10),
+            ]
+        )
+
+        idAdminSementara = hasil.insertId
+    })
+
+    after(async () => {
+        // Dihapus lewat id yang sudah ditangkap saat insert, bukan
+        // lewat code atau email: pelajaran dari Task 5 adalah PUT bisa
+        // menimpa kolom lain jadi NULL di jalur tertentu, jadi
+        // pembersihan tidak boleh bergantung pada kolom itu masih utuh.
+        if (idAdminSementara) {
+            await db.query(
+                'DELETE FROM users WHERE id = ?',
+                [idAdminSementara]
+            )
+        }
+    })
+
     test('SPG tidak boleh menonaktifkan siapa pun', async () => {
         const { status } = await kirim(
             'PUT',
-            `/api/users/${ADMIN}/status`,
+            `/api/users/${idSementara}/status`,
             SPG
         )
 
         assert.strictEqual(status, 403)
         assert.strictEqual(
-            await statusDi(ADMIN),
+            await statusDi(idSementara),
             'ACTIVE',
             'status tidak boleh berubah saat ditolak'
         )
@@ -512,12 +562,12 @@ describe('gerbang pada penonaktifan akun', () => {
     test('administrator tidak boleh menonaktifkan dirinya sendiri', async () => {
         const { status } = await kirim(
             'PUT',
-            `/api/users/${ADMIN}/status`,
-            ADMIN
+            `/api/users/${idAdminSementara}/status`,
+            idAdminSementara
         )
 
         assert.strictEqual(status, 400)
-        assert.strictEqual(await statusDi(ADMIN), 'ACTIVE')
+        assert.strictEqual(await statusDi(idAdminSementara), 'ACTIVE')
     })
 
     test('user yang tidak ada tetap 404 bagi administrator', async () => {
@@ -542,23 +592,25 @@ describe('gerbang pada penonaktifan akun', () => {
         assert.strictEqual(status, 403)
     })
 
-    // MySQL mengoersi '2abc' menjadi 2 saat dibandingkan dengan kolom id,
-    // tapi Number('2abc') di JavaScript adalah NaN sehingga perbandingan
-    // dengan req.user.id tidak akan pernah cocok. Penjaga yang memakai
-    // req.params.id mentah-mentah bisa dilewati hanya dengan menambahkan
-    // huruf ke URL, sementara findByPk tetap menyasar baris yang sama.
-    // Diperiksa langsung ke database, bukan hanya status, supaya
-    // administrator id 2 tidak diam-diam ikut ternonaktifkan oleh tes
-    // ini sendiri.
-    test('id dengan akhiran huruf tidak melewati penjaga diri sendiri', async () => {
+    // parseId menolak '<id>abc' pada pemeriksaan format sebelum sampai
+    // ke pembanding req.user.id ataupun ke findByPk sama sekali — bukan
+    // pada pembanding larangan diri sendiri, seperti nama tes versi
+    // sebelumnya keliru menyiratkan. Tanpa penormalan ini, Number('2abc')
+    // adalah NaN (tidak pernah cocok dengan req.user.id secara
+    // JavaScript) sementara MySQL tetap mengoersi '2abc' menjadi baris
+    // id 2 pada WHERE id = ?, sehingga penjaga bisa dilewati sekaligus
+    // barisnya tetap ter-toggle. Diperiksa langsung ke database, bukan
+    // hanya status, supaya administrator sekali pakai ini tidak
+    // diam-diam ikut berubah.
+    test('id non-numerik ditolak sebelum lookup atau toggle apa pun', async () => {
         const { status } = await kirim(
             'PUT',
-            `/api/users/${ADMIN}abc/status`,
-            ADMIN
+            `/api/users/${idAdminSementara}abc/status`,
+            idAdminSementara
         )
 
         assert.strictEqual(status, 400)
-        assert.strictEqual(await statusDi(ADMIN), 'ACTIVE')
+        assert.strictEqual(await statusDi(idAdminSementara), 'ACTIVE')
     })
 
 })
