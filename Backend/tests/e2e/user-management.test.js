@@ -156,3 +156,79 @@ describe('middleware menolak akun nonaktif', () => {
     })
 
 })
+
+
+describe('gerbang login untuk akun nonaktif', () => {
+
+    const login = async (email, password) => {
+        const res = await fetch(BASE + '/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password }),
+        })
+
+        return { status: res.status, data: await res.json() }
+    }
+
+    before(async () => {
+        await db.query(
+            'UPDATE users SET status = ? WHERE id = ?',
+            ['INACTIVE', idSementara]
+        )
+    })
+
+    after(async () => {
+        await db.query(
+            'UPDATE users SET status = ? WHERE id = ?',
+            ['ACTIVE', idSementara]
+        )
+    })
+
+    test('password benar tapi akun nonaktif ditolak 403', async () => {
+        const { status, data } = await login(
+            SEMENTARA.email,
+            SEMENTARA.password
+        )
+
+        assert.strictEqual(status, 403)
+        assert.match(data.message, /tidak aktif/i)
+    })
+
+    // Pemeriksaan status HARUS terjadi setelah password diperiksa.
+    // Kalau tidak, siapa pun bisa mengetahui email mana yang terdaftar
+    // hanya dengan menebak — persis kebocoran yang dicegah oleh pesan
+    // login yang sengaja dibuat identik.
+    test('password salah pada akun nonaktif tetap 401 generik', async () => {
+        const { status, data } = await login(
+            SEMENTARA.email,
+            'PasswordYangSalah'
+        )
+
+        assert.strictEqual(
+            status,
+            401,
+            'status akun tidak boleh bocor sebelum password diperiksa'
+        )
+        assert.match(data.message, /Email atau password salah/i)
+    })
+
+    test('status NULL juga ditolak, bukan diloloskan', async () => {
+        await db.query(
+            'UPDATE users SET status = NULL WHERE id = ?',
+            [idSementara]
+        )
+
+        const { status } = await login(
+            SEMENTARA.email,
+            SEMENTARA.password
+        )
+
+        assert.strictEqual(status, 403)
+
+        await db.query(
+            'UPDATE users SET status = ? WHERE id = ?',
+            ['INACTIVE', idSementara]
+        )
+    })
+
+})

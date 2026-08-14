@@ -85,14 +85,6 @@ exports.login = async (req, res) => {
             )
         }
 
-        if (user.status === 'INACTIVE') {
-            return sendError(
-                res,
-                403,
-                'Akun Anda tidak aktif. Silakan hubungi administrator.'
-            )
-        }
-
         const isMatch = await bcrypt.compare(password, user.password)
 
         if (!isMatch) {
@@ -100,6 +92,21 @@ exports.login = async (req, res) => {
                 res,
                 401,
                 INVALID_CREDENTIALS_MESSAGE
+            )
+        }
+
+        // Diperiksa setelah password, bukan sebelumnya: kalau ditolak
+        // lebih dulu, siapa pun bisa mengetahui email mana yang
+        // terdaftar hanya dengan menebak. Itu kebocoran yang sama dengan
+        // yang dicegah oleh pesan login yang sengaja dibuat identik.
+        //
+        // Allowlist, bukan `=== 'INACTIVE'`: kolomnya boleh NULL, dan
+        // NULL harus ditolak.
+        if (user.status !== 'ACTIVE') {
+            return sendError(
+                res,
+                403,
+                'Akun Anda tidak aktif. Silakan hubungi administrator.'
             )
         }
 
