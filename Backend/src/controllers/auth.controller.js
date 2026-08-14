@@ -14,52 +14,6 @@ const {
 const INVALID_CREDENTIALS_MESSAGE =
     'Email atau password salah.'
 
-// REGISTER
-exports.register = async (req, res) => {
-    try {
-        const { name, email, password } = req.body
-
-        if (!name || !email || !password) {
-            return sendError(
-                res,
-                400,
-                'Nama, email, dan password wajib diisi.'
-            )
-        }
-
-        const existingUser = await User.findOne({
-            where: { email }
-        })
-
-        if (existingUser) {
-            return sendError(
-                res,
-                409,
-                'Email sudah terdaftar.'
-            )
-        }
-
-        const hashPassword = await bcrypt.hash(password, 10)
-
-        const user = await User.create({
-            name,
-            email,
-            password: hashPassword
-        })
-
-        // Jangan balikkan object user mentah — di dalamnya ada
-        // kolom password (hash) dan kolom internal lain.
-        res.status(201).json({
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            role: user.role
-        })
-    } catch (err) {
-        return sendServerError(res, err, 'REGISTER')
-    }
-}
-
 // LOGIN
 exports.login = async (req, res) => {
     try {

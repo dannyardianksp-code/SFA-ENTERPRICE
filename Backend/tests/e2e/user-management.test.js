@@ -614,3 +614,43 @@ describe('gerbang pada penonaktifan akun', () => {
     })
 
 })
+
+describe('register dihapus', () => {
+
+    const KODE_ORANG_ASING = 'orang.asing.14082026@contoh.invalid'
+
+    after(async () => {
+        await db.query(
+            'DELETE FROM users WHERE email = ?',
+            [KODE_ORANG_ASING]
+        )
+    })
+
+    // Endpoint ini berjalan tanpa autentikasi. Ia hanya bisa membuat
+    // SPG, tapi SPG itulah satu-satunya prasyarat untuk seluruh jalur
+    // eskalasi di berkas ini — rantainya jadi tidak butuh kredensial
+    // apa pun.
+    test('POST /api/auth/register tidak ada lagi', async () => {
+        const res = await fetch(BASE + '/api/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: 'Orang Asing',
+                email: KODE_ORANG_ASING,
+                password: 'RahasiaUji123',
+            }),
+        })
+
+        assert.strictEqual(res.status, 404)
+    })
+
+    test('tidak ada baris yang tercipta dari percobaan itu', async () => {
+        const [baris] = await db.query(
+            'SELECT id FROM users WHERE email = ?',
+            [KODE_ORANG_ASING]
+        )
+
+        assert.strictEqual(baris.length, 0)
+    })
+
+})
