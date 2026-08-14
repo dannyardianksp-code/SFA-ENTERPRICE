@@ -27,6 +27,11 @@ const {
     generateTempPassword,
 } = require('../utils/password.util')
 
+const {
+    assertUserManagement,
+    USER_ROLES,
+} = require('../utils/access.util')
+
 
 
 
@@ -191,6 +196,12 @@ router.post(
 
         try {
 
+            const gerbang = assertUserManagement(req.user)
+
+            if (gerbang) {
+                return sendError(res, gerbang.status, gerbang.message)
+            }
+
             const {
 
                 code,
@@ -212,6 +223,16 @@ router.post(
 
 
             } = req.body
+
+            // Ditolak di sini supaya jadi 400 yang jelas, bukan 500 dari
+            // MySQL saat nilainya tidak cocok dengan ENUM kolomnya.
+            if (role !== undefined && !USER_ROLES.includes(role)) {
+                return sendError(
+                    res,
+                    400,
+                    'Role tidak dikenal.'
+                )
+            }
 
             // HASH PASSWORD
             const hashedPassword =
@@ -456,6 +477,12 @@ router.put(
 
         try {
 
+            const gerbang = assertUserManagement(req.user)
+
+            if (gerbang) {
+                return sendError(res, gerbang.status, gerbang.message)
+            }
+
             const {
 
                 code,
@@ -475,6 +502,34 @@ router.put(
 
 
             } = req.body
+
+            if (role !== undefined && !USER_ROLES.includes(role)) {
+                return sendError(
+                    res,
+                    400,
+                    'Role tidak dikenal.'
+                )
+            }
+
+            // Membandingkan NILAI, bukan keberadaan field: form user di
+            // web mengirim kembali seluruh objeknya, sehingga admin yang
+            // sekadar mengubah namanya sendiri tetap ikut mengirim role
+            // yang sama. Menolak berdasarkan keberadaan field akan
+            // menguncinya dari mengedit namanya sendiri.
+            //
+            // Karena pelakunya selalu tetap administrator aktif, jumlah
+            // administrator aktif tidak pernah bisa mencapai nol.
+            if (
+                Number(req.params.id) === req.user.id &&
+                role !== undefined &&
+                role !== req.user.role
+            ) {
+                return sendError(
+                    res,
+                    400,
+                    'Anda tidak bisa mengubah role akun Anda sendiri.'
+                )
+            }
 
             await User.update(
 

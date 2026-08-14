@@ -232,3 +232,184 @@ describe('gerbang login untuk akun nonaktif', () => {
     })
 
 })
+
+
+describe('gerbang role pada penulisan user', () => {
+
+    const KODE_SELUNDUPAN = 'UJI-SELUNDUP-14082026'
+
+    after(async () => {
+        await db.query(
+            'DELETE FROM users WHERE code = ?',
+            [KODE_SELUNDUPAN]
+        )
+    })
+
+    const adaDiDatabase = async (code) => {
+        const [baris] = await db.query(
+            'SELECT id FROM users WHERE code = ?',
+            [code]
+        )
+
+        return baris.length > 0
+    }
+
+    const roleDi = async (id) => {
+        const [baris] = await db.query(
+            'SELECT role FROM users WHERE id = ?',
+            [id]
+        )
+
+        return baris[0].role
+    }
+
+    test('SPG tidak boleh membuat user', async () => {
+        const { status } = await kirim('POST', '/api/users', SPG, {
+            code: KODE_SELUNDUPAN,
+            name: 'Administrator Selundupan',
+            email: 'selundup.14082026@contoh.invalid',
+            password: 'apa saja',
+            role: 'ADMINISTRATOR',
+        })
+
+        assert.strictEqual(status, 403)
+
+        // Diperiksa langsung ke database. Tanpa ini, tesnya juga lulus
+        // pada handler yang menyimpan barisnya lebih dulu lalu
+        // mengembalikan 403.
+        assert.strictEqual(
+            await adaDiDatabase(KODE_SELUNDUPAN),
+            false,
+            'baris tidak boleh tersimpan saat ditolak'
+        )
+    })
+
+    test('SPG tidak boleh menaikkan role dirinya sendiri', async () => {
+        const { status } = await kirim(
+            'PUT',
+            `/api/users/${idSementara}`,
+            idSementara,
+            { name: SEMENTARA.name, role: 'ADMINISTRATOR' }
+        )
+
+        assert.strictEqual(status, 403)
+        assert.strictEqual(await roleDi(idSementara), 'SPG')
+    })
+
+    // Unit test sudah membuktikan helper-nya menolak ketiga role, tapi
+    // hanya e2e yang membuktikan helper itu benar-benar terpasang di
+    // route ini.
+    test('SUPERVISOR dan MANAGER juga ditolak', async () => {
+        const SUPERVISOR = 3
+        const MANAGER = 30
+
+        for (const pemanggil of [SUPERVISOR, MANAGER]) {
+            const { status } = await kirim('POST', '/api/users', pemanggil, {
+                code: KODE_SELUNDUPAN,
+                name: 'Administrator Selundupan',
+                email: 'selundup.14082026@contoh.invalid',
+                password: 'apa saja',
+                role: 'ADMINISTRATOR',
+            })
+
+            assert.strictEqual(
+                status,
+                403,
+                `user ${pemanggil} seharusnya ditolak`
+            )
+        }
+
+        assert.strictEqual(await adaDiDatabase(KODE_SELUNDUPAN), false)
+    })
+
+    test('ADMINISTRATOR boleh membuat user', async () => {
+        const { status } = await kirim('POST', '/api/users', ADMIN, {
+            code: KODE_SELUNDUPAN,
+            name: 'User Dibuat Admin',
+            email: 'selundup.14082026@contoh.invalid',
+            password: 'RahasiaUji123',
+            role: 'SPG',
+        })
+
+        assert.strictEqual(status, 200)
+        assert.strictEqual(await adaDiDatabase(KODE_SELUNDUPAN), true)
+    })
+
+    test('role tidak dikenal ditolak 400, bukan 500', async () => {
+        const { status } = await kirim('POST', '/api/users', ADMIN, {
+            code: 'UJI-ROLE-SALAH-14082026',
+            name: 'Role Salah',
+            email: 'role.salah.14082026@contoh.invalid',
+            password: 'RahasiaUji123',
+            role: 'DIREKTUR',
+        })
+
+        assert.strictEqual(status, 400)
+    })
+
+    test('role tidak dikenal pada PUT juga ditolak 400', async () => {
+        const { status } = await kirim(
+            'PUT',
+            `/api/users/${idSementara}`,
+            ADMIN,
+            { name: SEMENTARA.name, role: 'DIREKTUR' }
+        )
+
+        assert.strictEqual(status, 400)
+        assert.strictEqual(await roleDi(idSementara), 'SPG')
+    })
+
+})
+
+
+describe('administrator tidak boleh mengubah role dirinya sendiri', () => {
+
+    const roleDi = async (id) => {
+        const [baris] = await db.query(
+            'SELECT role FROM users WHERE id = ?',
+            [id]
+        )
+
+        return baris[0].role
+    }
+
+    let namaAsli
+
+    before(async () => {
+        const [baris] = await db.query(
+            'SELECT name FROM users WHERE id = ?',
+            [ADMIN]
+        )
+
+        namaAsli = baris[0].name
+    })
+
+    test('menurunkan role sendiri ditolak 400', async () => {
+        const { status } = await kirim(
+            'PUT',
+            `/api/users/${ADMIN}`,
+            ADMIN,
+            { name: namaAsli, role: 'SPG' }
+        )
+
+        assert.strictEqual(status, 400)
+        assert.strictEqual(await roleDi(ADMIN), 'ADMINISTRATOR')
+    })
+
+    // Form user di web mengirim kembali seluruh objeknya, jadi admin
+    // yang sekadar mengubah namanya sendiri tetap ikut mengirim role
+    // yang sama. Larangan yang membandingkan keberadaan field — bukan
+    // nilainya — akan mengunci admin dari mengedit namanya sendiri.
+    test('mengirim role yang sama sambil mengubah field lain tetap boleh', async () => {
+        const { status } = await kirim(
+            'PUT',
+            `/api/users/${ADMIN}`,
+            ADMIN,
+            { name: namaAsli, role: 'ADMINISTRATOR' }
+        )
+
+        assert.strictEqual(status, 200)
+        assert.strictEqual(await roleDi(ADMIN), 'ADMINISTRATOR')
+    })
+
+})
