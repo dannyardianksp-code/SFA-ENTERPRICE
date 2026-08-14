@@ -74,6 +74,49 @@ const UNRESTRICTED_ROLES = ['ADMINISTRATOR']
 const PLAN_WRITER_ROLES = ['SUPERVISOR', 'MANAGER', 'ADMINISTRATOR']
 
 
+/** Role yang boleh membuat, mengubah, dan menonaktifkan akun user. */
+const USER_MANAGER_ROLES = ['ADMINISTRATOR']
+
+
+/**
+ * Nilai sah kolom users.role — sama persis dengan ENUM di database.
+ * Dipakai supaya role yang salah ditolak 400, bukan sampai ke MySQL dan
+ * kembali sebagai 500.
+ */
+const USER_ROLES = [
+    'SPG',
+    'SUPERVISOR',
+    'MANAGER',
+    'ADMINISTRATOR',
+]
+
+
+/**
+ * Gerbang untuk route yang menulis akun user.
+ *
+ * Ditulis sebagai allowlist, bukan blacklist: user kosong, role NULL,
+ * nilai warisan seperti 'ADMIN', dan role baru apa pun ditolak secara
+ * bawaan. Blacklist akan meloloskan semuanya.
+ *
+ * null = boleh. { status, message } = tolak.
+ */
+const assertUserManagement = (user) => {
+
+    if (!user || !USER_MANAGER_ROLES.includes(user.role)) {
+
+        return {
+            status: 403,
+            message:
+                'Hanya administrator yang boleh mengelola akun user.',
+        }
+
+    }
+
+    return null
+
+}
+
+
 /**
  * Pengaman terakhir kalau data supervisor_id sampai melingkar.
  * Penyaring id yang sudah terkumpul sudah menangani lingkaran; batas ini
@@ -184,6 +227,9 @@ module.exports = {
     assertAreaChannelAccess,
     RESTRICTED_ROLES,
     PLAN_WRITER_ROLES,
+    USER_MANAGER_ROLES,
+    USER_ROLES,
+    assertUserManagement,
     MAX_HIERARCHY_DEPTH,
     collectSubtreeIds,
     resolveSubordinateUserIds,
