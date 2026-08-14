@@ -329,10 +329,40 @@ router.put(
 
         try {
 
+            const gerbang = assertUserManagement(req.user)
+
+            if (gerbang) {
+                return sendError(res, gerbang.status, gerbang.message)
+            }
+
+            // parseId, bukan Number(req.params.id): MySQL mengoersi
+            // '2abc' menjadi 2 saat dibandingkan dengan kolom id, tapi
+            // Number('2abc') adalah NaN sehingga tidak akan pernah sama
+            // dengan req.user.id. Penjaga yang membandingkan nilai
+            // mentah bisa dilewati hanya dengan menambahkan huruf ke
+            // URL, sementara findByPk tetap menyasar baris yang sama.
+            const id = parseId(req.params.id)
+
+            if (id === null) {
+                return sendError(res, 400, 'Id user tidak valid.')
+            }
+
+            // Jumlah administrator aktif tidak boleh bisa mencapai nol.
+            // Karena pelakunya selalu tetap administrator aktif,
+            // invarian itu dijaga oleh bentuk aturan ini — tanpa COUNT
+            // dan tanpa kondisi balapan antara dua admin.
+            if (id === req.user.id) {
+                return sendError(
+                    res,
+                    400,
+                    'Anda tidak bisa mengubah status akun Anda sendiri.'
+                )
+            }
+
             const user =
                 await User.findByPk(
 
-                    req.params.id
+                    id
 
                 )
 

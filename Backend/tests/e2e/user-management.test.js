@@ -477,3 +477,88 @@ describe('administrator tidak boleh mengubah role dirinya sendiri', () => {
     })
 
 })
+
+
+describe('gerbang pada penonaktifan akun', () => {
+
+    const statusDi = async (id) => {
+        const [baris] = await db.query(
+            'SELECT status FROM users WHERE id = ?',
+            [id]
+        )
+
+        return baris[0].status
+    }
+
+    test('SPG tidak boleh menonaktifkan siapa pun', async () => {
+        const { status } = await kirim(
+            'PUT',
+            `/api/users/${ADMIN}/status`,
+            SPG
+        )
+
+        assert.strictEqual(status, 403)
+        assert.strictEqual(
+            await statusDi(ADMIN),
+            'ACTIVE',
+            'status tidak boleh berubah saat ditolak'
+        )
+    })
+
+    // Karena pelaku setiap perubahan selalu tetap administrator aktif,
+    // jumlah administrator aktif tidak pernah bisa mencapai nol. Tanpa
+    // ini, dua klik salah mengunci semua orang keluar secara permanen —
+    // reset password sendiri sudah ADMINISTRATOR-saja.
+    test('administrator tidak boleh menonaktifkan dirinya sendiri', async () => {
+        const { status } = await kirim(
+            'PUT',
+            `/api/users/${ADMIN}/status`,
+            ADMIN
+        )
+
+        assert.strictEqual(status, 400)
+        assert.strictEqual(await statusDi(ADMIN), 'ACTIVE')
+    })
+
+    test('user yang tidak ada tetap 404 bagi administrator', async () => {
+        const { status } = await kirim(
+            'PUT',
+            '/api/users/99999999/status',
+            ADMIN
+        )
+
+        assert.strictEqual(status, 404)
+    })
+
+    // Pemanggil yang tidak berhak tidak perlu diberi tahu apakah id
+    // targetnya ada.
+    test('SPG mendapat 403, bukan 404, untuk id yang tidak ada', async () => {
+        const { status } = await kirim(
+            'PUT',
+            '/api/users/99999999/status',
+            SPG
+        )
+
+        assert.strictEqual(status, 403)
+    })
+
+    // MySQL mengoersi '2abc' menjadi 2 saat dibandingkan dengan kolom id,
+    // tapi Number('2abc') di JavaScript adalah NaN sehingga perbandingan
+    // dengan req.user.id tidak akan pernah cocok. Penjaga yang memakai
+    // req.params.id mentah-mentah bisa dilewati hanya dengan menambahkan
+    // huruf ke URL, sementara findByPk tetap menyasar baris yang sama.
+    // Diperiksa langsung ke database, bukan hanya status, supaya
+    // administrator id 2 tidak diam-diam ikut ternonaktifkan oleh tes
+    // ini sendiri.
+    test('id dengan akhiran huruf tidak melewati penjaga diri sendiri', async () => {
+        const { status } = await kirim(
+            'PUT',
+            `/api/users/${ADMIN}abc/status`,
+            ADMIN
+        )
+
+        assert.strictEqual(status, 400)
+        assert.strictEqual(await statusDi(ADMIN), 'ACTIVE')
+    })
+
+})
