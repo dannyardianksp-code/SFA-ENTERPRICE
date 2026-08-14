@@ -13,12 +13,24 @@ const User = db.define('User', {
     },
     password: DataTypes.STRING,
     role: {
-        type: DataTypes.ENUM('SPG', 'ADMIN', 'SPV'),
+        type: DataTypes.ENUM(
+            'SPG',
+            'SUPERVISOR',
+            'MANAGER',
+            'ADMINISTRATOR'
+        ),
         defaultValue: 'SPG'
     },
     area_id: DataTypes.INTEGER,
     channel_id: DataTypes.INTEGER,
     supervisor_id: DataTypes.INTEGER,
+    // Kolomnya varchar(20) di database, bukan ENUM, jadi tipenya STRING.
+    // defaultValue dipasang di sini supaya user yang dibuat lewat
+    // POST /api/users tidak dikembalikan dengan status: undefined.
+    status: {
+        type: DataTypes.STRING,
+        defaultValue: 'ACTIVE'
+    },
 }, {
     tableName: 'users',
     timestamps: false
