@@ -32,6 +32,10 @@ const {
     USER_ROLES,
 } = require('../utils/access.util')
 
+const {
+    parseId,
+} = require('../utils/id.util')
+
 
 
 
@@ -483,6 +487,19 @@ router.put(
                 return sendError(res, gerbang.status, gerbang.message)
             }
 
+            // MySQL mengoersi string ke angka saat dibandingkan dengan
+            // kolom numerik: WHERE id = '2abc' tetap cocok dengan baris
+            // id 2. Kalau penjaga di bawah membandingkan req.params.id
+            // mentah-mentah, '2abc' akan lolos dari penjaga (NaN tidak
+            // pernah sama dengan apa pun) padahal where-nya tetap
+            // menyasar baris yang sama. Menormalkan sekali di sini dan
+            // memakai hasilnya di keduanya menutup celah itu.
+            const targetId = parseId(req.params.id)
+
+            if (targetId === null) {
+                return sendError(res, 400, 'Id user tidak valid.')
+            }
+
             const {
 
                 code,
@@ -520,7 +537,7 @@ router.put(
             // Karena pelakunya selalu tetap administrator aktif, jumlah
             // administrator aktif tidak pernah bisa mencapai nol.
             if (
-                Number(req.params.id) === req.user.id &&
+                targetId === req.user.id &&
                 role !== undefined &&
                 role !== req.user.role
             ) {
@@ -560,7 +577,7 @@ router.put(
                     where: {
 
                         id:
-                            req.params.id
+                            targetId
 
                     }
 

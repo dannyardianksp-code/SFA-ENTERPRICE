@@ -237,11 +237,16 @@ describe('gerbang login untuk akun nonaktif', () => {
 describe('gerbang role pada penulisan user', () => {
 
     const KODE_SELUNDUPAN = 'UJI-SELUNDUP-14082026'
+    const KODE_ROLE_SALAH = 'UJI-ROLE-SALAH-14082026'
 
     after(async () => {
         await db.query(
             'DELETE FROM users WHERE code = ?',
             [KODE_SELUNDUPAN]
+        )
+        await db.query(
+            'DELETE FROM users WHERE code = ?',
+            [KODE_ROLE_SALAH]
         )
     })
 
@@ -337,7 +342,7 @@ describe('gerbang role pada penulisan user', () => {
 
     test('role tidak dikenal ditolak 400, bukan 500', async () => {
         const { status } = await kirim('POST', '/api/users', ADMIN, {
-            code: 'UJI-ROLE-SALAH-14082026',
+            code: KODE_ROLE_SALAH,
             name: 'Role Salah',
             email: 'role.salah.14082026@contoh.invalid',
             password: 'RahasiaUji123',
@@ -345,6 +350,11 @@ describe('gerbang role pada penulisan user', () => {
         })
 
         assert.strictEqual(status, 400)
+
+        // Sama seperti tes penolakan role di atas: tanpa ini, tesnya
+        // juga lulus pada handler yang menyimpan barisnya lebih dulu
+        // baru memvalidasi role-nya.
+        assert.strictEqual(await adaDiDatabase(KODE_ROLE_SALAH), false)
     })
 
     test('role tidak dikenal pada PUT juga ditolak 400', async () => {
@@ -357,6 +367,29 @@ describe('gerbang role pada penulisan user', () => {
 
         assert.strictEqual(status, 400)
         assert.strictEqual(await roleDi(idSementara), 'SPG')
+    })
+
+    // MySQL mengoersi '2abc' menjadi 2 saat dibandingkan dengan kolom
+    // id, tapi Number('2abc') di JavaScript adalah NaN. Penjaga yang
+    // membandingkan req.params.id mentah-mentah bisa dilewati hanya
+    // dengan menambahkan huruf ke URL, sementara where-nya tetap
+    // menyasar baris yang sama. Diperiksa langsung ke database, bukan
+    // hanya status, supaya bug ini tidak bisa lolos diam-diam.
+    test('id dengan akhiran huruf tidak melewati penjaga role sendiri', async () => {
+        const [baris] = await db.query(
+            'SELECT name FROM users WHERE id = ?',
+            [ADMIN]
+        )
+
+        const { status } = await kirim(
+            'PUT',
+            `/api/users/${ADMIN}abc`,
+            ADMIN,
+            { name: baris[0].name, role: 'SPG' }
+        )
+
+        assert.strictEqual(status, 400)
+        assert.strictEqual(await roleDi(ADMIN), 'ADMINISTRATOR')
     })
 
 })
@@ -374,14 +407,27 @@ describe('administrator tidak boleh mengubah role dirinya sendiri', () => {
     }
 
     let namaAsli
+    let dataAsli
 
     before(async () => {
         const [baris] = await db.query(
-            'SELECT name FROM users WHERE id = ?',
+            'SELECT name, code, area_id, channel_id, supervisor_id FROM users WHERE id = ?',
             [ADMIN]
         )
 
         namaAsli = baris[0].name
+
+        // Handler PUT menulis area_id/channel_id/supervisor_id/code
+        // sebagai `field || null` — kalau field itu tidak dikirim, kolom
+        // aslinya akan ikut tertimpa NULL. Nilai-nilai ini dikirim balik
+        // apa adanya supaya tes ini tidak diam-diam menghapus data akun
+        // administrator sungguhan.
+        dataAsli = {
+            code: baris[0].code,
+            area_id: baris[0].area_id,
+            channel_id: baris[0].channel_id,
+            supervisor_id: baris[0].supervisor_id,
+        }
     })
 
     test('menurunkan role sendiri ditolak 400', async () => {
@@ -405,11 +451,29 @@ describe('administrator tidak boleh mengubah role dirinya sendiri', () => {
             'PUT',
             `/api/users/${ADMIN}`,
             ADMIN,
-            { name: namaAsli, role: 'ADMINISTRATOR' }
+            {
+                name: namaAsli,
+                role: 'ADMINISTRATOR',
+                code: dataAsli.code,
+                area_id: dataAsli.area_id,
+                channel_id: dataAsli.channel_id,
+                supervisor_id: dataAsli.supervisor_id,
+            }
         )
 
         assert.strictEqual(status, 200)
         assert.strictEqual(await roleDi(ADMIN), 'ADMINISTRATOR')
+
+        const [baris] = await db.query(
+            'SELECT code, area_id, channel_id, supervisor_id FROM users WHERE id = ?',
+            [ADMIN]
+        )
+
+        assert.deepStrictEqual(
+            baris[0],
+            dataAsli,
+            'PUT tanpa perubahan tidak boleh menimpa kolom lain dengan NULL'
+        )
     })
 
 })
