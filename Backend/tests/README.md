@@ -34,7 +34,7 @@ tests/
 | `password.util.test.js` | alfabet tanpa karakter yang mudah tertukar, panjang, dan keacakan password sementara |
 | `id.util.test.js` | `parseId` menolak apa pun yang bukan angka bulat positif murni, termasuk `'2abc'` yang MySQL sendiri akan mengoersi jadi baris 2 |
 | `user-model.test.js` | deklarasi kolom `status` (dengan default `ACTIVE`) dan ENUM `role` di model User |
-| `user-management.test.js` | `assertUserManagement` sebagai gerbang ADMINISTRATOR untuk penulisan akun, gagal-tertutup untuk user kosong dan role tak dikenal |
+| `user-management.test.js` | `assertUserManagement` sebagai gerbang ADMINISTRATOR untuk penulisan akun, gagal-tertutup untuk user kosong dan role tak dikenal; `wouldRemoveLastActiveAdministrator` sebagai keputusan lantai administrator |
 
 `customer.controller.test.js` bisa jalan tanpa database karena seluruh
 validasi parameter terjadi **sebelum** `User.findByPk` dipanggil.
@@ -91,19 +91,50 @@ membuat aplikasi mobile tidak bisa login, dan tes yang mati di tengah akan
 meninggalkan akun itu dengan password acak yang tidak diketahui siapa pun —
 termasuk tesnya sendiri.
 
-`tests/e2e/user-management.test.js` membuat dua user sekali pakai langsung
-lewat `mysql2`: satu SPG di level berkas (dipakai untuk menguji gerbang
-login dan penolakan token setelah nonaktif) dan satu ADMINISTRATOR sekali
-pakai yang dibatasi ke satu blok (khusus dua tes larangan
-menonaktifkan-diri-sendiri). Keduanya dihapus di `after()` masing-masing.
+`tests/e2e/user-management.test.js` membuat lima user sekali pakai langsung
+lewat `mysql2`:
+
+| Baris | Lingkup | Untuk |
+|---|---|---|
+| satu SPG | level berkas | gerbang login, penolakan token setelah nonaktif, `parseId` di `GET /:id` dan `reset-password` |
+| satu ADMINISTRATOR | blok penonaktifan | dua tes larangan menonaktifkan-diri-sendiri |
+| satu ADMINISTRATOR | blok penjaga identitas | larangan mengubah role, email, dan code sendiri |
+| dua ADMINISTRATOR | blok lantai administrator | dua request bersamaan yang saling menurunkan role dan saling menonaktifkan |
+
+Semuanya dihapus di `after()` masing-masing, **lewat id yang ditangkap saat
+insert** — bukan lewat `code` atau `email`, karena `PUT /api/users/:id`
+menulis `code` sebagai `code || null` dan pembersihan tidak boleh
+bergantung pada kolom yang request di bawah uji bisa mengubah. Setiap blok
+yang menyisipkan baris juga **pre-clean lewat seluruh kunci unik yang
+dipakainya**, sehingga satu run yang mati di tengah tidak meracuni run
+berikutnya: `email` pun punya unique index dan bisa menahan `INSERT`
+sendirian.
+
 Ia juga membuat beberapa user lewat `POST /api/users` sebagai administrator
-sungguhan (untuk menguji gerbang role dan validasi role) lalu menghapusnya.
-Sengaja memakai akun sekali pakai untuk kedua peran itu, bukan akun ADMIN
-sungguhan: percobaan sebelumnya menonaktifkan akun administrator asli lewat
-tes ini, dan 401 yang dihasilkannya menjalar ke blok tes lain yang sedang
-berjalan bersamaan — bukan cuma tes ini yang gagal. Tidak ada user
-sungguhan yang datanya diubah, dan tidak ada password user sungguhan yang
-pernah ditulis ulang.
+sungguhan (untuk menguji gerbang role dan validasi role) lalu
+menghapusnya.
+
+**Akun sungguhan (`SPG` id 1, `ADMIN` id 2) dipakai HANYA sebagai
+pemanggil, tidak pernah sebagai sasaran tulis.** Alasannya bukan kerapian:
+kalau sebuah penjaga regresi, request yang seharusnya ditolak akan
+*berhasil*. Assertion-nya gagal dengan berisik, tapi tidak ada yang
+mengembalikan barisnya — dan akun administrator yang terlanjur jadi SPG
+tidak punya jalur pemulihan, karena reset password pun ADMINISTRATOR-saja.
+Percobaan sebelumnya menonaktifkan akun administrator asli lewat tes ini,
+dan 401 yang dihasilkannya menjalar ke blok tes lain yang sedang berjalan
+bersamaan — bukan cuma tes ini yang gagal. Tidak ada user sungguhan yang
+datanya diubah, dan tidak ada password user sungguhan yang pernah ditulis
+ulang.
+
+Satu batas yang perlu diketahui: **cabang 409 lantai administrator tidak
+ditutup e2e.** Jumlah administrator aktif dihitung global, dan database dev
+selalu punya dua akun administrator sungguhan, jadi dua administrator
+sekali pakai yang saling menurunkan role hanya menurunkan jumlahnya dari
+empat ke dua. Membuat keadaan yang menyalakan 409 menuntut kedua
+administrator sungguhan diturunkan lebih dulu. Keputusan tolak/terima-nya
+ditutup unit test atas `wouldRemoveLastActiveAdministrator`; yang ditutup
+e2e adalah transaksi dan locking read yang memasok angkanya, termasuk bahwa
+dua arah bersamaan tidak berakhir sebagai deadlock.
 
 **Jangan jalankan `npm run test:e2e` menghadap database produksi.**
 
@@ -168,6 +199,38 @@ jangan dihapus tanpa membaca komentarnya:
 - **nol administrator** — tidak ada jalur pemulihan kalau administrator
   terakhir menonaktifkan atau menurunkan dirinya sendiri; reset password
   pun ADMINISTRATOR-saja.
+- **nol administrator lewat balapan** — larangan diri sendiri saja tidak
+  cukup. Ia dievaluasi per-request, baca-lalu-tulis, tanpa transaksi: admin
+  2 mengirim `PUT /api/users/29 {role:'SPG'}` dan admin 29 mengirim
+  `PUT /api/users/2 {role:'SPG'}` dalam beberapa milidetik yang sama,
+  keduanya lolos karena sasaran masing-masing bukan dirinya sendiri, dan
+  kedua `UPDATE` commit. Kedua handler sekarang menulis di dalam transaksi
+  dan lebih dulu menghitung administrator aktif lewat
+  `SELECT ... FOR UPDATE`. **Lock itulah perbaikannya**, bukan `COUNT`-nya:
+  tanpa lock kedua transaksi membaca angka yang sama dan sama-sama lolos.
+  Query hitungnya harus SELALU dijalankan pertama dan identik di kedua
+  handler — urutan lock yang berbeda berakhir sebagai deadlock MySQL, bukan
+  sebagai penolakan.
+- **`email` sebagai jalan mengunci diri sendiri** — `email` adalah
+  identitas login, dan `PUT /api/users/:id` menulisnya tanpa penjaga; yang
+  lama hanya menutup `role`. Administrator yang salah mengetik emailnya
+  sendiri tetap punya satu baris administrator aktif, tapi begitu tokennya
+  kedaluwarsa (1 hari) **nol administrator bisa login**, dan tidak ada
+  lagi yang bisa mereset password siapa pun. `email` dan `code` kini ikut
+  dijaga dengan pola bandingkan-nilai yang sama seperti `role`.
+- **`JWT_SECRET` hilang menjadi logout massal** — `jwt.verify` juga
+  melempar saat secretnya tidak terpasang
+  (`secretOrPublicKey must have a value`) dan saat secret dirotasi. Catch
+  yang meruntuhkan setiap lemparan menjadi 401 membuat interceptor mobile
+  me-logout **seluruh user di lapangan** sekaligus, tanpa satu baris pun di
+  log server. Hanya `TokenExpiredError` dan `JsonWebTokenError` yang 401;
+  sisanya 500 supaya klien mencoba lagi alih-alih logout.
+- **email non-teks di login** — penjaga yang memeriksa truthiness saja
+  meloloskan `{"email":{"a":1}}` sampai ke `findOne` dan pulang sebagai 500
+  pada endpoint tanpa autentikasi. Nilai array lebih buruk: Sequelize
+  mengubahnya menjadi klausa `IN`, sehingga satu password bisa dicoba
+  terhadap sekumpulan email sekaligus. `?.` tidak menolong — ia menjaga
+  `null` dan `undefined`, bukan tipe.
 - **`Number(req.params.id)` dibandingkan, `where` mentah dieksekusi** —
   penjaga larangan-ubah-diri-sendiri pada `PUT /api/users/:id` dan
   `PUT /api/users/:id/status` sempat membandingkan
@@ -223,8 +286,31 @@ Dicatat supaya tidak terbaca sebagai regresi:
   layar. Aturannya: **401 = "sesi Anda sudah tidak berlaku, keluar"**,
   yang hanya bermakna kalau sesinya memang pernah ada; **403 = "permintaan
   ini ditolak, dan ini alasannya"**.
-- `PUT /api/users/:id` dan `PUT /api/users/:id/status` kini menolak
-  `:id` yang bukan angka bulat positif murni dengan **400**; sebelumnya
-  diterima begitu saja dan diteruskan mentah-mentah ke `where`, yang
-  juga berarti bisa melewati penjaga larangan-ubah-diri-sendiri (lihat
-  bagian "Kenapa tes ini ada" di atas).
+- **Keempat** route `:id` di `user.routes.js` kini menolak `:id` yang bukan
+  angka bulat positif murni dengan **400**: `PUT /:id`, `PUT /:id/status`,
+  `GET /:id`, dan `PUT /:id/reset-password`. Sebelumnya diterima begitu saja
+  dan diteruskan mentah-mentah ke `where`, yang juga berarti bisa melewati
+  penjaga larangan-ubah-diri-sendiri (lihat bagian "Kenapa tes ini ada" di
+  atas). `GET /api/users/2abc` dulu mengembalikan baris admin id 2, dan
+  `PUT /api/users/2abc/reset-password` mereset password baris id 2. Kedua
+  route itu tidak punya penjaga yang bisa dilewati, jadi bukan celah yang
+  bisa dieksploitasi — tapi penormalannya membuat invarian "penjaga dan
+  klausa `where` selalu melihat nilai yang sama" berlaku secara struktural,
+  bukan per-route.
+- `PUT /api/users/:id` dan `PUT /api/users/:id/status` kini bisa menjawab
+  **409** kalau operasinya akan menghabiskan administrator aktif terakhir.
+  Hanya tercapai di jalur bersamaan: route-nya sudah memastikan pemanggilnya
+  ADMINISTRATOR aktif dan sasarannya bukan dirinya sendiri, sehingga di
+  request yang berurutan jumlahnya selalu minimal dua.
+- `PUT /api/users/:id` kini menolak **400** kalau administrator mengubah
+  `email` atau `code` **akun sendiri**. Nilai yang dikirim sama dengan yang
+  sekarang tetap diterima, sehingga form web yang mengirim balik seluruh
+  objeknya tetap bisa dipakai mengubah nama.
+- `PUT /api/users/:id/reset-password` kini memakai gerbang bersama
+  `assertUserManagement`, sehingga **pesan 403-nya berubah** menjadi
+  "Hanya administrator yang boleh mengelola akun user." Cabang 404 "akun
+  Anda tidak ditemukan" hilang; ia sudah tidak bisa dicapai sejak middleware
+  menolak 401 untuk user yang tidak ada.
+- `POST /api/auth/login` kini menjawab **400** untuk `email` atau `password`
+  yang bukan string; sebelumnya objek menghasilkan 500 dan array diam-diam
+  menjadi klausa `IN`.
