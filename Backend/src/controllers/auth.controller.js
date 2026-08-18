@@ -14,52 +14,6 @@ const {
 const INVALID_CREDENTIALS_MESSAGE =
     'Email atau password salah.'
 
-// REGISTER
-exports.register = async (req, res) => {
-    try {
-        const { name, email, password } = req.body
-
-        if (!name || !email || !password) {
-            return sendError(
-                res,
-                400,
-                'Nama, email, dan password wajib diisi.'
-            )
-        }
-
-        const existingUser = await User.findOne({
-            where: { email }
-        })
-
-        if (existingUser) {
-            return sendError(
-                res,
-                409,
-                'Email sudah terdaftar.'
-            )
-        }
-
-        const hashPassword = await bcrypt.hash(password, 10)
-
-        const user = await User.create({
-            name,
-            email,
-            password: hashPassword
-        })
-
-        // Jangan balikkan object user mentah — di dalamnya ada
-        // kolom password (hash) dan kolom internal lain.
-        res.status(201).json({
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            role: user.role
-        })
-    } catch (err) {
-        return sendServerError(res, err, 'REGISTER')
-    }
-}
-
 // LOGIN
 exports.login = async (req, res) => {
     try {
@@ -70,6 +24,27 @@ exports.login = async (req, res) => {
                 res,
                 400,
                 'Email dan password wajib diisi.'
+            )
+        }
+
+        // Tipe diperiksa terpisah, karena cek falsy di atas hanya
+        // menangkap yang kosong. `{ "email": { "a": 1 } }` lolos begitu
+        // saja lalu meledak di findOne sebagai 500 — pada endpoint yang
+        // bisa dipanggil tanpa autentikasi, jadi siapa pun bisa
+        // memicunya. `["a@b.c","d@e.f"]` lebih buruk lagi: Sequelize
+        // mengubahnya menjadi klausa IN, sehingga satu password bisa
+        // dicoba terhadap sekumpulan email sekaligus.
+        //
+        // `?.` tidak menolong di sini: ia menjaga null dan undefined,
+        // bukan tipe.
+        if (
+            typeof email !== 'string' ||
+            typeof password !== 'string'
+        ) {
+            return sendError(
+                res,
+                400,
+                'Email dan password harus berupa teks.'
             )
         }
 
@@ -85,14 +60,6 @@ exports.login = async (req, res) => {
             )
         }
 
-        if (user.status === 'INACTIVE') {
-            return sendError(
-                res,
-                403,
-                'Akun Anda tidak aktif. Silakan hubungi administrator.'
-            )
-        }
-
         const isMatch = await bcrypt.compare(password, user.password)
 
         if (!isMatch) {
@@ -100,6 +67,21 @@ exports.login = async (req, res) => {
                 res,
                 401,
                 INVALID_CREDENTIALS_MESSAGE
+            )
+        }
+
+        // Diperiksa setelah password, bukan sebelumnya: kalau ditolak
+        // lebih dulu, siapa pun bisa mengetahui email mana yang
+        // terdaftar hanya dengan menebak. Itu kebocoran yang sama dengan
+        // yang dicegah oleh pesan login yang sengaja dibuat identik.
+        //
+        // Allowlist, bukan `=== 'INACTIVE'`: kolomnya boleh NULL, dan
+        // NULL harus ditolak.
+        if (user.status !== 'ACTIVE') {
+            return sendError(
+                res,
+                403,
+                'Akun Anda tidak aktif. Silakan hubungi administrator.'
             )
         }
 

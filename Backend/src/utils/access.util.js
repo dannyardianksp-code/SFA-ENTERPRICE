@@ -74,6 +74,112 @@ const UNRESTRICTED_ROLES = ['ADMINISTRATOR']
 const PLAN_WRITER_ROLES = ['SUPERVISOR', 'MANAGER', 'ADMINISTRATOR']
 
 
+/** Role yang boleh membuat, mengubah, dan menonaktifkan akun user. */
+const USER_MANAGER_ROLES = ['ADMINISTRATOR']
+
+
+/**
+ * Nilai sah kolom users.role — sama persis dengan ENUM di database.
+ * Dipakai supaya role yang salah ditolak 400, bukan sampai ke MySQL dan
+ * kembali sebagai 500.
+ */
+const USER_ROLES = [
+    'SPG',
+    'SUPERVISOR',
+    'MANAGER',
+    'ADMINISTRATOR',
+]
+
+
+/**
+ * Gerbang untuk route yang menulis akun user.
+ *
+ * Ditulis sebagai allowlist, bukan blacklist: user kosong, role NULL,
+ * nilai warisan seperti 'ADMIN', dan role baru apa pun ditolak secara
+ * bawaan. Blacklist akan meloloskan semuanya.
+ *
+ * null = boleh. { status, message } = tolak.
+ */
+const assertUserManagement = (user) => {
+
+    if (!user || !USER_MANAGER_ROLES.includes(user.role)) {
+
+        return {
+            status: 403,
+            message:
+                'Hanya administrator yang boleh mengelola akun user.',
+        }
+
+    }
+
+    return null
+
+}
+
+
+/**
+ * Apakah satu perubahan akan menghabiskan administrator aktif terakhir?
+ *
+ * Dipisah menjadi fungsi murni karena cabang penolakannya tidak bisa
+ * dicapai lewat e2e: mencapainya butuh database yang hanya punya SATU
+ * administrator aktif, sedangkan database dev punya dua akun
+ * administrator sungguhan yang tidak boleh diubah oleh tes mana pun.
+ * Jadi keputusannya diuji di unit test, dan yang diuji e2e adalah
+ * transaksi serta locking read yang memasok `jumlahAdminAktif`.
+ *
+ * Nol administrator aktif tidak punya jalur pemulihan: reset password
+ * pun ADMINISTRATOR-saja, sehingga satu-satunya jalan kembali adalah
+ * akses langsung ke database.
+ *
+ * @param {object|null} target baris user yang akan diubah
+ * @param {{role?: string, status?: string}} perubahan nilai BARU saja
+ * @param {number} jumlahAdminAktif hasil locking read, bukan cache
+ * @returns {boolean} true bila perubahannya harus ditolak
+ */
+const wouldRemoveLastActiveAdministrator = (
+    target,
+    perubahan,
+    jumlahAdminAktif
+) => {
+
+    // Target yang tidak ada, atau yang bukan administrator aktif, tidak
+    // mengurangi jumlah administrator aktif apa pun yang terjadi padanya.
+    if (!target) {
+        return false
+    }
+
+    if (
+        target.role !== 'ADMINISTRATOR' ||
+        target.status !== 'ACTIVE'
+    ) {
+        return false
+    }
+
+    // `!== undefined` dan bukan truthy: field yang tidak dikirim tidak
+    // ditulis Sequelize, jadi ia bukan perubahan. Membandingkan NILAI
+    // BARU dengan 'ADMINISTRATOR'/'ACTIVE' membuat administrator yang
+    // mengirim balik role dan status yang sama — yang dilakukan form
+    // user di web setiap kali menyimpan — tidak ikut tertolak.
+    const kehilanganRole =
+        perubahan.role !== undefined &&
+        perubahan.role !== 'ADMINISTRATOR'
+
+    const kehilanganStatus =
+        perubahan.status !== undefined &&
+        perubahan.status !== 'ACTIVE'
+
+    if (!kehilanganRole && !kehilanganStatus) {
+        return false
+    }
+
+    // <= 1, bukan === 1: jumlah nol berarti invariannya sudah rusak
+    // sebelum request ini, dan menolak tetap lebih benar daripada
+    // meloloskan.
+    return jumlahAdminAktif <= 1
+
+}
+
+
 /**
  * Pengaman terakhir kalau data supervisor_id sampai melingkar.
  * Penyaring id yang sudah terkumpul sudah menangani lingkaran; batas ini
@@ -184,6 +290,10 @@ module.exports = {
     assertAreaChannelAccess,
     RESTRICTED_ROLES,
     PLAN_WRITER_ROLES,
+    USER_MANAGER_ROLES,
+    USER_ROLES,
+    assertUserManagement,
+    wouldRemoveLastActiveAdministrator,
     MAX_HIERARCHY_DEPTH,
     collectSubtreeIds,
     resolveSubordinateUserIds,
