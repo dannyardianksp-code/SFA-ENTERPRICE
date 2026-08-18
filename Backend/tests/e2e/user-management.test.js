@@ -808,3 +808,370 @@ describe('register dihapus', () => {
     })
 
 })
+
+
+describe('lantai administrator aktif di bawah dua request bersamaan', () => {
+
+    // DUA administrator sekali pakai, dibuat berkas ini sendiri. Akun
+    // administrator sungguhan tidak boleh ikut, baik sebagai sasaran
+    // maupun sebagai bagian dari skenarionya.
+    const ADMIN_A = {
+        code: 'UJI-AUTHZ-LANTAI-A-14082026',
+        email: 'uji.authz.lantai.a.14082026@contoh.invalid',
+    }
+
+    const ADMIN_B = {
+        code: 'UJI-AUTHZ-LANTAI-B-14082026',
+        email: 'uji.authz.lantai.b.14082026@contoh.invalid',
+    }
+
+    let idA
+    let idB
+
+    const jumlahAdminAktif = async () => {
+        const [baris] = await db.query(
+            `SELECT COUNT(*) AS n FROM users
+             WHERE role = 'ADMINISTRATOR' AND status = 'ACTIVE'`
+        )
+
+        return baris[0].n
+    }
+
+    const buatAdmin = async (spek) => {
+        await db.query(
+            'DELETE FROM users WHERE code = ? OR email = ?',
+            [spek.code, spek.email]
+        )
+
+        const [hasil] = await db.query(
+            `INSERT INTO users (code, name, email, password, role, status)
+             VALUES (?, ?, ?, ?, 'ADMINISTRATOR', 'ACTIVE')`,
+            [
+                spek.code,
+                'Admin Uji Lantai ' + spek.code,
+                spek.email,
+                await bcrypt.hash('RahasiaUjiLantai123', 10),
+            ]
+        )
+
+        return hasil.insertId
+    }
+
+    before(async () => {
+        idA = await buatAdmin(ADMIN_A)
+        idB = await buatAdmin(ADMIN_B)
+    })
+
+    after(async () => {
+        for (const id of [idA, idB]) {
+            if (id) {
+                await db.query('DELETE FROM users WHERE id = ?', [id])
+            }
+        }
+    })
+
+    // APA yang dibuktikan tes ini, dan apa yang TIDAK.
+    //
+    // Membuktikan: dua transaksi yang keduanya mengambil
+    // SELECT ... FOR UPDATE atas himpunan administrator aktif lalu menulis
+    // ke baris yang berbeda tidak saling mematikan. Kalau urutan lock-nya
+    // berbeda antar handler, MySQL membatalkan salah satunya sebagai
+    // deadlock dan klien melihat 500 — bukan penolakan yang rapi. Itu
+    // risiko nyata yang dibawa perbaikan ini, dan hanya jalur bersamaan
+    // yang bisa memperlihatkannya. Sekaligus membuktikan jalur normal
+    // (menurunkan administrator LAIN saat masih ada yang lain) tetap
+    // berhasil setelah dibungkus transaksi.
+    //
+    // TIDAK membuktikan: bahwa cabang 409-nya menyala. Lantai
+    // administrator dihitung global, dan database dev selalu punya dua
+    // akun administrator sungguhan, jadi jumlahnya di sini turun dari
+    // empat ke dua — tidak pernah menyentuh satu. Membuat keadaan yang
+    // menyalakan 409 menuntut kedua administrator sungguhan diturunkan
+    // lebih dulu, yang dilarang, dan menonaktifkannya pernah membuat 401
+    // menjalar ke berkas tes lain yang berjalan bersamaan. Keputusan
+    // tolak/terima itu ditutup unit test atas
+    // wouldRemoveLastActiveAdministrator di
+    // tests/unit/user-management.test.js.
+    //
+    // Assertion "masih ada administrator aktif" karena itu memang lemah di
+    // sini. Ia tetap ada sebagai penjaga invarian: kalau suatu saat
+    // seseorang mengubah lantainya menjadi per-request lagi, tes ini tidak
+    // akan menangkapnya, tapi tes yang menangkapnya harus dibangun di
+    // atas assertion ini.
+    test('dua administrator yang saling menurunkan role tidak berakhir deadlock', async () => {
+        const sebelum = await jumlahAdminAktif()
+
+        assert.ok(
+            sebelum >= 2,
+            `butuh minimal 2 administrator aktif, ada ${sebelum}`
+        )
+
+        const [a, b] = await Promise.all([
+            kirim('PUT', `/api/users/${idB}`, idA, {
+                name: 'B diturunkan A',
+                role: 'SPG',
+                code: ADMIN_B.code,
+                email: ADMIN_B.email,
+            }),
+            kirim('PUT', `/api/users/${idA}`, idB, {
+                name: 'A diturunkan B',
+                role: 'SPG',
+                code: ADMIN_A.code,
+                email: ADMIN_A.email,
+            }),
+        ])
+
+        for (const [nama, hasil] of [['A->B', a], ['B->A', b]]) {
+            assert.ok(
+                hasil.status < 500,
+                `${nama} mengembalikan ${hasil.status}: ` +
+                `deadlock atau error server, bukan penolakan yang rapi ` +
+                `(${JSON.stringify(hasil.data)})`
+            )
+
+            // 200 kalau masih ada administrator lain, 409 kalau ia yang
+            // terakhir. Tidak ada hasil sah yang lain.
+            assert.ok(
+                [200, 409].includes(hasil.status),
+                `${nama} mengembalikan ${hasil.status}, ` +
+                `harusnya 200 atau 409`
+            )
+        }
+
+        assert.ok(
+            await jumlahAdminAktif() >= 1,
+            'tidak boleh ada nol administrator aktif'
+        )
+    })
+
+    test('dua penonaktifan bersamaan juga tidak berakhir deadlock', async () => {
+        // Dikembalikan menjadi administrator aktif lewat mysql2, karena
+        // tes sebelumnya menurunkan keduanya.
+        await db.query(
+            `UPDATE users SET role = 'ADMINISTRATOR', status = 'ACTIVE'
+             WHERE id IN (?, ?)`,
+            [idA, idB]
+        )
+
+        const [a, b] = await Promise.all([
+            kirim('PUT', `/api/users/${idB}/status`, idA),
+            kirim('PUT', `/api/users/${idA}/status`, idB),
+        ])
+
+        for (const [nama, hasil] of [['A->B', a], ['B->A', b]]) {
+            assert.ok(
+                [200, 409].includes(hasil.status),
+                `${nama} mengembalikan ${hasil.status}, ` +
+                `harusnya 200 atau 409 (${JSON.stringify(hasil.data)})`
+            )
+        }
+
+        assert.ok(
+            await jumlahAdminAktif() >= 1,
+            'tidak boleh ada nol administrator aktif'
+        )
+    })
+
+    // Jalur normal harus tetap bekerja setelah dibungkus transaksi. Tanpa
+    // ini, transaksi yang selalu rollback juga akan melewatkan tes-tes di
+    // atas.
+    test('menurunkan administrator lain tetap berhasil saat masih ada yang lain', async () => {
+        await db.query(
+            `UPDATE users SET role = 'ADMINISTRATOR', status = 'ACTIVE'
+             WHERE id IN (?, ?)`,
+            [idA, idB]
+        )
+
+        const { status } = await kirim('PUT', `/api/users/${idB}`, idA, {
+            name: 'B diturunkan berurutan',
+            role: 'SPG',
+            code: ADMIN_B.code,
+            email: ADMIN_B.email,
+        })
+
+        assert.strictEqual(status, 200)
+
+        const [baris] = await db.query(
+            'SELECT role FROM users WHERE id = ?',
+            [idB]
+        )
+
+        assert.strictEqual(
+            baris[0].role,
+            'SPG',
+            'transaksi harus commit, bukan diam-diam rollback'
+        )
+    })
+
+})
+
+
+describe('penanganan kegagalan verifikasi token', () => {
+
+    const ambil = async (token) => {
+        const res = await fetch(BASE + '/api/users', {
+            headers: { Authorization: 'Bearer ' + token },
+        })
+
+        return res.status
+    }
+
+    // Dua cabang 401 yang benar-benar masalah klien.
+    //
+    // Cabang 500-nya — JWT_SECRET hilang atau tidak sah, yang membuat
+    // jwt.verify melempar 'secretOrPublicKey must have a value' —
+    // SENGAJA tidak diuji di sini. Memicunya menuntut JWT_SECRET dihapus
+    // dari environment proses server, dan itu akan mematikan setiap tes
+    // lain dalam run yang sama, termasuk tes ini. Ia terverifikasi lewat
+    // pembacaan kode di src/middleware/auth.middleware.js.
+    //
+    // Yang penting justru bahwa kedua kasus di bawah TETAP 401: kalau
+    // pencabangan err.name terlalu lebar, sesi yang benar-benar
+    // kedaluwarsa akan menjadi 500 dan mobile tidak akan pernah meminta
+    // login ulang.
+    test('token cacat ditolak 401', async () => {
+        assert.strictEqual(await ambil('ini-bukan-jwt'), 401)
+    })
+
+    test('token dengan tanda tangan salah ditolak 401', async () => {
+        const palsu = jwt.sign(
+            { id: idSementara },
+            'secret-yang-bukan-milik-server'
+        )
+
+        assert.strictEqual(await ambil(palsu), 401)
+    })
+
+    test('token kedaluwarsa ditolak 401', async () => {
+        const kedaluwarsa = jwt.sign(
+            { id: idSementara },
+            process.env.JWT_SECRET,
+            { expiresIn: '-10s' }
+        )
+
+        assert.strictEqual(await ambil(kedaluwarsa), 401)
+    })
+
+})
+
+
+describe('parseId di seluruh route :id', () => {
+
+    // GET /:id dan PUT /:id/reset-password sempat meneruskan
+    // req.params.id mentah-mentah ke database. Terverifikasi sebelum
+    // perbaikan: GET /api/users/2abc mengembalikan baris admin id 2.
+    //
+    // Keduanya belum punya penjaga yang bisa dilewati, jadi ini bukan
+    // celah yang bisa dieksploitasi hari ini. Tesnya ada supaya invarian
+    // "penjaga dan klausa where selalu melihat nilai yang sama" berlaku
+    // secara struktural, dan supaya orang yang menambahkan penjaga besok
+    // tidak menghidupkan ulang celah yang baru saja ditutup.
+    test('GET /api/users/<id>abc ditolak 400, bukan mengembalikan baris <id>', async () => {
+        const { status } = await kirim(
+            'GET',
+            `/api/users/${idSementara}abc`,
+            ADMIN
+        )
+
+        assert.strictEqual(status, 400)
+    })
+
+    test('GET /api/users/<id> yang sah tetap 200', async () => {
+        const { status } = await kirim(
+            'GET',
+            `/api/users/${idSementara}`,
+            ADMIN
+        )
+
+        assert.strictEqual(status, 200)
+    })
+
+    // Sasarannya user sekali pakai, BUKAN akun sungguhan: kalau parseId
+    // regresi, request ini berhasil dan mereset password baris sasarannya.
+    // Tidak satu pun tes boleh mengubah password user sungguhan.
+    test('PUT /api/users/<id>abc/reset-password ditolak 400 tanpa mengubah password', async () => {
+        const hashDi = async () => {
+            const [baris] = await db.query(
+                'SELECT password FROM users WHERE id = ?',
+                [idSementara]
+            )
+
+            return baris[0].password
+        }
+
+        const sebelum = await hashDi()
+
+        const { status } = await kirim(
+            'PUT',
+            `/api/users/${idSementara}abc/reset-password`,
+            ADMIN
+        )
+
+        assert.strictEqual(status, 400)
+
+        assert.strictEqual(
+            await hashDi(),
+            sebelum,
+            'password berubah padahal id-nya tidak sah'
+        )
+    })
+
+})
+
+
+describe('validasi tipe pada POST /api/auth/login', () => {
+
+    const login = async (email, password) => {
+        const res = await fetch(BASE + '/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password }),
+        })
+
+        return { status: res.status, data: await res.json() }
+    }
+
+    // Penjaganya sempat memeriksa truthiness saja, sehingga objek lolos
+    // sampai ke User.findOne dan pulang sebagai 500 — pada endpoint yang
+    // bisa dipanggil tanpa autentikasi sama sekali.
+    test('email berupa objek ditolak 400, bukan 500', async () => {
+        const { status } = await login({ a: 1 }, 'apa saja')
+
+        assert.strictEqual(status, 400)
+    })
+
+    // Array lebih buruk daripada 500: Sequelize mengubahnya menjadi
+    // klausa IN, sehingga satu password bisa dicoba terhadap sekumpulan
+    // email sekaligus tanpa error apa pun.
+    test('email berupa array ditolak 400, bukan menjadi klausa IN', async () => {
+        const { status } = await login(
+            [SEMENTARA.email, 'lain.14082026@contoh.invalid'],
+            SEMENTARA.password
+        )
+
+        assert.strictEqual(
+            status,
+            400,
+            'array email tidak boleh diperlakukan sebagai daftar kandidat'
+        )
+    })
+
+    test('password berupa objek juga ditolak 400', async () => {
+        const { status } = await login(SEMENTARA.email, { a: 1 })
+
+        assert.strictEqual(status, 400)
+    })
+
+    // Jalur normal tidak boleh rusak oleh pemeriksaan tipe: email yang
+    // tidak terdaftar tetap 401 generik, bukan 400.
+    test('email teks yang tidak terdaftar tetap 401 generik', async () => {
+        const { status, data } = await login(
+            'tidak.terdaftar.14082026@contoh.invalid',
+            'apa saja'
+        )
+
+        assert.strictEqual(status, 401)
+        assert.match(data.message, /Email atau password salah/i)
+    })
+
+})
