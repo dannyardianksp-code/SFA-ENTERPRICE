@@ -40,6 +40,41 @@ const {
     parseId,
 } = require('../utils/id.util')
 
+const {
+    isLockConflictError,
+    withShortLockWait,
+} = require('../utils/lock.util')
+
+
+/**
+ * Jawaban seragam untuk kedua handler saat transaksinya kalah balapan
+ * lock.
+ *
+ * 503, bukan 409. Lantai administrator sudah memakai 409 untuk penolakan
+ * yang TIDAK boleh diulang — mengulangnya akan ditolak lagi selamanya
+ * sampai ada administrator lain diangkat. Kontensi lock kebalikannya:
+ * permintaannya sah dan kemungkinan besar berhasil kalau dikirim ulang.
+ * Memberi keduanya 409 berarti klien tidak bisa membedakan "jangan
+ * diulang" dari "ulangi saja", padahal itu satu-satunya hal yang perlu
+ * diketahui klien di sini.
+ *
+ * 503 juga lebih jujur soal sebabnya: server yang sementara tidak bisa
+ * menyelesaikan permintaan yang valid, bukan permintaan yang bentrok
+ * dengan keadaan sumber daya. Retry-After membuat sinyal itu bisa dibaca
+ * mesin, bukan hanya manusia yang membaca pesannya.
+ */
+const sendLockConflict = (res) => {
+
+    res.set('Retry-After', '1')
+
+    return sendError(
+        res,
+        503,
+        'Sistem sedang memproses perubahan akun lain. Silakan coba lagi.'
+    )
+
+}
+
 
 /**
  * Query yang sama dipakai kedua handler yang bisa mengurangi jumlah
@@ -56,10 +91,25 @@ const {
  * membaca ulang dan melihat jumlah yang sudah berkurang. Tanpa lock,
  * keduanya membaca angka yang sama dan sama-sama lolos.
  *
- * Kolom role dan status tidak berindeks, jadi FOR UPDATE di sini
- * mengunci lebih banyak baris daripada yang dibaca. Itu diterima: kedua
- * route ini ADMINISTRATOR-saja dan jarang dipakai, sementara nol
- * administrator tidak punya jalur pemulihan sama sekali.
+ * Kolom role dan status TIDAK berindeks, jadi FOR UPDATE di sini adalah
+ * full scan yang mengunci setiap baris users beserta gap-nya, bukan hanya
+ * kedua baris administrator. Diukur langsung: selama transaksi ini
+ * terbuka, UPDATE atas baris SPG yang tidak berkaitan pun terblokir
+ * sampai ER_LOCK_WAIT_TIMEOUT.
+ *
+ * JANGAN menambahkan index (role, status) untuk mempersempitnya tanpa
+ * membaca catatan di tests/README.md lebih dulu. Sudah dicoba dan diukur:
+ * index itu memang mempersempit lock bacanya, tapi UPDATE yang menulis
+ * kolom role harus ikut memelihara entri index sekundernya, dan itu
+ * membuat dua administrator yang saling menurunkan role berakhir
+ * ER_LOCK_DEADLOCK pada 5 dari 6 percobaan — padahal tanpa index angkanya
+ * 0 dari 8. Deadlock lebih buruk daripada lock yang lebar: yang satu
+ * menggagalkan operasi yang sebelumnya berhasil, yang lain hanya
+ * memperlambatnya.
+ *
+ * Yang MEMANG membatasi kerusakan lock lebar ini adalah batas tunggu
+ * per-sesi di withShortLockWait: pemegang koneksi menyerah setelah 5
+ * detik, bukan 50, sehingga pool tidak kering.
  */
 const hitungAdminAktifTerkunci = async (t) => {
 
@@ -415,7 +465,13 @@ router.put(
             // dan tidak ada administrator aktif yang tersisa. Reset
             // password pun ADMINISTRATOR-saja, jadi tidak ada jalur
             // pemulihan selain akses langsung ke database.
-            const hasil = await db.transaction(async (t) => {
+            // withShortLockWait: batas tunggu lock dipendekkan di dalam
+            // transaksi ini saja. Yang kalah balapan harus MELEPAS koneksi
+            // pool-nya dengan cepat — menunggu 50 detik sambil memegang
+            // koneksi adalah cara lima administrator menghabiskan pool
+            // (max = 5) dan menjatuhkan traffic yang tidak berkaitan,
+            // termasuk login mobile.
+            const hasil = await db.transaction(withShortLockWait(async (t) => {
 
                 // Locking read DULU, sebelum baris sasaran, dengan query
                 // yang persis sama seperti di PUT /:id — urutan lock yang
@@ -483,7 +539,7 @@ router.put(
 
                 return { data: userWithoutPassword }
 
-            })
+            }))
 
             if (hasil.status) {
                 return sendError(res, hasil.status, hasil.message)
@@ -502,6 +558,13 @@ router.put(
         }
 
         catch (err) {
+
+            // Diperiksa SEBELUM cabang 500. Kalah balapan lock bukan bug,
+            // dan 500 tidak memberi tahu pemanggil bahwa mengulang akan
+            // berhasil.
+            if (isLockConflictError(err)) {
+                return sendLockConflict(res)
+            }
 
             console.log(err)
 
@@ -729,7 +792,11 @@ router.put(
             // dan nol administrator tersisa. Reset password pun
             // ADMINISTRATOR-saja, jadi tidak ada jalur pemulihan selain
             // akses langsung ke database.
-            const hasil = await db.transaction(async (t) => {
+            // withShortLockWait: alasannya sama seperti di PUT /:id/status
+            // — yang kalah balapan lock harus melepas koneksi pool-nya
+            // dalam hitungan detik, bukan menahannya sampai 50 detik dan
+            // mengeringkan pool untuk request yang tidak berkaitan.
+            const hasil = await db.transaction(withShortLockWait(async (t) => {
 
                 // Locking read DULU, sebelum baris sasaran, dengan query
                 // yang persis sama seperti di PUT /:id/status — urutan
@@ -803,7 +870,7 @@ router.put(
 
                 return null
 
-            })
+            }))
 
             if (hasil) {
                 return sendError(res, hasil.status, hasil.message)
@@ -819,6 +886,13 @@ router.put(
         }
 
         catch (err) {
+
+            // Diperiksa SEBELUM cabang 500. Kalah balapan lock bukan bug,
+            // dan 500 tidak memberi tahu pemanggil bahwa mengulang akan
+            // berhasil.
+            if (isLockConflictError(err)) {
+                return sendLockConflict(res)
+            }
 
             console.log(err)
 

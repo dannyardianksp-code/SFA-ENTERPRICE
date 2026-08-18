@@ -1175,3 +1175,193 @@ describe('validasi tipe pada POST /api/auth/login', () => {
     })
 
 })
+
+
+/**
+ * Kontensi lock pada transaksi lantai administrator.
+ *
+ * Ini BUKAN tes yang berpura-pura menguji balapan lalu berharap
+ * timingnya kebetulan tepat. Kontensinya dipaksa, bukan diundi: koneksi
+ * kedua memegang `SELECT ... FOR UPDATE` atas baris sasaran dan
+ * MENAHANNYA selama request berjalan, sehingga `findByPk(..., lock)` di
+ * dalam handler pasti menunggu dan pasti kehabisan waktu. Tidak ada
+ * jendela waktu yang harus tepat.
+ *
+ * Sasarannya baris buangan milik blok ini sendiri. Baris administrator
+ * sungguhan tidak pernah menjadi sasaran — kalau penanganan errornya
+ * regresi, yang gagal hanyalah assertion, bukan akun siapa pun.
+ *
+ * Blok ini sengaja berada di berkas yang sama dengan tes penulisan user
+ * lainnya: `node --test` menjalankan BERKAS secara paralel tapi tes di
+ * dalam satu berkas secara berurutan. Selama handler menunggu, ia
+ * memegang lock atas baris administrator dari counting read-nya, jadi
+ * request penulisan user lain yang berjalan bersamaan bisa ikut kalah
+ * balapan. Dipisah ke berkas sendiri, blok ini akan membuat tes lain
+ * gagal secara acak.
+ */
+describe('kontensi lock dijawab 503 yang bisa diulang', () => {
+
+    const KONTENSI = {
+        code: 'UJI-LOCK-14082026',
+        name: 'User Uji Kontensi Lock',
+        email: 'uji.lock.14082026@contoh.invalid',
+    }
+
+    let idKontensi = null
+
+    before(async () => {
+        await db.query(
+            'DELETE FROM users WHERE code = ? OR email = ?',
+            [KONTENSI.code, KONTENSI.email]
+        )
+
+        const [hasil] = await db.query(
+            `INSERT INTO users (code, name, email, password, role, status)
+             VALUES (?, ?, ?, 'hash-tidak-dipakai', 'SPG', 'ACTIVE')`,
+            [KONTENSI.code, KONTENSI.name, KONTENSI.email]
+        )
+
+        idKontensi = hasil.insertId
+    })
+
+    after(async () => {
+        if (idKontensi) {
+            await db.query('DELETE FROM users WHERE id = ?', [idKontensi])
+        }
+
+        await db.query(
+            'DELETE FROM users WHERE code = ? OR email = ?',
+            [KONTENSI.code, KONTENSI.email]
+        )
+    })
+
+    /**
+     * Menahan lock atas baris sasaran lewat koneksi terpisah, menjalankan
+     * `kerja`, lalu SELALU melepasnya.
+     *
+     * `finally` bukan kerapian: koneksi yang lupa di-rollback akan
+     * menahan lock sampai prosesnya mati, dan setiap tes berikutnya yang
+     * menyentuh baris user gagal dengan sebab yang tidak kelihatan.
+     */
+    const denganLockDitahan = async (id, kerja) => {
+        const penahan = await mysql.createConnection({
+            host: process.env.DB_HOST,
+            user: process.env.DB_USER,
+            password: process.env.DB_PASS,
+            database: process.env.DB_NAME,
+        })
+
+        try {
+            await penahan.beginTransaction()
+
+            await penahan.query(
+                'SELECT id FROM users WHERE id = ? FOR UPDATE',
+                [id]
+            )
+
+            return await kerja()
+        } finally {
+            try {
+                await penahan.rollback()
+            } catch {
+                // Rollback yang gagal tidak boleh menutupi kegagalan tes.
+            }
+
+            await penahan.end()
+        }
+    }
+
+    const kirimMentah = async (method, path, userId) => {
+        const res = await fetch(BASE + path, {
+            method,
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: 'Bearer ' + tokenUntuk(userId),
+            },
+        })
+
+        let data = null
+
+        try {
+            data = await res.json()
+        } catch {
+            data = null
+        }
+
+        return {
+            status: res.status,
+            data,
+            retryAfter: res.headers.get('retry-after'),
+        }
+    }
+
+    test('PUT /:id/status yang kalah balapan lock dijawab 503, bukan 500', async () => {
+        const mulai = Date.now()
+
+        const res = await denganLockDitahan(idKontensi, () =>
+            kirimMentah('PUT', `/api/users/${idKontensi}/status`, ADMIN)
+        )
+
+        const lama = Date.now() - mulai
+
+        assert.strictEqual(
+            res.status,
+            503,
+            `harus 503, dapat ${res.status}: ${JSON.stringify(res.data)}`
+        )
+
+        // 500 dulunya membocorkan pesan exception mentah di luar
+        // production. Yang sampai ke user harus pesan Indonesia yang
+        // menyuruh mencoba lagi.
+        assert.match(res.data.message, /coba lagi/i)
+
+        assert.ok(
+            !/lock wait timeout|deadlock/i.test(res.data.message),
+            'pesan internal database tidak boleh sampai ke client'
+        )
+
+        // Sinyal yang bisa dibaca mesin, bukan hanya manusia.
+        assert.strictEqual(res.retryAfter, '1')
+
+        // INI yang membuktikan batas tunggu per-sesi benar-benar terpasang.
+        // Global server ada di 50 detik; kalau SET SESSION-nya mengenai
+        // koneksi pool yang salah, request ini akan memegang koneksinya
+        // ~50 detik dan angka di bawah akan jauh terlampaui.
+        assert.ok(
+            lama < 20000,
+            `harus menyerah cepat karena batas sesi 5 detik, bukan 50 — ${lama} ms`
+        )
+    })
+
+    test('baris sasaran tidak berubah setelah transaksinya gagal', async () => {
+        // Transaksi yang kalah harus rollback utuh. Handler yang menulis
+        // dulu lalu gagal akan meninggalkan status yang setengah berubah.
+        const [baris] = await db.query(
+            'SELECT status FROM users WHERE id = ?',
+            [idKontensi]
+        )
+
+        assert.strictEqual(baris[0].status, 'ACTIVE')
+    })
+
+    test('permintaan yang sama berhasil setelah lock dilepas', async () => {
+        // Inti dari memilih 503 dan bukan 500: permintaannya memang sah,
+        // hanya kalah balapan. Sekali lock lawannya lepas, pengulangan
+        // yang identik harus berhasil.
+        const res = await kirimMentah(
+            'PUT',
+            `/api/users/${idKontensi}/status`,
+            ADMIN
+        )
+
+        assert.strictEqual(res.status, 200, JSON.stringify(res.data))
+
+        const [baris] = await db.query(
+            'SELECT status FROM users WHERE id = ?',
+            [idKontensi]
+        )
+
+        assert.strictEqual(baris[0].status, 'INACTIVE')
+    })
+
+})
