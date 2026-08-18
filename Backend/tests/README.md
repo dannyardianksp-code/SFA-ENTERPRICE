@@ -35,6 +35,7 @@ tests/
 | `id.util.test.js` | `parseId` menolak apa pun yang bukan angka bulat positif murni, termasuk `'2abc'` yang MySQL sendiri akan mengoersi jadi baris 2 |
 | `user-model.test.js` | deklarasi kolom `status` (dengan default `ACTIVE`) dan ENUM `role` di model User |
 | `user-management.test.js` | `assertUserManagement` sebagai gerbang ADMINISTRATOR untuk penulisan akun, gagal-tertutup untuk user kosong dan role tak dikenal; `wouldRemoveLastActiveAdministrator` sebagai keputusan lantai administrator |
+| `lock.util.test.js` | `isLockConflictError` mengenali `ER_LOCK_WAIT_TIMEOUT`/`ER_LOCK_DEADLOCK` lewat kode di `parent`/`original` (bukan substring pesan) dan **gagal-tertutup** untuk error lain; `applyLockWaitTimeout` menembak koneksi transaksinya sendiri; `restoreLockWaitTimeout` tidak pernah melempar sehingga tidak menutupi error asli |
 
 `customer.controller.test.js` bisa jalan tanpa database karena seluruh
 validasi parameter terjadi **sebelum** `User.findByPk` dipanggil.
@@ -82,6 +83,21 @@ tidak bisa dibuat lewat API. Berkas ini juga menyisipkan satu baris
 `visit_activities` **yatim** (menunjuk `visit_id` yang tidak ada) langsung
 lewat `mysql2` untuk menguji `required: true` pada include `Visit`, lalu
 menghapusnya lagi di `after()` lokal blok itu.
+
+Blok `kontensi lock dijawab 503 yang bisa diulang` di
+`tests/e2e/user-management.test.js` **memaksa** kontensi lock, tidak
+mengundinya: satu koneksi `mysql2` terpisah memegang
+`SELECT ... FOR UPDATE` atas baris buangannya sendiri selama request
+berjalan, sehingga locking read di dalam handler pasti menunggu dan pasti
+kehabisan waktu pada 5 detik. Tidak ada jendela waktu yang harus tepat,
+jadi tesnya tidak flaky.
+
+Blok itu sengaja berada di berkas yang sama dengan tes penulisan user
+lainnya. `node --test` menjalankan **berkas** secara paralel tapi tes di
+dalam satu berkas berurutan — dan selama handler menunggu, ia memegang
+lock dari counting read-nya, jadi request penulisan user lain yang
+berjalan bersamaan bisa ikut kalah balapan. Dipindahkan ke berkas sendiri,
+blok ini akan membuat tes lain gagal secara acak.
 
 `tests/e2e/user-auth.test.js` menyisipkan **satu user sementara** lewat
 `mysql2` sebagai sasaran reset password, lalu menghapusnya di `after()`.
@@ -254,6 +270,64 @@ Migration harus dijalankan **sebelum** backend versi baru dideploy:
 Backend yang dideploy lebih dulu akan mencoba menulis `updated_at` dan
 `updated_by` ke kolom yang belum ada, dan setiap penyimpanan hasil edit
 gagal dengan 500.
+
+Wave ini **tidak menambah migration**. Index `(role, status)` yang
+sempat dibuat untuk mempersempit locking read di `user.routes.js`
+dibatalkan setelah diukur — alasannya di bawah.
+
+### Index (role, status): sudah dicoba, JANGAN diulang tanpa membaca ini
+
+Locking read yang menjaga lantai administrator,
+
+```sql
+SELECT id FROM users WHERE role='ADMINISTRATOR' AND status='ACTIVE' FOR UPDATE
+```
+
+berjalan sebagai full scan karena `role` dan `status` tidak berindeks,
+sehingga ia mengunci **seluruh** tabel `users`, bukan hanya baris
+administrator. Itu benar dan sudah diukur: sementara transaksinya
+terbuka, `UPDATE` atas baris SPG yang tidak berkaitan pun terblokir
+sampai `ER_LOCK_WAIT_TIMEOUT`.
+
+Index `(role, status)` memang memperbaiki bagian itu — `EXPLAIN` berubah
+dari `type=ALL, key=NULL, rows=11` menjadi
+`type=ref, key=idx_users_role_status, rows=2, Using index`, dan baris SPG
+yang tidak berkaitan lolos dalam 18 ms alih-alih terblokir.
+
+**Tapi index itu justru menimbulkan deadlock**, dan deadlock lebih buruk
+daripada lock yang lebar: yang satu menggagalkan operasi yang sebelumnya
+berhasil, yang lain hanya memperlambatnya. Diukur pada MariaDB 10.6.22,
+dua administrator yang saling menurunkan role secara bersamaan:
+
+| Keadaan | Putaran yang berakhir `ER_LOCK_DEADLOCK` |
+|---|---|
+| tanpa index | 0 dari 8 |
+| dengan index | 6 dari 8 |
+
+Penyebabnya bukan jalur bacanya, melainkan **pemeliharaan index sekunder
+saat kolom `role` ditulis**. Dengan index yang sama terpasang:
+
+| `UPDATE` yang dijalankan | Putaran yang deadlock |
+|---|---|
+| menyentuh `role` | 5 dari 6 |
+| hanya `name` | 0 dari 6 |
+
+Karena itu tidak ada cara menulis ulang query bacanya untuk menghindari
+deadlock — masalahnya ada di sisi tulisnya. Yang sudah dicoba dan gagal:
+memaksa locking read ikut mengunci baris clustered (`attributes:
+['id','name']`) supaya urutan lock deterministik. Hasilnya deadlock tetap
+muncul (2 dari 5) **dan** optimiser meninggalkan indexnya
+(`type=ALL`), jadi penyempitannya ikut hilang.
+
+Tanpa index, kerusakan dari lock yang lebar dibatasi oleh
+`withShortLockWait` (`src/utils/lock.util.js`): pemegang koneksi menyerah
+setelah 5 detik, bukan 50, sehingga pool `max = 5` tidak kering. Itulah
+yang membuat lock lebar bisa ditanggung.
+
+Kalau suatu saat index ini tetap dibutuhkan, keputusannya adalah
+**menukar lock lebar dengan deadlock yang bisa diulang** — dan itu hanya
+masuk akal kalau pemanggilnya (`sfa-web`) benar-benar mengulang otomatis
+pada `503`. Sekarang tidak.
 
 ## Perubahan perilaku yang disengaja
 
