@@ -99,11 +99,11 @@ router.get(
 
         try {
 
-            const loginUser =
-                await User.findByPk(
-                    req.user.id
-                )
-
+            // Dibaca dari req.user, bukan dimuat ulang: middleware auth
+            // sudah mengambil baris segar dari database setiap request.
+            // Memuat ulang di sini hanya menambah satu query yang bisa
+            // mengembalikan null — dan `null.role` di bawah akan menjadi
+            // 500 tanpa sebab yang jelas.
             let whereCondition = {}
 
             // ======================
@@ -112,7 +112,7 @@ router.get(
 
             if (
 
-                loginUser.role ===
+                req.user.role ===
                 'SUPERVISOR'
 
             ) {
@@ -123,13 +123,13 @@ router.get(
                         'SPG',
 
                     supervisor_id:
-                        loginUser.id,
+                        req.user.id,
 
                     area_id:
-                        loginUser.area_id,
+                        req.user.area_id,
 
                     channel_id:
-                        loginUser.channel_id
+                        req.user.channel_id
 
                 }
 
@@ -141,7 +141,7 @@ router.get(
 
             if (
 
-                loginUser.role ===
+                req.user.role ===
                 'MANAGER'
 
             ) {
@@ -149,10 +149,10 @@ router.get(
                 whereCondition = {
 
                     area_id:
-                        loginUser.area_id,
+                        req.user.area_id,
 
                     channel_id:
-                        loginUser.channel_id
+                        req.user.channel_id
 
                 }
 
@@ -533,10 +533,23 @@ router.get(
 
         try {
 
+            // parseId juga di route yang belum punya penjaga apa pun.
+            // Invariannya dijaga secara struktural, bukan per-route:
+            // selama SEMUA route :id menormalkan idnya, penjaga yang
+            // ditambahkan siapa pun besok tidak bisa lagi salah
+            // membandingkan nilai yang berbeda dari yang dieksekusi
+            // `where`. GET /api/users/2abc sebelumnya mengembalikan baris
+            // id 2 karena MySQL mengoersi stringnya.
+            const id = parseId(req.params.id)
+
+            if (id === null) {
+                return sendError(res, 400, 'Id user tidak valid.')
+            }
+
             const data =
                 await User.findByPk(
 
-                    req.params.id,
+                    id,
 
                     {
 
@@ -837,41 +850,36 @@ router.put(
 
         try {
 
-            // Role diambil dari database, bukan dari token: token yang
-            // rolenya sudah berubah di database tidak boleh menentukan
-            // wewenang.
-            const loginUser =
-                await User.findByPk(req.user.id)
+            // Gerbang yang SAMA dengan route penulisan user lainnya.
+            // Sebelumnya route ini mengulang aturannya sendiri: memuat
+            // ulang pemanggil dari database (padahal middleware auth
+            // sudah memasok baris segar), memeriksa rolenya inline, dan
+            // menjawab dengan pesan yang berbeda. Dua tempat yang
+            // menghitung wewenang yang sama akan berbeda pada perubahan
+            // berikutnya — dan reset password adalah pengambilalihan akun
+            // yang sah, jadi cabang yang tertinggal di sini paling mahal.
+            //
+            // Cabang 404 "akun Anda tidak ditemukan" ikut hilang: ia
+            // sudah tidak bisa dicapai sejak middleware menolak 401 untuk
+            // user yang tidak ada.
+            const gerbang = assertUserManagement(req.user)
 
-            if (!loginUser) {
-
-                return sendError(
-                    res,
-                    404,
-                    'Akun Anda tidak ditemukan.'
-                )
-
+            if (gerbang) {
+                return sendError(res, gerbang.status, gerbang.message)
             }
 
-            // Allowlist, bukan blacklist: role NULL, nilai warisan, atau
-            // role baru apa pun ditolak secara bawaan.
-            //
-            // Reset password adalah pengambilalihan akun yang sah —
-            // siapa pun yang bisa melakukannya bisa menjadi orang itu.
-            if (loginUser.role !== 'ADMINISTRATOR') {
+            // parseId juga di sini: tanpa penormalan, `2abc` mereset
+            // password baris id 2 karena MySQL mengoersi stringnya.
+            const id = parseId(req.params.id)
 
-                return sendError(
-                    res,
-                    403,
-                    'Hanya administrator yang boleh mereset password.'
-                )
-
+            if (id === null) {
+                return sendError(res, 400, 'Id user tidak valid.')
             }
 
             // Diperiksa SETELAH otorisasi: pemanggil yang tidak berhak
             // tidak perlu diberi tahu apakah id targetnya ada.
             const user =
-                await User.findByPk(req.params.id)
+                await User.findByPk(id)
 
             if (!user) {
 
