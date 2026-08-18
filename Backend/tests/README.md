@@ -211,8 +211,18 @@ Dicatat supaya tidak terbaca sebagai regresi:
   diturunkan atau akun yang dinonaktifkan berlaku seketika, bukan setelah
   token kedaluwarsa (token berlaku 1 hari).
 - `POST /api/auth/register` **dihapus**; ia menjawab 404.
-- User yang dinonaktifkan mendapat **401**, bukan 403, supaya aplikasi
-  mobile mengeluarkannya alih-alih menjebaknya di layar yang error.
+- User yang dinonaktifkan mendapat **401** dari middleware `auth`, bukan
+  403, supaya aplikasi mobile mengeluarkannya alih-alih menjebaknya di
+  layar yang error.
+
+  **`POST /api/auth/login` tetap menjawab 403** untuk kondisi yang sama,
+  dan itu bukan ketidakkonsistenan yang terlewat. Interceptor mobile
+  mengecualikan login dari pemicu logout-nya, jadi 401 di sana hanya akan
+  menghapus sesi yang belum ada sambil menyembunyikan alasannya dari user.
+  403 pada login-lah yang membuat pesan "akun Anda tidak aktif" sampai ke
+  layar. Aturannya: **401 = "sesi Anda sudah tidak berlaku, keluar"**,
+  yang hanya bermakna kalau sesinya memang pernah ada; **403 = "permintaan
+  ini ditolak, dan ini alasannya"**.
 - `PUT /api/users/:id` dan `PUT /api/users/:id/status` kini menolak
   `:id` yang bukan angka bulat positif murni dengan **400**; sebelumnya
   diterima begitu saja dan diteruskan mentah-mentah ke `where`, yang
