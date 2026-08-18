@@ -8,8 +8,18 @@ const mysql = require('mysql2/promise')
 
 const BASE = process.env.TEST_BASE_URL || 'http://localhost:1000'
 
-// User sungguhan, dipakai hanya sebagai pemanggil. Tidak ada satu pun
-// tes di berkas ini yang mengubah data mereka.
+// User sungguhan, dipakai HANYA sebagai pemanggil — tidak pernah sebagai
+// sasaran tulis. Setiap tes yang perlu menulis ke akun ADMINISTRATOR
+// membuat administrator sekali pakainya sendiri dan menghapusnya lewat id
+// yang ditangkap saat insert.
+//
+// Bukan kerapian: kalau sebuah penjaga regresi, request yang seharusnya
+// ditolak akan BERHASIL. Assertion-nya gagal dengan berisik, tapi barisnya
+// tidak dikembalikan siapa pun — dan akun administrator yang terlanjur
+// jadi SPG tidak punya jalur pemulihan, karena reset password pun
+// ADMINISTRATOR-saja. Percobaan sebelumnya menonaktifkan akun
+// administrator asli lewat berkas ini, dan 401 yang dihasilkannya menjalar
+// ke blok tes lain yang sedang berjalan bersamaan.
 const SPG = 1
 const ADMIN = 2
 
@@ -71,7 +81,14 @@ before(async () => {
     // code dan email keduanya punya unique index. Sisa dari tes yang
     // pernah mati di tengah harus dibersihkan dulu, kalau tidak INSERT
     // di bawah gagal dan kegagalannya terbaca seperti masalah koneksi.
-    await db.query('DELETE FROM users WHERE code = ?', [SEMENTARA.code])
+    //
+    // Dibersihkan lewat KEDUA kunci unik, bukan hanya code: baris sisa
+    // yang code-nya sudah tertimpa NULL tetap menahan email-nya, dan
+    // INSERT-nya akan gagal karena kunci yang tidak ikut diperiksa.
+    await db.query(
+        'DELETE FROM users WHERE code = ? OR email = ?',
+        [SEMENTARA.code, SEMENTARA.email]
+    )
 
     // status ditulis eksplisit 'ACTIVE'. Kalau dibiarkan kosong dan
     // defaultnya berubah suatu saat, tes "token ditolak setelah
@@ -93,7 +110,22 @@ before(async () => {
 
 after(async () => {
     if (db) {
-        await db.query('DELETE FROM users WHERE code = ?', [SEMENTARA.code])
+
+        // Dihapus lewat id yang ditangkap saat insert. PUT /api/users/:id
+        // menulis code sebagai `code || null`, jadi baris ini bisa
+        // kehilangan code-nya di jalur tertentu dan pembersihan yang
+        // bergantung pada kolom itu akan meninggalkannya. Penghapusan
+        // lewat kedua kunci unik tetap dijalankan sebagai jaring untuk
+        // run sebelumnya yang mati sebelum id-nya tertangkap.
+        if (idSementara) {
+            await db.query('DELETE FROM users WHERE id = ?', [idSementara])
+        }
+
+        await db.query(
+            'DELETE FROM users WHERE code = ? OR email = ?',
+            [SEMENTARA.code, SEMENTARA.email]
+        )
+
         await db.end()
     }
 })
@@ -237,18 +269,37 @@ describe('gerbang login untuk akun nonaktif', () => {
 describe('gerbang role pada penulisan user', () => {
 
     const KODE_SELUNDUPAN = 'UJI-SELUNDUP-14082026'
-    const KODE_ROLE_SALAH = 'UJI-ROLE-SALAH-14082026'
+    const EMAIL_SELUNDUPAN = 'selundup.14082026@contoh.invalid'
 
-    after(async () => {
+    const KODE_ROLE_SALAH = 'UJI-ROLE-SALAH-14082026'
+    const EMAIL_ROLE_SALAH = 'role.salah.14082026@contoh.invalid'
+
+    const bersihkan = async () => {
         await db.query(
-            'DELETE FROM users WHERE code = ?',
-            [KODE_SELUNDUPAN]
+            `DELETE FROM users
+             WHERE code IN (?, ?) OR email IN (?, ?)`,
+            [
+                KODE_SELUNDUPAN,
+                KODE_ROLE_SALAH,
+                EMAIL_SELUNDUPAN,
+                EMAIL_ROLE_SALAH,
+            ]
         )
-        await db.query(
-            'DELETE FROM users WHERE code = ?',
-            [KODE_ROLE_SALAH]
-        )
-    })
+    }
+
+    // Blok ini SEBELUMNYA hanya punya after. Kalau prosesnya mati antara
+    // INSERT-nya 'ADMINISTRATOR boleh membuat user' dan after itu, barisnya
+    // bertahan — pembersihan di level berkas hanya menyentuh SEMENTARA.code.
+    // Pada run berikutnya 'SPG tidak boleh membuat user' gagal pada
+    // assertion "baris tidak boleh ada" dan 'ADMINISTRATOR boleh membuat
+    // user' mendapat 500 dari unique index alih-alih 200, sehingga regresi
+    // sungguhan tidak bisa dibedakan dari sisa yang basi.
+    //
+    // Dibersihkan lewat KEDUA kunci unik keduanya, bukan hanya code:
+    // email pun punya unique index dan bisa menahan INSERT sendirian.
+    before(bersihkan)
+
+    after(bersihkan)
 
     const adaDiDatabase = async (code) => {
         const [baris] = await db.query(
@@ -272,7 +323,7 @@ describe('gerbang role pada penulisan user', () => {
         const { status } = await kirim('POST', '/api/users', SPG, {
             code: KODE_SELUNDUPAN,
             name: 'Administrator Selundupan',
-            email: 'selundup.14082026@contoh.invalid',
+            email: EMAIL_SELUNDUPAN,
             password: 'apa saja',
             role: 'ADMINISTRATOR',
         })
@@ -312,7 +363,7 @@ describe('gerbang role pada penulisan user', () => {
             const { status } = await kirim('POST', '/api/users', pemanggil, {
                 code: KODE_SELUNDUPAN,
                 name: 'Administrator Selundupan',
-                email: 'selundup.14082026@contoh.invalid',
+                email: EMAIL_SELUNDUPAN,
                 password: 'apa saja',
                 role: 'ADMINISTRATOR',
             })
@@ -331,7 +382,7 @@ describe('gerbang role pada penulisan user', () => {
         const { status } = await kirim('POST', '/api/users', ADMIN, {
             code: KODE_SELUNDUPAN,
             name: 'User Dibuat Admin',
-            email: 'selundup.14082026@contoh.invalid',
+            email: EMAIL_SELUNDUPAN,
             password: 'RahasiaUji123',
             role: 'SPG',
         })
@@ -344,7 +395,7 @@ describe('gerbang role pada penulisan user', () => {
         const { status } = await kirim('POST', '/api/users', ADMIN, {
             code: KODE_ROLE_SALAH,
             name: 'Role Salah',
-            email: 'role.salah.14082026@contoh.invalid',
+            email: EMAIL_ROLE_SALAH,
             password: 'RahasiaUji123',
             role: 'DIREKTUR',
         })
@@ -369,110 +420,205 @@ describe('gerbang role pada penulisan user', () => {
         assert.strictEqual(await roleDi(idSementara), 'SPG')
     })
 
-    // MySQL mengoersi '2abc' menjadi 2 saat dibandingkan dengan kolom
-    // id, tapi Number('2abc') di JavaScript adalah NaN. Penjaga yang
-    // membandingkan req.params.id mentah-mentah bisa dilewati hanya
-    // dengan menambahkan huruf ke URL, sementara where-nya tetap
-    // menyasar baris yang sama. Diperiksa langsung ke database, bukan
-    // hanya status, supaya bug ini tidak bisa lolos diam-diam.
-    test('id dengan akhiran huruf tidak melewati penjaga role sendiri', async () => {
-        const [baris] = await db.query(
-            'SELECT name FROM users WHERE id = ?',
-            [ADMIN]
-        )
-
-        const { status } = await kirim(
-            'PUT',
-            `/api/users/${ADMIN}abc`,
-            ADMIN,
-            { name: baris[0].name, role: 'SPG' }
-        )
-
-        assert.strictEqual(status, 400)
-        assert.strictEqual(await roleDi(ADMIN), 'ADMINISTRATOR')
-    })
-
 })
 
 
-describe('administrator tidak boleh mengubah role dirinya sendiri', () => {
+describe('penjaga identitas diri sendiri pada PUT /api/users/:id', () => {
 
-    const roleDi = async (id) => {
+    // Administrator sekali pakai, sama seperti pola di blok
+    // 'gerbang pada penonaktifan akun'. Blok ini SEBELUMNYA menyasar akun
+    // ADMIN sungguhan (id 2) sebagai sasaran TULIS dan hanya punya before,
+    // tanpa after yang memulihkannya. Assertion-nya benar hari ini, tapi
+    // kalau penjaganya regresi maka request-nya BERHASIL: User.update
+    // berjalan dengan where id = 2, sehingga role administrator sungguhan
+    // menjadi SPG dan code, area_id, channel_id, supervisor_id-nya
+    // tertimpa NULL. Assertion-nya gagal dengan berisik, tapi tidak ada
+    // yang mengembalikan barisnya.
+    //
+    // assertUserManagement hanya memeriksa role, jadi administrator sekali
+    // pakai ini lolos gerbang yang sama persis. code dan email-nya dibuat
+    // berbeda dari baris sekali pakai mana pun di berkas ini supaya tidak
+    // bertabrakan di unique index.
+    const ADMIN_SENDIRI = {
+        code: 'UJI-AUTHZ-DIRI-14082026',
+        email: 'uji.authz.diri.14082026@contoh.invalid',
+        name: 'Admin Uji Penjaga Diri Sendiri',
+    }
+
+    let idAdminSendiri
+
+    const kolomDi = async (id, kolom) => {
         const [baris] = await db.query(
-            'SELECT role FROM users WHERE id = ?',
+            `SELECT ${kolom} AS nilai FROM users WHERE id = ?`,
             [id]
         )
 
-        return baris[0].role
+        return baris[0].nilai
     }
 
-    let namaAsli
-    let dataAsli
-
     before(async () => {
-        const [baris] = await db.query(
-            'SELECT name, code, area_id, channel_id, supervisor_id FROM users WHERE id = ?',
-            [ADMIN]
+        // Sisa dari run yang pernah mati di tengah, lewat KEDUA kunci unik.
+        await db.query(
+            'DELETE FROM users WHERE code = ? OR email = ?',
+            [ADMIN_SENDIRI.code, ADMIN_SENDIRI.email]
         )
 
-        namaAsli = baris[0].name
+        const [hasil] = await db.query(
+            `INSERT INTO users (code, name, email, password, role, status)
+             VALUES (?, ?, ?, ?, 'ADMINISTRATOR', 'ACTIVE')`,
+            [
+                ADMIN_SENDIRI.code,
+                ADMIN_SENDIRI.name,
+                ADMIN_SENDIRI.email,
+                await bcrypt.hash('RahasiaUjiAdminDiri123', 10),
+            ]
+        )
 
-        // Handler PUT menulis area_id/channel_id/supervisor_id/code
-        // sebagai `field || null` — kalau field itu tidak dikirim, kolom
-        // aslinya akan ikut tertimpa NULL. Nilai-nilai ini dikirim balik
-        // apa adanya supaya tes ini tidak diam-diam menghapus data akun
-        // administrator sungguhan.
-        dataAsli = {
-            code: baris[0].code,
-            area_id: baris[0].area_id,
-            channel_id: baris[0].channel_id,
-            supervisor_id: baris[0].supervisor_id,
+        idAdminSendiri = hasil.insertId
+    })
+
+    after(async () => {
+        // Lewat id yang ditangkap saat insert, bukan lewat code atau
+        // email: justru code dan email itulah yang diuji di blok ini, dan
+        // handler PUT menulis code sebagai `code || null`. Pembersihan
+        // tidak boleh bergantung pada kolom yang request di bawah bisa
+        // mengubah.
+        if (idAdminSendiri) {
+            await db.query(
+                'DELETE FROM users WHERE id = ?',
+                [idAdminSendiri]
+            )
         }
     })
 
     test('menurunkan role sendiri ditolak 400', async () => {
         const { status } = await kirim(
             'PUT',
-            `/api/users/${ADMIN}`,
-            ADMIN,
-            { name: namaAsli, role: 'SPG' }
+            `/api/users/${idAdminSendiri}`,
+            idAdminSendiri,
+            { name: ADMIN_SENDIRI.name, role: 'SPG' }
         )
 
         assert.strictEqual(status, 400)
-        assert.strictEqual(await roleDi(ADMIN), 'ADMINISTRATOR')
+        assert.strictEqual(
+            await kolomDi(idAdminSendiri, 'role'),
+            'ADMINISTRATOR'
+        )
     })
 
-    // Form user di web mengirim kembali seluruh objeknya, jadi admin
-    // yang sekadar mengubah namanya sendiri tetap ikut mengirim role
-    // yang sama. Larangan yang membandingkan keberadaan field — bukan
-    // nilainya — akan mengunci admin dari mengedit namanya sendiri.
-    test('mengirim role yang sama sambil mengubah field lain tetap boleh', async () => {
+    // email adalah identitas login, dan handler PUT menulisnya tanpa
+    // penjaga apa pun sebelum perbaikan ini — penjaga lama hanya menutup
+    // role. Berurutan, tanpa balapan: administrator menurunkan
+    // administrator LAIN (boleh, akun lain), lalu salah mengetik emailnya
+    // sendiri sambil menyunting namanya. role dikirim tidak berubah
+    // sehingga penjaga lama lolos. Dalam satu hari tokennya kedaluwarsa
+    // dan tidak ada lagi administrator yang bisa login untuk mereset
+    // password siapa pun.
+    test('mengubah email sendiri ditolak 400', async () => {
         const { status } = await kirim(
             'PUT',
-            `/api/users/${ADMIN}`,
-            ADMIN,
+            `/api/users/${idAdminSendiri}`,
+            idAdminSendiri,
             {
-                name: namaAsli,
+                name: ADMIN_SENDIRI.name,
+                email: 'salah.ketik.14082026@contoh.invalid',
                 role: 'ADMINISTRATOR',
-                code: dataAsli.code,
-                area_id: dataAsli.area_id,
-                channel_id: dataAsli.channel_id,
-                supervisor_id: dataAsli.supervisor_id,
+                code: ADMIN_SENDIRI.code,
+            }
+        )
+
+        assert.strictEqual(status, 400)
+
+        // Diperiksa langsung ke database, bukan hanya status: handler yang
+        // menulis dulu lalu menolak tetap mengunci akunnya keluar.
+        assert.strictEqual(
+            await kolomDi(idAdminSendiri, 'email'),
+            ADMIN_SENDIRI.email,
+            'email tidak boleh berubah saat ditolak'
+        )
+    })
+
+    test('mengubah code sendiri ditolak 400', async () => {
+        const { status } = await kirim(
+            'PUT',
+            `/api/users/${idAdminSendiri}`,
+            idAdminSendiri,
+            {
+                name: ADMIN_SENDIRI.name,
+                email: ADMIN_SENDIRI.email,
+                role: 'ADMINISTRATOR',
+                code: 'UJI-AUTHZ-DIRI-CODE-LAIN',
+            }
+        )
+
+        assert.strictEqual(status, 400)
+        assert.strictEqual(
+            await kolomDi(idAdminSendiri, 'code'),
+            ADMIN_SENDIRI.code
+        )
+    })
+
+    // Form user di web mengirim kembali seluruh objeknya, jadi admin yang
+    // sekadar mengubah namanya sendiri tetap ikut mengirim role, email,
+    // dan code yang sama. Larangan yang membandingkan KEBERADAAN field —
+    // bukan nilainya — akan mengunci admin dari mengedit namanya sendiri.
+    test('mengirim role, email, dan code sendiri apa adanya sambil mengubah nama tetap boleh', async () => {
+        const namaBaru = 'Admin Uji Penjaga Diri Sendiri (diubah)'
+
+        const { status } = await kirim(
+            'PUT',
+            `/api/users/${idAdminSendiri}`,
+            idAdminSendiri,
+            {
+                name: namaBaru,
+                role: 'ADMINISTRATOR',
+                email: ADMIN_SENDIRI.email,
+                code: ADMIN_SENDIRI.code,
             }
         )
 
         assert.strictEqual(status, 200)
-        assert.strictEqual(await roleDi(ADMIN), 'ADMINISTRATOR')
 
-        const [baris] = await db.query(
-            'SELECT code, area_id, channel_id, supervisor_id FROM users WHERE id = ?',
-            [ADMIN]
+        // Namanya harus benar-benar tersimpan. Tanpa ini tesnya juga lulus
+        // pada handler yang mengembalikan 200 tanpa menulis apa pun.
+        assert.strictEqual(await kolomDi(idAdminSendiri, 'name'), namaBaru)
+
+        assert.strictEqual(
+            await kolomDi(idAdminSendiri, 'role'),
+            'ADMINISTRATOR'
+        )
+        assert.strictEqual(
+            await kolomDi(idAdminSendiri, 'email'),
+            ADMIN_SENDIRI.email
+        )
+        assert.strictEqual(
+            await kolomDi(idAdminSendiri, 'code'),
+            ADMIN_SENDIRI.code
+        )
+    })
+
+    // MySQL mengoersi '<id>abc' menjadi <id> saat dibandingkan dengan
+    // kolom id, tapi Number('<id>abc') di JavaScript adalah NaN. Penjaga
+    // yang membandingkan req.params.id mentah-mentah bisa dilewati hanya
+    // dengan menambahkan huruf ke URL, sementara where-nya tetap menyasar
+    // baris yang sama. parseId menolaknya di pemeriksaan format, sebelum
+    // pembanding req.user.id maupun findByPk.
+    //
+    // Sasarannya administrator sekali pakai, bukan akun ADMIN sungguhan:
+    // kalau parseId regresi, request ini BERHASIL dan menulis role SPG
+    // plus NULL ke empat kolom lain pada baris sasarannya.
+    test('id dengan akhiran huruf ditolak 400 sebelum penjaga atau where', async () => {
+        const { status } = await kirim(
+            'PUT',
+            `/api/users/${idAdminSendiri}abc`,
+            idAdminSendiri,
+            { name: ADMIN_SENDIRI.name, role: 'SPG' }
         )
 
-        assert.deepStrictEqual(
-            baris[0],
-            dataAsli,
-            'PUT tanpa perubahan tidak boleh menimpa kolom lain dengan NULL'
+        assert.strictEqual(status, 400)
+        assert.strictEqual(
+            await kolomDi(idAdminSendiri, 'role'),
+            'ADMINISTRATOR'
         )
     })
 
@@ -619,12 +765,20 @@ describe('register dihapus', () => {
 
     const KODE_ORANG_ASING = 'orang.asing.14082026@contoh.invalid'
 
-    after(async () => {
+    const bersihkan = async () => {
         await db.query(
             'DELETE FROM users WHERE email = ?',
             [KODE_ORANG_ASING]
         )
-    })
+    }
+
+    // Pre-clean, bukan cuma after. Tanpa ini, satu baris sisa dari run
+    // yang mati di tengah — atau dari zaman register masih ada — membuat
+    // 'tidak ada baris yang tercipta dari percobaan itu' gagal dan
+    // menuduh route yang sudah benar.
+    before(bersihkan)
+
+    after(bersihkan)
 
     // Endpoint ini berjalan tanpa autentikasi. Ia hanya bisa membuat
     // SPG, tapi SPG itulah satu-satunya prasyarat untuk seluruh jalur
