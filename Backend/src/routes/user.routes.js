@@ -16,6 +16,9 @@ const Channel =
 const auth =
     require('../middleware/auth.middleware')
 
+const db =
+    require('../config/database')
+
 require('../models/relations')
 
 const {
@@ -29,12 +32,55 @@ const {
 
 const {
     assertUserManagement,
+    wouldRemoveLastActiveAdministrator,
     USER_ROLES,
 } = require('../utils/access.util')
 
 const {
     parseId,
 } = require('../utils/id.util')
+
+
+/**
+ * Query yang sama dipakai kedua handler yang bisa mengurangi jumlah
+ * administrator aktif, dan SELALU dijalankan lebih dulu di dalam
+ * transaksinya.
+ *
+ * Sengaja satu tempat: dua handler yang mengambil lock atas baris yang
+ * sama dengan urutan berbeda tidak berakhir sebagai penolakan yang rapi,
+ * melainkan sebagai deadlock MySQL yang muncul di klien sebagai 500.
+ *
+ * `lock: t.LOCK.UPDATE` menghasilkan SELECT ... FOR UPDATE. Inilah yang
+ * membuat pemeriksaan lantai administrator benar saat dua request
+ * berjalan bersamaan: transaksi kedua menunggu yang pertama commit, lalu
+ * membaca ulang dan melihat jumlah yang sudah berkurang. Tanpa lock,
+ * keduanya membaca angka yang sama dan sama-sama lolos.
+ *
+ * Kolom role dan status tidak berindeks, jadi FOR UPDATE di sini
+ * mengunci lebih banyak baris daripada yang dibaca. Itu diterima: kedua
+ * route ini ADMINISTRATOR-saja dan jarang dipakai, sementara nol
+ * administrator tidak punya jalur pemulihan sama sekali.
+ */
+const hitungAdminAktifTerkunci = async (t) => {
+
+    const baris = await User.findAll({
+
+        where: {
+            role: 'ADMINISTRATOR',
+            status: 'ACTIVE',
+        },
+
+        attributes: ['id'],
+
+        transaction: t,
+
+        lock: t.LOCK.UPDATE,
+
+    })
+
+    return baris.length
+
+}
 
 
 
@@ -347,10 +393,12 @@ router.put(
                 return sendError(res, 400, 'Id user tidak valid.')
             }
 
-            // Jumlah administrator aktif tidak boleh bisa mencapai nol.
-            // Karena pelakunya selalu tetap administrator aktif,
-            // invarian itu dijaga oleh bentuk aturan ini — tanpa COUNT
-            // dan tanpa kondisi balapan antara dua admin.
+            // Larangan menonaktifkan diri sendiri. Ini MENGURANGI peluang
+            // nol administrator, tapi tidak menutupnya: penjaga ini hanya
+            // melihat pemanggil vs sasaran, sedangkan dua administrator
+            // yang saling menonaktifkan pada milidetik yang sama
+            // sama-sama lolos. Lantai administrator dijaga oleh transaksi
+            // di bawah, bukan oleh baris ini.
             if (id === req.user.id) {
                 return sendError(
                     res,
@@ -359,44 +407,87 @@ router.put(
                 )
             }
 
-            const user =
-                await User.findByPk(
+            // Baca-lalu-tulis harus berada dalam SATU transaksi dengan
+            // locking read. Tanpa itu, admin 2 menonaktifkan admin 29 dan
+            // admin 29 menonaktifkan admin 2 dalam beberapa milidetik
+            // yang sama: keduanya lolos setiap pemeriksaan (sasaran
+            // masing-masing bukan dirinya sendiri), kedua UPDATE commit,
+            // dan tidak ada administrator aktif yang tersisa. Reset
+            // password pun ADMINISTRATOR-saja, jadi tidak ada jalur
+            // pemulihan selain akses langsung ke database.
+            const hasil = await db.transaction(async (t) => {
 
-                    id
+                // Locking read DULU, sebelum baris sasaran, dengan query
+                // yang persis sama seperti di PUT /:id — urutan lock yang
+                // berbeda antar handler berakhir sebagai deadlock, bukan
+                // sebagai penolakan.
+                const jumlahAdminAktif =
+                    await hitungAdminAktifTerkunci(t)
 
-                )
+                const user = await User.findByPk(id, {
 
-            if (!user) {
+                    transaction: t,
 
-                return res.status(404).json({
-
-                    message:
-                        'User tidak ditemukan'
+                    lock: t.LOCK.UPDATE,
 
                 })
 
+                if (!user) {
+
+                    return {
+                        status: 404,
+                        message: 'User tidak ditemukan',
+                    }
+
+                }
+
+                const statusBaru =
+
+                    user.status === 'ACTIVE'
+
+                        ?
+
+                        'INACTIVE'
+
+                        :
+
+                        'ACTIVE'
+
+                if (
+                    wouldRemoveLastActiveAdministrator(
+                        user,
+                        { status: statusBaru },
+                        jumlahAdminAktif
+                    )
+                ) {
+
+                    return {
+                        status: 409,
+                        message:
+                            'Ini administrator aktif terakhir. Angkat administrator lain lebih dulu sebelum menonaktifkannya.',
+                    }
+
+                }
+
+                await user.update(
+                    { status: statusBaru },
+                    { transaction: t }
+                )
+
+                // Password TIDAK BOLEH ikut terkirim: toJSON() Sequelize
+                // menyertakan seluruh kolom, termasuk hash bcrypt.
+                const {
+                    password: _password,
+                    ...userWithoutPassword
+                } = user.toJSON()
+
+                return { data: userWithoutPassword }
+
+            })
+
+            if (hasil.status) {
+                return sendError(res, hasil.status, hasil.message)
             }
-
-            user.status =
-
-                user.status === 'ACTIVE'
-
-                    ?
-
-                    'INACTIVE'
-
-                    :
-
-                    'ACTIVE'
-
-            await user.save()
-
-            // Password TIDAK BOLEH ikut terkirim: toJSON() Sequelize
-            // menyertakan seluruh kolom, termasuk hash bcrypt.
-            const {
-                password: _password,
-                ...userWithoutPassword
-            } = user.toJSON()
 
             res.json({
 
@@ -404,7 +495,7 @@ router.put(
                     'Status user berhasil diupdate',
 
                 data:
-                    userWithoutPassword
+                    hasil.data
 
             })
 
@@ -560,60 +651,150 @@ router.put(
 
             // Membandingkan NILAI, bukan keberadaan field: form user di
             // web mengirim kembali seluruh objeknya, sehingga admin yang
-            // sekadar mengubah namanya sendiri tetap ikut mengirim role
-            // yang sama. Menolak berdasarkan keberadaan field akan
-            // menguncinya dari mengedit namanya sendiri.
+            // sekadar mengubah namanya sendiri tetap ikut mengirim role,
+            // email, dan code yang sama. Menolak berdasarkan keberadaan
+            // field akan menguncinya dari mengedit namanya sendiri.
             //
-            // Karena pelakunya selalu tetap administrator aktif, jumlah
-            // administrator aktif tidak pernah bisa mencapai nol.
-            if (
-                targetId === req.user.id &&
-                role !== undefined &&
-                role !== req.user.role
-            ) {
-                return sendError(
-                    res,
-                    400,
-                    'Anda tidak bisa mengubah role akun Anda sendiri.'
-                )
+            // Ini penjaga per-request dan hanya melihat pemanggil vs
+            // sasaran; lantai administrator aktif dijaga oleh transaksi di
+            // bawah, bukan oleh blok ini.
+            if (targetId === req.user.id) {
+
+                if (
+                    role !== undefined &&
+                    role !== req.user.role
+                ) {
+                    return sendError(
+                        res,
+                        400,
+                        'Anda tidak bisa mengubah role akun Anda sendiri.'
+                    )
+                }
+
+                // email adalah identitas login, jadi mengubahnya sendiri
+                // adalah cara mengunci diri sendiri keluar yang tidak
+                // ketahuan sampai tokennya kedaluwarsa — dan token
+                // berlaku 1 hari. Barisnya tetap ADMINISTRATOR dan ACTIVE
+                // sehingga lantai administrator di bawah tidak melihat
+                // apa pun yang salah, padahal tidak ada lagi
+                // administrator yang bisa login untuk mereset password
+                // siapa pun. Sunting profil sendiri memang di luar
+                // lingkup endpoint ini.
+                if (
+                    email !== undefined &&
+                    email !== req.user.email
+                ) {
+                    return sendError(
+                        res,
+                        400,
+                        'Anda tidak bisa mengubah email akun Anda sendiri.'
+                    )
+                }
+
+                // Dinormalkan `|| null` persis seperti saat ditulis di
+                // bawah, supaya form yang mengirim string kosong untuk
+                // code yang memang NULL tidak terbaca sebagai perubahan.
+                if (
+                    code !== undefined &&
+                    (code || null) !== (req.user.code || null)
+                ) {
+                    return sendError(
+                        res,
+                        400,
+                        'Anda tidak bisa mengubah code akun Anda sendiri.'
+                    )
+                }
+
             }
 
-            await User.update(
+            // Baca-lalu-tulis harus berada dalam SATU transaksi dengan
+            // locking read. Tanpa itu, admin 2 mengirim
+            // PUT /api/users/29 {role:'SPG'} dan admin 29 mengirim
+            // PUT /api/users/2 {role:'SPG'} dalam beberapa milidetik yang
+            // sama: keduanya lolos setiap pemeriksaan di atas (sasaran
+            // masing-masing bukan dirinya sendiri), kedua UPDATE commit,
+            // dan nol administrator tersisa. Reset password pun
+            // ADMINISTRATOR-saja, jadi tidak ada jalur pemulihan selain
+            // akses langsung ke database.
+            const hasil = await db.transaction(async (t) => {
 
-                {
+                // Locking read DULU, sebelum baris sasaran, dengan query
+                // yang persis sama seperti di PUT /:id/status — urutan
+                // lock yang berbeda antar handler berakhir sebagai
+                // deadlock, bukan sebagai penolakan.
+                const jumlahAdminAktif =
+                    await hitungAdminAktifTerkunci(t)
 
-                    name,
+                const target = await User.findByPk(targetId, {
 
-                    email,
+                    transaction: t,
 
-                    role,
+                    lock: t.LOCK.UPDATE,
 
-                    area_id:
-                        area_id || null,
+                })
 
-                    channel_id:
-                        channel_id || null,
+                if (
+                    wouldRemoveLastActiveAdministrator(
+                        target,
+                        { role },
+                        jumlahAdminAktif
+                    )
+                ) {
 
-                    supervisor_id:
-                        supervisor_id || null,
-
-                    code:
-                        code || null
-
-                },
-
-                {
-
-                    where: {
-
-                        id:
-                            targetId
-
+                    return {
+                        status: 409,
+                        message:
+                            'Ini administrator aktif terakhir. Angkat administrator lain lebih dulu sebelum menurunkan rolenya.',
                     }
 
                 }
 
-            )
+                await User.update(
+
+                    {
+
+                        name,
+
+                        email,
+
+                        role,
+
+                        area_id:
+                            area_id || null,
+
+                        channel_id:
+                            channel_id || null,
+
+                        supervisor_id:
+                            supervisor_id || null,
+
+                        code:
+                            code || null
+
+                    },
+
+                    {
+
+                        where: {
+
+                            id:
+                                targetId
+
+                        },
+
+                        transaction: t
+
+                    }
+
+                )
+
+                return null
+
+            })
+
+            if (hasil) {
+                return sendError(res, hasil.status, hasil.message)
+            }
 
             res.json({
 
