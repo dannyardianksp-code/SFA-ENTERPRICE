@@ -27,6 +27,27 @@ exports.login = async (req, res) => {
             )
         }
 
+        // Tipe diperiksa terpisah, karena cek falsy di atas hanya
+        // menangkap yang kosong. `{ "email": { "a": 1 } }` lolos begitu
+        // saja lalu meledak di findOne sebagai 500 — pada endpoint yang
+        // bisa dipanggil tanpa autentikasi, jadi siapa pun bisa
+        // memicunya. `["a@b.c","d@e.f"]` lebih buruk lagi: Sequelize
+        // mengubahnya menjadi klausa IN, sehingga satu password bisa
+        // dicoba terhadap sekumpulan email sekaligus.
+        //
+        // `?.` tidak menolong di sini: ia menjaga null dan undefined,
+        // bukan tipe.
+        if (
+            typeof email !== 'string' ||
+            typeof password !== 'string'
+        ) {
+            return sendError(
+                res,
+                400,
+                'Email dan password harus berupa teks.'
+            )
+        }
+
         const user = await User.findOne({ where: { email } })
 
         // 401, bukan 404: dari sisi client ini "kredensial ditolak",
