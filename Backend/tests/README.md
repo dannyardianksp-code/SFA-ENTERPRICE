@@ -32,6 +32,9 @@ tests/
 | `date.util.test.js` | tanggal lokal Asia/Jakarta, termasuk jam malam UTC yang sudah tanggal berikutnya |
 | `visit-plan.test.js` | rentang tanggal SPG, batas bulan dan batas tahun |
 | `password.util.test.js` | alfabet tanpa karakter yang mudah tertukar, panjang, dan keacakan password sementara |
+| `id.util.test.js` | `parseId` menolak apa pun yang bukan angka bulat positif murni, termasuk `'2abc'` yang MySQL sendiri akan mengoersi jadi baris 2 |
+| `user-model.test.js` | deklarasi kolom `status` (dengan default `ACTIVE`) dan ENUM `role` di model User |
+| `user-management.test.js` | `assertUserManagement` sebagai gerbang ADMINISTRATOR untuk penulisan akun, gagal-tertutup untuk user kosong dan role tak dikenal |
 
 `customer.controller.test.js` bisa jalan tanpa database karena seluruh
 validasi parameter terjadi **sebelum** `User.findByPk` dipanggil.
@@ -88,6 +91,20 @@ membuat aplikasi mobile tidak bisa login, dan tes yang mati di tengah akan
 meninggalkan akun itu dengan password acak yang tidak diketahui siapa pun —
 termasuk tesnya sendiri.
 
+`tests/e2e/user-management.test.js` membuat dua user sekali pakai langsung
+lewat `mysql2`: satu SPG di level berkas (dipakai untuk menguji gerbang
+login dan penolakan token setelah nonaktif) dan satu ADMINISTRATOR sekali
+pakai yang dibatasi ke satu blok (khusus dua tes larangan
+menonaktifkan-diri-sendiri). Keduanya dihapus di `after()` masing-masing.
+Ia juga membuat beberapa user lewat `POST /api/users` sebagai administrator
+sungguhan (untuk menguji gerbang role dan validasi role) lalu menghapusnya.
+Sengaja memakai akun sekali pakai untuk kedua peran itu, bukan akun ADMIN
+sungguhan: percobaan sebelumnya menonaktifkan akun administrator asli lewat
+tes ini, dan 401 yang dihasilkannya menjalar ke blok tes lain yang sedang
+berjalan bersamaan — bukan cuma tes ini yang gagal. Tidak ada user
+sungguhan yang datanya diubah, dan tidak ada password user sungguhan yang
+pernah ditulis ulang.
+
 **Jangan jalankan `npm run test:e2e` menghadap database produksi.**
 
 ## Kenapa tes ini ada
@@ -137,6 +154,32 @@ jangan dihapus tanpa membaca komentarnya:
 - **mengubah data sebelum memeriksa status** — `update` dan `delete`
   visit plan pernah mengubah atau menghapus baris lalu mengembalikan 400.
   Datanya sudah rusak saat penolakannya dikirim.
+- **role ditulis dari body tanpa gerbang** — `POST /api/users` dan
+  `PUT /api/users/:id` pernah menerima `role: 'ADMINISTRATOR'` dari
+  siapa pun yang punya token. Tesnya memeriksa langsung ke database,
+  bukan hanya status HTTP: handler yang menyimpan barisnya lalu
+  mengembalikan 403 tetap merusak data.
+- **kolom yang tidak dideklarasikan tidak terbaca** — `status` pernah
+  hilang dari model `User`, sehingga tombol Deactivate mengembalikan 200
+  tanpa menulis apa pun dan gerbang login membandingkan `undefined`.
+- **status diperiksa sebelum password** — akun nonaktif menjawab 403
+  sementara email asing menjawab 401, sehingga siapa pun bisa mengetahui
+  email mana yang terdaftar hanya dengan menebak.
+- **nol administrator** — tidak ada jalur pemulihan kalau administrator
+  terakhir menonaktifkan atau menurunkan dirinya sendiri; reset password
+  pun ADMINISTRATOR-saja.
+- **`Number(req.params.id)` dibandingkan, `where` mentah dieksekusi** —
+  penjaga larangan-ubah-diri-sendiri pada `PUT /api/users/:id` dan
+  `PUT /api/users/:id/status` sempat membandingkan
+  `Number(req.params.id)` dengan `req.user.id`, sementara klausa `where`
+  Sequelize memakai `req.params.id` mentah. MySQL mengoersi string ke
+  angka saat dibandingkan dengan kolom numerik, jadi `WHERE id = '2abc'`
+  tetap menyasar baris id 2 — padahal `Number('2abc')` di JavaScript
+  adalah `NaN` dan tidak akan pernah sama dengan `req.user.id` mana pun.
+  Akibatnya penjaganya bisa dilewati hanya dengan menambahkan huruf ke
+  URL, sementara query-nya tetap mengenai baris yang sama persis.
+  `parseId` (`src/utils/id.util.js`) menormalkan id sekali di awal
+  sehingga penjaga dan `where` selalu membandingkan nilai yang sama.
 
 ## Urutan rilis
 
@@ -161,3 +204,17 @@ Dicatat supaya tidak terbaca sebagai regresi:
 - `PUT` dan `DELETE /api/visit-plans/:id` **kini terdaftar**. Tombol Edit
   dan Hapus di `sfa-web` yang sebelumnya no-op sekarang benar-benar
   bekerja.
+- Tombol **Activate/Deactivate** di `sfa-web/app/users/page.tsx` yang
+  sebelumnya no-op sekarang benar-benar bekerja, dan badge status yang
+  sebelumnya kosong sekarang menampilkan nilai.
+- **Setiap request kini memuat baris user dari database.** Role yang
+  diturunkan atau akun yang dinonaktifkan berlaku seketika, bukan setelah
+  token kedaluwarsa (token berlaku 1 hari).
+- `POST /api/auth/register` **dihapus**; ia menjawab 404.
+- User yang dinonaktifkan mendapat **401**, bukan 403, supaya aplikasi
+  mobile mengeluarkannya alih-alih menjebaknya di layar yang error.
+- `PUT /api/users/:id` dan `PUT /api/users/:id/status` kini menolak
+  `:id` yang bukan angka bulat positif murni dengan **400**; sebelumnya
+  diterima begitu saja dan diteruskan mentah-mentah ke `where`, yang
+  juga berarti bisa melewati penjaga larangan-ubah-diri-sendiri (lihat
+  bagian "Kenapa tes ini ada" di atas).
