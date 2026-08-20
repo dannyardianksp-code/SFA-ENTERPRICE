@@ -29,6 +29,8 @@ const {
 const {
     resolveSubordinateUserIds,
     PLAN_WRITER_ROLES,
+    ownerWhere,
+    assertWithinSubtree,
 } = require('../utils/access.util')
 
 
@@ -80,17 +82,7 @@ exports.getAll =
             const bolehDilihat =
                 await resolveSubordinateUserIds(loginUser)
 
-            if (bolehDilihat !== null) {
-
-                whereCondition = {
-
-                    user_id: {
-                        [Op.in]: bolehDilihat
-                    }
-
-                }
-
-            }
+            Object.assign(whereCondition, ownerWhere(bolehDilihat))
 
             // SPG melihat rencana hari ini dan besok. Rentangnya
             // eksplisit lewat spgDateRange — sebelumnya tanggalnya
@@ -259,20 +251,11 @@ exports.update =
             const bolehDilihat =
                 await resolveSubordinateUserIds(loginUser)
 
-            if (
+            const gerbang =
+                assertWithinSubtree(bolehDilihat, visitPlan.user_id)
 
-                bolehDilihat !== null
-                &&
-                !bolehDilihat.includes(visitPlan.user_id)
-
-            ) {
-
-                return sendError(
-                    res,
-                    403,
-                    'Visit plan ini di luar jangkauan Anda.'
-                )
-
+            if (gerbang) {
+                return sendError(res, gerbang.status, gerbang.message)
             }
 
             // Status diperiksa SEBELUM data disentuh. Sebelumnya
@@ -365,20 +348,11 @@ exports.delete =
             const bolehDilihat =
                 await resolveSubordinateUserIds(loginUser)
 
-            if (
+            const gerbang =
+                assertWithinSubtree(bolehDilihat, visitPlan.user_id)
 
-                bolehDilihat !== null
-                &&
-                !bolehDilihat.includes(visitPlan.user_id)
-
-            ) {
-
-                return sendError(
-                    res,
-                    403,
-                    'Visit plan ini di luar jangkauan Anda.'
-                )
-
+            if (gerbang) {
+                return sendError(res, gerbang.status, gerbang.message)
             }
 
             // Diperiksa SEBELUM destroy. Sebelumnya barisnya dihapus

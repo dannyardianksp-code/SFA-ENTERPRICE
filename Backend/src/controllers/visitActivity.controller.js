@@ -21,6 +21,7 @@ const { sendError, sendServerError } =
 
 const {
     resolveSubordinateUserIds,
+    ownerWhere,
 } = require('../utils/access.util')
 
 // ======================
@@ -119,16 +120,7 @@ exports.getAll = async (req, res) => {
         const bolehDilihat =
             await resolveSubordinateUserIds(loginUser)
 
-        const visitWhere =
-            bolehDilihat === null
-
-                ? {}
-
-                : {
-                    user_id: {
-                        [Op.in]: bolehDilihat
-                    }
-                }
+        const visitWhere = ownerWhere(bolehDilihat)
 
         const {
 

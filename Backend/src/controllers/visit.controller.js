@@ -14,6 +14,8 @@ const {
 
 const {
     resolveSubordinateUserIds,
+    ownerWhere,
+    assertWithinSubtree,
 } = require('../utils/access.util')
 
 
@@ -279,16 +281,7 @@ exports.getAll = async (req, res) => {
         const bolehDilihat =
             await resolveSubordinateUserIds(loginUser)
 
-        const where =
-            bolehDilihat === null
-
-                ? {}
-
-                : {
-                    user_id: {
-                        [Op.in]: bolehDilihat
-                    }
-                }
+        const where = ownerWhere(bolehDilihat)
 
         const data = await Visit.findAll({
 
@@ -383,20 +376,11 @@ exports.getById = async (
         const bolehDilihat =
             await resolveSubordinateUserIds(loginUser)
 
-        if (
+        const gerbang =
+            assertWithinSubtree(bolehDilihat, data.user_id)
 
-            bolehDilihat !== null
-            &&
-            !bolehDilihat.includes(data.user_id)
-
-        ) {
-
-            return sendError(
-                res,
-                403,
-                'Kunjungan ini di luar jangkauan Anda.'
-            )
-
+        if (gerbang) {
+            return sendError(res, gerbang.status, gerbang.message)
         }
 
         res.json(data)
