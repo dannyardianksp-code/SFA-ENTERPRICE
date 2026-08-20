@@ -154,6 +154,39 @@ dua arah bersamaan tidak berakhir sebagai deadlock.
 
 **Jangan jalankan `npm run test:e2e` menghadap database produksi.**
 
+## Kenapa e2e dijalankan berurutan
+
+`test:e2e` memakai `--test-concurrency=1`. Ini BUKAN sisa debugging —
+jangan dihapus tanpa membaca bagian ini.
+
+`node --test` menjalankan berkas tes secara **konkuren** secara bawaan,
+dan hampir semua berkas e2e di atas membuat baris sementara langsung
+lewat `mysql2` yang hidup selama berkasnya sendiri berjalan (bukan hanya
+selama satu tes). Tes yang membandingkan jumlah baris atau daftar id di
+berkas LAIN yang kebetulan berjalan bersamaan bisa ikut melihat baris
+sementara itu, dan gagal — padahal tidak ada apa pun yang benar-benar
+rusak.
+
+Interferensi itu properti dari runner terhadap database bersama yang
+mutable, bukan sesuatu yang bisa dipertahankan satu tes secara individual.
+Karena itu diperbaiki di tingkat runner (serialisasi), bukan dengan
+melonggarkan assertion-nya: assertion yang dilonggarkan menjadi "kurang
+dari N" tetap hijau ketika sebuah filter bocor sebagian, dan bocor
+sebagian tetap bocor — itu justru properti yang tes-tes ini ada untuk
+membuktikan.
+
+`tests/e2e/data-leak.test.js` sendiri punya dua lapis pertahanan yang
+saling melengkapi, bukan saling menggantikan: assertion SPG/SUPERVISOR/
+MANAGER membandingkan daftar id eksplisit (kebal terhadap kardinalitas
+tabel, tapi bisa rusak kalau suatu saat ada baris sementara yang
+kebetulan masuk ke subtree-nya), sementara assertion ADMINISTRATOR
+membandingkan terhadap `SELECT COUNT(*) FROM users` yang dibaca saat itu
+juga (kebal terhadap baris sementara ADMIN-tak-terbatas manapun, tapi
+tidak menutup kebocoran subtree). `--test-concurrency=1` tetap dibutuhkan
+untuk lapis pertama; ia melindungi dari skenario yang belum pernah
+terjadi hari ini tapi bisa terjadi kalau berkas e2e mendatang menyisipkan
+baris sementara dengan `supervisor_id` di dalam subtree 3 atau 30.
+
 ## Kenapa tes ini ada
 
 Beberapa di antaranya menjaga bug yang pernah benar-benar terjadi —

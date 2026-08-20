@@ -116,10 +116,18 @@ describe('GET /api/users memakai subtree', () => {
         )
     })
 
+    // Dibandingkan dengan jumlah baris hidup di database, bukan angka
+    // yang dipaku: administrator TIDAK dibatasi, jadi yang benar adalah
+    // "sebanyak yang ada di tabel", apa pun isinya saat ini. Angka
+    // literal mengikat tes ini pada kardinalitas seluruh tabel users,
+    // sehingga berkas e2e lain yang menyisipkan satu baris sementara
+    // membuatnya merah tanpa ada yang rusak.
     test('ADMINISTRATOR melihat semuanya', async () => {
+        const [semua] = await db.query('SELECT COUNT(*) n FROM users')
+
         const { data } = await kirim('GET', '/api/users', ADMIN)
 
-        assert.strictEqual(daftarDari(data).length, 11)
+        assert.strictEqual(daftarDari(data).length, Number(semua[0].n))
     })
 
     // Relasi User pernah membawa seluruh baris termasuk hash bcrypt.
