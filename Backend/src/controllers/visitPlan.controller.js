@@ -181,10 +181,58 @@ exports.create =
 
         try {
 
+            // Gerbang role dulu, sebelum data apa pun disentuh.
+            // update dan delete sudah punya ini sejak sub-proyek
+            // visit-plan; create tidak punya apa pun.
+            if (!PLAN_WRITER_ROLES.includes(req.user.role)) {
+                return sendError(
+                    res,
+                    403,
+                    'Hanya supervisor ke atas yang boleh membuat jadwal kunjungan.'
+                )
+            }
+
+            const { user_id, customer_id, visit_date } = req.body
+
+            if (
+                user_id === undefined ||
+                customer_id === undefined ||
+                visit_date === undefined
+            ) {
+                return sendError(
+                    res,
+                    400,
+                    'user_id, customer_id, dan visit_date wajib diisi.'
+                )
+            }
+
+            const bolehDilihat =
+                await resolveSubordinateUserIds(req.user)
+
+            const gerbang =
+                assertWithinSubtree(bolehDilihat, user_id)
+
+            if (gerbang) {
+                return sendError(res, gerbang.status, gerbang.message)
+            }
+
+            // Daftar field EKSPLISIT menggantikan { ...req.body }.
+            // Spread hanya dibatasi oleh atribut yang dideklarasikan
+            // model, dan user_id ada di antaranya — itulah lubang
+            // kepemilikannya. Daftar eksplisit membuat kolom baru di
+            // masa depan tidak otomatis bisa ditulis klien.
+            //
+            // status dipaksa PENDING dan TIDAK diambil dari body: update
+            // dan delete menolak jadwal non-PENDING, sehingga jadwal
+            // yang lahir COMPLETED terkunci selamanya.
             const data =
                 await VisitPlan.create({
 
-                    ...req.body,
+                    user_id,
+
+                    customer_id,
+
+                    visit_date,
 
                     status: 'PENDING'
 
@@ -201,7 +249,6 @@ exports.create =
             )
 
         }
-
 
     }
 

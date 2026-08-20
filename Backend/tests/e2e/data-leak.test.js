@@ -507,3 +507,135 @@ describe('GET /api/visit-activities/visit/:id memakai subtree', () => {
     })
 
 })
+
+describe('POST /api/visit-plans', () => {
+
+    // Tanggal yang tidak dipakai data sungguhan, supaya pembersihan
+    // bisa dikunci padanya tanpa menyentuh jadwal siapa pun.
+    const TANGGAL = '2026-12-30'
+
+    let customerUji
+
+    before(async () => {
+        const [c] = await db.query(
+            'SELECT id FROM customers WHERE id <> 97 LIMIT 1'
+        )
+
+        customerUji = c[0]?.id ?? null
+
+        await db.query(
+            'DELETE FROM visit_plans WHERE visit_date = ?',
+            [TANGGAL]
+        )
+    })
+
+    after(async () => {
+        await db.query(
+            'DELETE FROM visit_plans WHERE visit_date = ?',
+            [TANGGAL]
+        )
+    })
+
+    const jumlahPada = async (userId) => {
+        const [r] = await db.query(
+            'SELECT COUNT(*) n FROM visit_plans WHERE visit_date = ? AND user_id = ?',
+            [TANGGAL, userId]
+        )
+
+        return Number(r[0].n)
+    }
+
+    // Keputusan sub-proyek visit-plan: SUPERVISOR ke atas. create tidak
+    // punya gerbang role sama sekali sebelum perbaikan ini.
+    test('SPG tidak boleh membuat jadwal kunjungan', async (t) => {
+        if (customerUji === null) {
+            t.skip('tidak ada customer selain id 97 di database')
+            return
+        }
+
+        const { status } = await kirim('POST', '/api/visit-plans', SPG, {
+            user_id: SPG,
+            customer_id: customerUji,
+            visit_date: TANGGAL,
+        })
+
+        assert.strictEqual(status, 403)
+
+        // Diperiksa ke database. Tanpa ini, tesnya juga lulus pada
+        // handler yang menyimpan barisnya lalu mengembalikan 403.
+        assert.strictEqual(await jumlahPada(SPG), 0)
+    })
+
+    test('SUPERVISOR tidak boleh menjadwalkan untuk SPG di luar subtree', async (t) => {
+        if (customerUji === null) {
+            t.skip('tidak ada customer selain id 97 di database')
+            return
+        }
+
+        const { status } = await kirim('POST', '/api/visit-plans', SUPERVISOR, {
+            user_id: SPG_LUAR,
+            customer_id: customerUji,
+            visit_date: TANGGAL,
+        })
+
+        assert.strictEqual(status, 403)
+        assert.strictEqual(await jumlahPada(SPG_LUAR), 0)
+    })
+
+    test('SUPERVISOR boleh menjadwalkan untuk SPG-nya sendiri', async (t) => {
+        if (customerUji === null) {
+            t.skip('tidak ada customer selain id 97 di database')
+            return
+        }
+
+        const { status } = await kirim('POST', '/api/visit-plans', SUPERVISOR, {
+            user_id: SPG,
+            customer_id: customerUji,
+            visit_date: TANGGAL,
+        })
+
+        // res.json(data), bukan res.status(201) — diperiksa, bukan
+        // diandaikan.
+        assert.strictEqual(status, 200)
+        assert.strictEqual(await jumlahPada(SPG), 1)
+    })
+
+    // status HARUS dipaksa PENDING. Klien tidak boleh membuat jadwal
+    // yang langsung COMPLETED — update dan delete menolak non-PENDING,
+    // sehingga jadwal seperti itu terkunci selamanya.
+    test('status dari klien diabaikan, selalu PENDING', async (t) => {
+        if (customerUji === null) {
+            t.skip('tidak ada customer selain id 97 di database')
+            return
+        }
+
+        await kirim('POST', '/api/visit-plans', SUPERVISOR, {
+            user_id: 37,
+            customer_id: customerUji,
+            visit_date: TANGGAL,
+            status: 'COMPLETED',
+        })
+
+        const [r] = await db.query(
+            'SELECT status FROM visit_plans WHERE visit_date = ? AND user_id = 37',
+            [TANGGAL]
+        )
+
+        assert.strictEqual(r[0]?.status, 'PENDING')
+    })
+
+    test('user_id yang tidak dikirim ditolak 400', async (t) => {
+        if (customerUji === null) {
+            t.skip('tidak ada customer selain id 97 di database')
+            return
+        }
+
+        const { status } = await kirim('POST', '/api/visit-plans', SUPERVISOR, {
+            customer_id: customerUji,
+            visit_date: TANGGAL,
+        })
+
+        assert.strictEqual(status, 400)
+    })
+
+})
