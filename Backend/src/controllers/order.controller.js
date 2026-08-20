@@ -7,6 +7,10 @@ const { Op } = require('sequelize')
 const Visit = require('../models/visit.model')
 
 const { sendServerError } = require('../utils/response.util')
+const {
+    resolveSubordinateUserIds,
+    ownerWhere,
+} = require('../utils/access.util')
 
 // CREATE ORDER
 exports.create = async (req, res) => {
@@ -72,10 +76,20 @@ exports.create = async (req, res) => {
 
 exports.getAll = async (req, res) => {
     try {
+
+        // SalesOrder punya user_id sendiri, jadi kepemilikannya langsung
+        // — tidak perlu lewat relasi Visit.
+        const bolehDilihat =
+            await resolveSubordinateUserIds(req.user)
+
         const orders = await SalesOrder.findAll({
+            where: ownerWhere(bolehDilihat),
             include: [
                 { model: Visit },
                 { model: Customer, attributes: ['name'] },
+                // attributes DIBATASI dengan sengaja: relasi ini
+                // mengambil dari tabel users, dan tanpa batas ini
+                // seluruh baris termasuk hash bcrypt masuk ke respons.
                 { model: User, attributes: ['name'] }
             ]
         })

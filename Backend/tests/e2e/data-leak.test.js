@@ -191,3 +191,105 @@ describe('GET /api/users/:id memakai subtree', () => {
     })
 
 })
+
+
+describe('GET /api/orders memakai subtree', () => {
+
+    // Fixture IDs untuk dihapus di after()
+    let ujiOrderLuarSubtreeId
+    let ujiOrderDalamSubtreeId
+
+    const daftarOrder = async (pemanggil) => {
+        const { status, data } = await kirim('GET', '/api/orders', pemanggil)
+
+        assert.strictEqual(status, 200)
+
+        return daftarDari(data)
+    }
+
+    before(async () => {
+        // Buat order milik SPG_LUAR (user 34, di luar subtree supervisor 3).
+        // Diperlukan untuk membuktikan filter benar-benar membedakan anggota
+        // subtree dari yang di luarnya, bukan hanya mengalami keberuntungan data.
+        const [resultLuar] = await db.query(
+            'INSERT INTO sales_orders (doc_no, user_id, customer_id, doc_date, total, status) VALUES (?, ?, ?, NOW(), ?, ?)',
+            ['UJI-LUAR-' + Date.now(), SPG_LUAR, null, 0, 'DRAFT']
+        )
+        ujiOrderLuarSubtreeId = resultLuar.insertId
+
+        // Buat order milik SPG (user 1, dalam subtree supervisor 3).
+        const [resultDalam] = await db.query(
+            'INSERT INTO sales_orders (doc_no, user_id, customer_id, doc_date, total, status) VALUES (?, ?, ?, NOW(), ?, ?)',
+            ['UJI-DALAM-' + Date.now(), SPG, null, 0, 'DRAFT']
+        )
+        ujiOrderDalamSubtreeId = resultDalam.insertId
+    })
+
+    after(async () => {
+        // Hapus fixture yang dibuat
+        if (ujiOrderLuarSubtreeId) {
+            await db.query('DELETE FROM sales_orders WHERE id = ?', [ujiOrderLuarSubtreeId])
+        }
+        if (ujiOrderDalamSubtreeId) {
+            await db.query('DELETE FROM sales_orders WHERE id = ?', [ujiOrderDalamSubtreeId])
+        }
+    })
+
+    // Dibandingkan dengan database, bukan dengan angka yang dipaku:
+    // jumlah order berubah setiap kali seseorang membuat order, dan tes
+    // yang memaku angka akan merah karena alasan yang salah.
+    test('ADMINISTRATOR melihat semua order', async () => {
+        const [semua] = await db.query('SELECT COUNT(*) n FROM sales_orders')
+
+        const hasil = await daftarOrder(ADMIN)
+
+        assert.strictEqual(hasil.length, Number(semua[0].n))
+    })
+
+    test('SUPERVISOR hanya melihat order subtree-nya', async () => {
+        const [subtree] = await db.query(
+            'SELECT COUNT(*) n FROM sales_orders WHERE user_id IN (1, 3, 37, 38)'
+        )
+
+        const hasil = await daftarOrder(SUPERVISOR)
+
+        assert.strictEqual(hasil.length, Number(subtree[0].n))
+    })
+
+    test('SPG hanya melihat ordernya sendiri', async () => {
+        const [milikSendiri] = await db.query(
+            'SELECT COUNT(*) n FROM sales_orders WHERE user_id = ?',
+            [SPG]
+        )
+
+        const hasil = await daftarOrder(SPG)
+
+        assert.strictEqual(hasil.length, Number(milikSendiri[0].n))
+    })
+
+    test('tidak ada order milik user di luar subtree yang muncul', async () => {
+        const hasil = await daftarOrder(SUPERVISOR)
+
+        for (const o of hasil) {
+            assert.ok(
+                [1, 3, 37, 38].includes(Number(o.user_id)),
+                `order user_id ${o.user_id} di luar subtree supervisor 3`
+            )
+        }
+    })
+
+    // Relasi User mengambil dari tabel users. Tanpa attributes yang
+    // dibatasi, seluruh baris termasuk hash bcrypt masuk ke respons.
+    test('respons tidak memuat hash password lewat relasi User', async () => {
+        const hasil = await daftarOrder(ADMIN)
+
+        for (const o of hasil) {
+            assert.strictEqual(
+                o.User && 'password' in o.User,
+                false,
+                'password ikut terkirim lewat relasi User'
+            )
+        }
+    })
+
+})
