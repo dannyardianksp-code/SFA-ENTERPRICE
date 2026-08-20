@@ -286,6 +286,73 @@ const resolveSubordinateUserIds = async (user) => {
 }
 
 
+/**
+ * Klausa where untuk kolom pemilik, dari hasil
+ * resolveSubordinateUserIds.
+ *
+ * null berarti "tidak dibatasi", sehingga TIDAK BOLEH menjadi
+ * { [Op.in]: null } — itu SQL yang tidak sah. Array kosong berarti
+ * "tidak ada siapa pun", dan { [Op.in]: [] } benar untuk itu.
+ *
+ * Membalik kedua arti mengubah administrator dari melihat segalanya
+ * menjadi melihat nol, tanpa error dan tanpa jejak.
+ *
+ * Kolomnya bisa diganti karena GET /api/users memfilter `id`, bukan
+ * `user_id`.
+ */
+const ownerWhere = (subordinateIds, column = 'user_id') => {
+
+    if (subordinateIds === null) {
+        return {}
+    }
+
+    return {
+        [column]: {
+            [Op.in]: subordinateIds
+        }
+    }
+
+}
+
+
+/**
+ * Gerbang untuk bacaan sumber-tunggal: bolehkah pemanggil melihat baris
+ * milik ownerId.
+ *
+ * Mengembalikan 403, bukan 404, dan itu disengaja — pemanggil yang tidak
+ * berhak tidak perlu diberi tahu apakah id targetnya ada. Sama dengan
+ * GET /api/visits/:id dari sub-proyek hierarki.
+ *
+ * Perbandingannya mengoersi tipe: id dari parameter URL selalu string,
+ * sedangkan daftar subtree berisi angka dari database. Tanpa koersi,
+ * '37' !== 37 dan supervisor ditolak atas datanya sendiri.
+ *
+ * null = boleh. { status, message } = tolak.
+ */
+const assertWithinSubtree = (subordinateIds, ownerId) => {
+
+    if (subordinateIds === null) {
+        return null
+    }
+
+    const pemilik = Number(ownerId)
+
+    const boleh =
+        Number.isInteger(pemilik) &&
+        subordinateIds.some(id => Number(id) === pemilik)
+
+    if (!boleh) {
+        return {
+            status: 403,
+            message: 'Data ini di luar jangkauan Anda.',
+        }
+    }
+
+    return null
+
+}
+
+
 module.exports = {
     assertAreaChannelAccess,
     RESTRICTED_ROLES,
@@ -297,4 +364,6 @@ module.exports = {
     MAX_HIERARCHY_DEPTH,
     collectSubtreeIds,
     resolveSubordinateUserIds,
+    ownerWhere,
+    assertWithinSubtree,
 }
