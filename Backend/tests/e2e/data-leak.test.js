@@ -293,3 +293,100 @@ describe('GET /api/orders memakai subtree', () => {
     })
 
 })
+
+
+describe('GET /api/visits/:id/products memakai subtree', () => {
+
+    let visitDalam
+
+    // Fixture id untuk dihapus di after(). Database dev hanya berisi
+    // kunjungan milik user 1 dan 37 -- keduanya DI DALAM subtree 3. Tanpa
+    // baris buatan di sini, sisi "luar subtree" kosong dan tesnya akan
+    // di-skip, bukan membuktikan apa pun. Ini persis pelajaran Task 5:
+    // tes yang hijau karena tidak pernah menyentuh sisi yang salah.
+    let visitLuarFixtureId
+
+    before(async () => {
+        const [dalam] = await db.query(
+            'SELECT id FROM visits WHERE user_id IN (1, 37, 38) LIMIT 1'
+        )
+
+        visitDalam = dalam[0]?.id ?? null
+
+        // Kunjungan milik SPG_LUAR (34), anak dari supervisor 33 --
+        // di luar subtree supervisor 3 (1, 37, 38). customer_id memakai
+        // customer nyata (2, ALFAMART DEPOK, dipakai juga oleh visit
+        // dalam-subtree lain) supaya rantai Customer->CustomerGroup->
+        // Product lengkap. Tanpa itu, handler lama gagal karena null
+        // chain, bukan karena kebocoran datanya sendiri terbukti.
+        const [resultLuar] = await db.query(
+            'INSERT INTO visits (user_id, customer_id) VALUES (?, ?)',
+            [SPG_LUAR, 2]
+        )
+        visitLuarFixtureId = resultLuar.insertId
+    })
+
+    after(async () => {
+        if (visitLuarFixtureId) {
+            await db.query('DELETE FROM visits WHERE id = ?', [visitLuarFixtureId])
+        }
+    })
+
+    test('kunjungan dalam subtree boleh', async (t) => {
+        if (visitDalam === null) {
+            t.skip('tidak ada kunjungan milik subtree 3 di database')
+            return
+        }
+
+        const { status } = await kirim(
+            'GET',
+            `/api/visits/${visitDalam}/products`,
+            SUPERVISOR
+        )
+
+        assert.strictEqual(status, 200)
+    })
+
+    test('kunjungan di luar subtree ditolak 403', async () => {
+        const { status } = await kirim(
+            'GET',
+            `/api/visits/${visitLuarFixtureId}/products`,
+            SUPERVISOR
+        )
+
+        assert.strictEqual(status, 403)
+    })
+
+    test('ADMINISTRATOR boleh membaca kunjungan mana pun', async () => {
+        const { status } = await kirim(
+            'GET',
+            `/api/visits/${visitLuarFixtureId}/products`,
+            ADMIN
+        )
+
+        assert.strictEqual(status, 200)
+    })
+
+    // Handler lama memakai visit.Customer tanpa memeriksa visit, jadi id
+    // yang tidak ada menghasilkan 500 -- pesan exception, bukan jawaban.
+    test('kunjungan yang tidak ada menghasilkan 404, bukan 500', async () => {
+        const { status } = await kirim(
+            'GET',
+            '/api/visits/99999999/products',
+            ADMIN
+        )
+
+        assert.strictEqual(status, 404)
+    })
+
+    test('id non-numerik ditolak 400', async () => {
+        const { status } = await kirim(
+            'GET',
+            '/api/visits/12abc/products',
+            ADMIN
+        )
+
+        assert.strictEqual(status, 400)
+    })
+
+})

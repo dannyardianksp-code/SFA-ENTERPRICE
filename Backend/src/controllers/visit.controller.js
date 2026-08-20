@@ -18,6 +18,8 @@ const {
     assertWithinSubtree,
 } = require('../utils/access.util')
 
+const { parseId } = require('../utils/id.util')
+
 
 
 // CHECK-IN
@@ -314,7 +316,13 @@ exports.getProducts = async (req, res) => {
 
     try {
 
-        const visit = await Visit.findByPk(req.params.id, {
+        const id = parseId(req.params.id)
+
+        if (id === null) {
+            return sendError(res, 400, 'Id kunjungan tidak valid.')
+        }
+
+        const visit = await Visit.findByPk(id, {
 
             include: [
                 {
@@ -330,8 +338,25 @@ exports.getProducts = async (req, res) => {
 
         })
 
+        if (!visit) {
+            return sendError(res, 404, 'Kunjungan tidak ditemukan.')
+        }
+
+        const bolehDilihat =
+            await resolveSubordinateUserIds(req.user)
+
+        const gerbang =
+            assertWithinSubtree(bolehDilihat, visit.user_id)
+
+        if (gerbang) {
+            return sendError(res, gerbang.status, gerbang.message)
+        }
+
+        // Relasi mana pun di rantai ini bisa kosong kalau datanya belum
+        // lengkap. Tanpa penjaga ini, customer tanpa group menjadi 500
+        // alih-alih daftar kosong.
         const products =
-            visit.Customer.CustomerGroup.Products
+            visit.Customer?.CustomerGroup?.Products ?? []
 
         res.json(products)
 
