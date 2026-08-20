@@ -390,3 +390,120 @@ describe('GET /api/visits/:id/products memakai subtree', () => {
     })
 
 })
+
+
+describe('GET /api/visit-activities/visit/:id memakai subtree', () => {
+
+    const VISIT_YATIM = 999999901
+
+    // Fixture: kunjungan milik SPG_LUAR (34), anak dari supervisor 33 --
+    // di luar subtree supervisor 3 (1, 3, 37, 38). Dicek langsung ke
+    // database sebelum menulis tes ini: 9 baris visits, dan SEMUANYA di
+    // dalam subtree 3 (8 milik user 1, 1 milik user 37) -- sisi luar
+    // subtree kosong. Tanpa baris buatan di sini, visitLuar akan null
+    // dan kedua tes di bawah cuma di-skip, bukan membuktikan apa pun.
+    // Ini persis pelajaran Task 5/6. customer_id memakai customer nyata
+    // (2, ALFAMART DEPOK) seperti fixture Task 6.
+    let visitLuar
+    let aktivitasLuarId
+
+    before(async () => {
+        const [luar] = await db.query(
+            'INSERT INTO visits (user_id, customer_id) VALUES (?, ?)',
+            [SPG_LUAR, 2]
+        )
+        visitLuar = luar.insertId
+
+        const [aktivitas] = await db.query(
+            'INSERT INTO visit_activities (visit_id, notes) VALUES (?, ?)',
+            [visitLuar, 'FIXTURE TASK 7 - LUAR SUBTREE']
+        )
+        aktivitasLuarId = aktivitas.insertId
+
+        // Baris YATIM: visit_id menunjuk kunjungan yang tidak ada.
+        // Inilah yang menguji `required: true` pada include Visit —
+        // tanpa baris yatim, mematikan `required` tetap hijau, karena
+        // LEFT JOIN dan INNER JOIN menghasilkan hal yang sama selama
+        // setiap activity punya induk.
+        //
+        // Kolomnya `notes`, bukan `activity_type` -- visit_activities
+        // tidak punya kolom activity_type di database ini.
+        await db.query(
+            'DELETE FROM visit_activities WHERE visit_id = ?',
+            [VISIT_YATIM]
+        )
+
+        await db.query(
+            'INSERT INTO visit_activities (visit_id, notes) VALUES (?, ?)',
+            [VISIT_YATIM, 'UJI YATIM']
+        )
+    })
+
+    after(async () => {
+        await db.query(
+            'DELETE FROM visit_activities WHERE visit_id = ?',
+            [VISIT_YATIM]
+        )
+
+        if (aktivitasLuarId) {
+            await db.query(
+                'DELETE FROM visit_activities WHERE id = ?',
+                [aktivitasLuarId]
+            )
+        }
+
+        if (visitLuar) {
+            await db.query(
+                'DELETE FROM visits WHERE id = ?',
+                [visitLuar]
+            )
+        }
+    })
+
+    const aktivitas = async (visitId, pemanggil) => {
+        const { status, data } = await kirim(
+            'GET',
+            `/api/visit-activities/visit/${visitId}`,
+            pemanggil
+        )
+
+        return { status, daftar: daftarDari(data) }
+    }
+
+    test('SUPERVISOR membaca kunjungan di luar subtree: nol baris', async () => {
+        const { daftar } = await aktivitas(visitLuar, SUPERVISOR)
+
+        assert.strictEqual(daftar.length, 0)
+    })
+
+    test('ADMINISTRATOR membaca kunjungan yang sama: ada isinya', async () => {
+        const [punya] = await db.query(
+            'SELECT COUNT(*) n FROM visit_activities WHERE visit_id = ?',
+            [visitLuar]
+        )
+
+        const { daftar } = await aktivitas(visitLuar, ADMIN)
+
+        assert.strictEqual(daftar.length, Number(punya[0].n))
+    })
+
+    // Ini tes required: true. Baris yatim tidak punya kunjungan induk,
+    // jadi ia TIDAK BOLEH muncul untuk siapa pun — termasuk
+    // administrator, yang subtree-nya null.
+    test('baris yatim tidak muncul, bahkan untuk ADMINISTRATOR', async () => {
+        const { daftar } = await aktivitas(VISIT_YATIM, ADMIN)
+
+        assert.strictEqual(
+            daftar.length,
+            0,
+            'activity tanpa kunjungan induk tidak boleh terkirim'
+        )
+    })
+
+    test('id non-numerik ditolak 400', async () => {
+        const { status } = await aktivitas('12abc', ADMIN)
+
+        assert.strictEqual(status, 400)
+    })
+
+})
