@@ -32,8 +32,11 @@ const {
 
 const {
     assertUserManagement,
-    wouldRemoveLastActiveAdministrator,
     USER_ROLES,
+    wouldRemoveLastActiveAdministrator,
+    resolveSubordinateUserIds,
+    ownerWhere,
+    assertWithinSubtree,
 } = require('../utils/access.util')
 
 const {
@@ -154,59 +157,19 @@ router.get(
             // Memuat ulang di sini hanya menambah satu query yang bisa
             // mengembalikan null — dan `null.role` di bawah akan menjadi
             // 500 tanpa sebab yang jelas.
-            let whereCondition = {}
 
-            // ======================
-            // SUPERVISOR
-            // ======================
+            // Satu aturan untuk seluruh bacaan: subtree supervisor_id.
+            // Aturan lama membandingkan area_id tunggal — kolom yang
+            // dikosongkan setiap penyuntingan lewat web — dan hanya
+            // menurun satu tingkat. Akibatnya SPG melihat seluruh bagan
+            // organisasi sementara MANAGER justru melihat kedua
+            // administrator dan nol bawahannya.
+            const bolehDilihat =
+                await resolveSubordinateUserIds(req.user)
 
-            if (
-
-                req.user.role ===
-                'SUPERVISOR'
-
-            ) {
-
-                whereCondition = {
-
-                    role:
-                        'SPG',
-
-                    supervisor_id:
-                        req.user.id,
-
-                    area_id:
-                        req.user.area_id,
-
-                    channel_id:
-                        req.user.channel_id
-
-                }
-
-            }
-
-            // ======================
-            // MANAGER
-            // ======================
-
-            if (
-
-                req.user.role ===
-                'MANAGER'
-
-            ) {
-
-                whereCondition = {
-
-                    area_id:
-                        req.user.area_id,
-
-                    channel_id:
-                        req.user.channel_id
-
-                }
-
-            }
+            // Kolomnya `id`, bukan `user_id`: yang difilter adalah baris
+            // user itu sendiri, bukan baris milik user.
+            const whereCondition = ownerWhere(bolehDilihat, 'id')
 
 
             const data =
@@ -607,6 +570,15 @@ router.get(
 
             if (id === null) {
                 return sendError(res, 400, 'Id user tidak valid.')
+            }
+
+            const bolehDilihat =
+                await resolveSubordinateUserIds(req.user)
+
+            const gerbang = assertWithinSubtree(bolehDilihat, id)
+
+            if (gerbang) {
+                return sendError(res, gerbang.status, gerbang.message)
             }
 
             const data =
