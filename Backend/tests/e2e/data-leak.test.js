@@ -545,6 +545,19 @@ describe('POST /api/visit-plans', () => {
         return Number(r[0].n)
     }
 
+    /** Total baris pada TANGGAL, tanpa peduli user_id -- dipakai untuk
+     * membuktikan TIDAK ADA baris baru tersimpan sama sekali, termasuk
+     * untuk user_id yang cacat (null, 0, non-numerik) yang tidak bisa
+     * dicocokkan dengan aman lewat `= ?` biasa. */
+    const totalPada = async () => {
+        const [r] = await db.query(
+            'SELECT COUNT(*) n FROM visit_plans WHERE visit_date = ?',
+            [TANGGAL]
+        )
+
+        return Number(r[0].n)
+    }
+
     // Keputusan sub-proyek visit-plan: SUPERVISOR ke atas. create tidak
     // punya gerbang role sama sekali sebelum perbaikan ini.
     test('SPG tidak boleh membuat jadwal kunjungan', async (t) => {
@@ -636,6 +649,110 @@ describe('POST /api/visit-plans', () => {
         })
 
         assert.strictEqual(status, 400)
+    })
+
+    // Temuan review lanjutan: assertWithinSubtree mengembalikan "boleh"
+    // seketika saat subordinateIds === null (ADMINISTRATOR), TANPA
+    // PERNAH melihat user_id. Keempat tes di bawah memanggil sebagai
+    // ADMINISTRATOR karena di situlah lubangnya -- SPG dan SUPERVISOR
+    // tidak pernah lolos gerbang kepemilikan dengan subordinateIds
+    // berupa array, apa pun nilai user_id yang mereka kirim.
+    //
+    // Assertion-nya memeriksa DATABASE, bukan cuma status HTTP: handler
+    // yang menyimpan barisnya lalu mengembalikan 400 tetap merusak data.
+
+    test('ADMINISTRATOR: user_id null ditolak 400, tidak ada baris tersimpan', async (t) => {
+        if (customerUji === null) {
+            t.skip('tidak ada customer selain id 97 di database')
+            return
+        }
+
+        const sebelum = await totalPada()
+
+        const { status } = await kirim('POST', '/api/visit-plans', ADMIN, {
+            user_id: null,
+            customer_id: customerUji,
+            visit_date: TANGGAL,
+        })
+
+        assert.strictEqual(status, 400)
+        assert.strictEqual(await totalPada(), sebelum)
+
+        const [yatim] = await db.query(
+            'SELECT COUNT(*) n FROM visit_plans WHERE visit_date = ? AND user_id IS NULL',
+            [TANGGAL]
+        )
+
+        assert.strictEqual(Number(yatim[0].n), 0)
+    })
+
+    // Kasus intinya: visit_plans.user_id NOT NULL tapi TANPA foreign
+    // key. user_id: 0 lolos NOT NULL begitu saja -- tanpa validasi ini,
+    // baris tersimpan sebagai baris yatim yang tidak menunjuk user mana
+    // pun.
+    test('ADMINISTRATOR: user_id 0 ditolak 400, tidak ada baris yatim', async (t) => {
+        if (customerUji === null) {
+            t.skip('tidak ada customer selain id 97 di database')
+            return
+        }
+
+        const sebelum = await totalPada()
+
+        const { status } = await kirim('POST', '/api/visit-plans', ADMIN, {
+            user_id: 0,
+            customer_id: customerUji,
+            visit_date: TANGGAL,
+        })
+
+        assert.strictEqual(status, 400)
+        assert.strictEqual(await totalPada(), sebelum)
+
+        const [yatim] = await db.query(
+            'SELECT COUNT(*) n FROM visit_plans WHERE visit_date = ? AND user_id = 0',
+            [TANGGAL]
+        )
+
+        assert.strictEqual(
+            Number(yatim[0].n),
+            0,
+            'baris yatim user_id=0 tidak boleh ada'
+        )
+    })
+
+    test('ADMINISTRATOR: user_id non-numerik ditolak 400, tidak ada baris tersimpan', async (t) => {
+        if (customerUji === null) {
+            t.skip('tidak ada customer selain id 97 di database')
+            return
+        }
+
+        const sebelum = await totalPada()
+
+        const { status } = await kirim('POST', '/api/visit-plans', ADMIN, {
+            user_id: 'abc',
+            customer_id: customerUji,
+            visit_date: TANGGAL,
+        })
+
+        assert.strictEqual(status, 400)
+        assert.strictEqual(await totalPada(), sebelum)
+    })
+
+    test('ADMINISTRATOR: customer_id 0 ditolak 400, tidak ada baris tersimpan', async (t) => {
+        if (customerUji === null) {
+            t.skip('tidak ada customer selain id 97 di database')
+            return
+        }
+
+        const sebelum = await totalPada()
+
+        const { status } = await kirim('POST', '/api/visit-plans', ADMIN, {
+            user_id: SPG,
+            customer_id: 0,
+            visit_date: TANGGAL,
+        })
+
+        assert.strictEqual(status, 400)
+        assert.strictEqual(await totalPada(), sebelum)
     })
 
 })

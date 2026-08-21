@@ -31,18 +31,6 @@ const get = async (path) => {
     return { status: res.status, body }
 }
 
-const post = async (path, body) => {
-    const res = await fetch(BASE + path, {
-        method: 'POST',
-        headers: { ...authHeader(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-    })
-    const text = await res.text()
-    let parsed
-    try { parsed = JSON.parse(text) } catch { parsed = text }
-    return { status: res.status, body: parsed }
-}
-
 before(async () => {
     try {
         const res = await fetch(BASE + '/')

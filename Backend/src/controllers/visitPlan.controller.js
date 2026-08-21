@@ -33,6 +33,9 @@ const {
     assertWithinSubtree,
 } = require('../utils/access.util')
 
+const { parseId } =
+    require('../utils/id.util')
+
 
 
 // ======================
@@ -206,11 +209,32 @@ exports.create =
                 )
             }
 
+            // Dinormalkan SEBELUM gerbang kepemilikan, bukan sesudah.
+            // assertWithinSubtree mengembalikan "boleh" seketika saat
+            // subordinateIds === null (ADMINISTRATOR) TANPA PERNAH
+            // melihat user_id -- jadi untuk administrator, validasi
+            // inilah satu-satunya yang berdiri antara id yang cacat dan
+            // tabelnya. Tanpa ini: user_id: null gagal di database
+            // (kolom NOT NULL, sql_mode STRICT_TRANS_TABLES) dan
+            // tersurat sebagai 500; user_id: 0 justru LOLOS NOT NULL
+            // dan tersimpan sebagai baris yatim, karena visit_plans
+            // tidak punya foreign key sama sekali.
+            const targetUserId = parseId(user_id)
+            const targetCustomerId = parseId(customer_id)
+
+            if (targetUserId === null || targetCustomerId === null) {
+                return sendError(
+                    res,
+                    400,
+                    'user_id dan customer_id harus id yang sah.'
+                )
+            }
+
             const bolehDilihat =
                 await resolveSubordinateUserIds(req.user)
 
             const gerbang =
-                assertWithinSubtree(bolehDilihat, user_id)
+                assertWithinSubtree(bolehDilihat, targetUserId)
 
             if (gerbang) {
                 return sendError(res, gerbang.status, gerbang.message)
@@ -222,15 +246,19 @@ exports.create =
             // kepemilikannya. Daftar eksplisit membuat kolom baru di
             // masa depan tidak otomatis bisa ditulis klien.
             //
+            // user_id dan customer_id memakai nilai yang sudah
+            // dinormalkan parseId, bukan req.body mentah -- keduanya
+            // sudah dipastikan bilangan bulat positif di atas.
+            //
             // status dipaksa PENDING dan TIDAK diambil dari body: update
             // dan delete menolak jadwal non-PENDING, sehingga jadwal
             // yang lahir COMPLETED terkunci selamanya.
             const data =
                 await VisitPlan.create({
 
-                    user_id,
+                    user_id: targetUserId,
 
-                    customer_id,
+                    customer_id: targetCustomerId,
 
                     visit_date,
 
