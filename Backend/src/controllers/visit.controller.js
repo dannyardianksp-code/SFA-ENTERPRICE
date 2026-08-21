@@ -16,6 +16,7 @@ const {
     resolveSubordinateUserIds,
     ownerWhere,
     assertWithinSubtree,
+    assertAreaChannelAccess,
 } = require('../utils/access.util')
 
 const { parseId } = require('../utils/id.util')
@@ -24,244 +25,129 @@ const { parseId } = require('../utils/id.util')
 
 // CHECK-IN
 
-exports.checkIn = async (
-
-    req,
-    res
-) => {
-
+exports.checkIn = async (req, res) => {
 
     try {
 
         const {
-            customer_id,
             visit_plan_id,
             latitude,
-            longitude
+            longitude,
+            accuracy,
         } = req.body
 
-        const user_id =
-            req.user.id
-
-        // GET VISIT PLAN
-        const plan =
-            await VisitPlan.findByPk(
-                visit_plan_id
-            )
-
-        const user =
-            await User.findByPk(
-                req.user.id
-            )
-
+        const plan = await VisitPlan.findByPk(visit_plan_id)
 
         if (!plan) {
-
-            return res.status(404).json({
-                message:
-                    'Visit plan tidak ditemukan'
-            })
-
-        }
-        if (plan.status !== 'PENDING') {
-            return res.status(400).json({
-                message: 'Visit already started'
-            })
+            return sendError(res, 404, 'Visit plan tidak ditemukan.')
         }
 
-        // GET CUSTOMER
-        const customer =
-            await Customer.findByPk(
-                customer_id
-            )
-
-        if (!customer) {
-
-            return res.status(404).json({
-                message:
-                    'Customer tidak ditemukan'
-            })
-
-        }
-
-        // HITUNG JARAK
-        const distance =
-            getDistance(
-
-                {
-                    latitude:
-                        parseFloat(latitude),
-
-                    longitude:
-                        parseFloat(longitude)
-                },
-
-                {
-                    latitude:
-                        parseFloat(
-                            customer.latitude
-                        ),
-
-                    longitude:
-                        parseFloat(
-                            customer.longitude
-                        )
-                }
-
-            )
-
-        // VALIDASI
-        if (distance > 50) {
-
-            return res.status(400).json({
-
-                message:
-                    `Terlalu jauh dari toko (${distance} meter)`,
-
-                distance
-
-            })
-
-        }
-
-        const existingVisit =
-            await Visit.findOne({
-
-                where: {
-
-                    user_id,
-
-                    customer_id,
-
-                    checkout_time: null
-
-                }
-
-            })
-
-        if (existingVisit) {
-
-            return res.json({
-
-                message:
-                    'Visit masih berjalan',
-
-                data: existingVisit
-
-            })
-
-        }
-
-        if (
-
-            user.area_id
-            !==
-            customer.area_id
-
-        ) {
-
+        // Check-in adalah tindakan personal -- SPG berdiri di toko,
+        // memakai perangkatnya sendiri. Beda dengan checkOut dan
+        // endpoint bacaan lain yang memakai assertWithinSubtree:
+        // supervisor tidak check-in atas nama bawahannya.
+        if (plan.user_id !== req.user.id) {
             return sendError(
                 res,
                 403,
-                'Customer ini berada di luar wilayah Anda.'
+                'Visit plan ini bukan milik Anda.'
             )
-
         }
-        if (
 
-            user.role === 'SPG'
+        if (plan.status !== 'PENDING') {
+            return sendError(res, 400, 'Visit already started')
+        }
 
-            ||
+        // customer_id DIKUNCI dari plan, bukan dari body. Body yang
+        // mengirim customer_id berbeda tidak boleh membuat kunjungan
+        // tercatat di lokasi yang salah.
+        const customer = await Customer.findByPk(plan.customer_id)
 
-            user.role === 'SUPERVISOR'
+        if (!customer) {
+            return sendError(res, 404, 'Customer tidak ditemukan')
+        }
 
-        ) {
+        // Akurasi diperiksa SEBELUM jarak. Bacaan GPS yang buruk bisa
+        // kebetulan menghasilkan jarak terhitung yang tampak dekat,
+        // padahal posisi sebenarnya jauh.
+        const akurasi = Number(accuracy)
 
-            if (
+        if (!Number.isFinite(akurasi) || akurasi > 50) {
+            return sendError(
+                res,
+                400,
+                `Akurasi lokasi terlalu rendah (±${accuracy} meter).`
+            )
+        }
 
-                customer.area_id !==
-                user.area_id
-
-                ||
-
-                customer.channel_id !==
-                user.channel_id
-
-            ) {
-
-                return res.status(403).json({
-
-                    message:
-                        'Customer beda territory'
-
-                })
-
+        const distance = getDistance(
+            {
+                latitude: parseFloat(latitude),
+                longitude: parseFloat(longitude),
+            },
+            {
+                latitude: parseFloat(customer.latitude),
+                longitude: parseFloat(customer.longitude),
             }
+        )
 
+        if (distance > 50) {
+            return res.status(400).json({
+                message: `Terlalu jauh dari toko (${distance} meter)`,
+                distance,
+            })
         }
 
+        const existingVisit = await Visit.findOne({
+            where: {
+                user_id: req.user.id,
+                customer_id: plan.customer_id,
+                checkout_time: null,
+            },
+        })
 
-
-
-        // SAVE VISIT
-        const visit =
-
-            await Visit.create({
-
-                user_id:
-                    req.user.id,
-
-                customer_id,
-
-                visit_plan_id,
-
-                latitude,
-
-                longitude,
-
-                checkin_time:
-                    new Date()
-
-
+        if (existingVisit) {
+            return res.json({
+                message: 'Visit masih berjalan',
+                data: existingVisit,
             })
+        }
+
+        // Satu aturan, sama dengan endpoint lain: multi-area lewat
+        // user_areas, bukan perbandingan area_id tunggal.
+        const gerbangArea = assertAreaChannelAccess(
+            req.user,
+            customer.area_id,
+            customer.channel_id
+        )
+
+        if (gerbangArea) {
+            return sendError(res, gerbangArea.status, gerbangArea.message)
+        }
+
+        const visit = await Visit.create({
+            user_id: req.user.id,
+            customer_id: plan.customer_id,
+            visit_plan_id,
+            latitude,
+            longitude,
+            location_accuracy: accuracy,
+            checkin_time: new Date(),
+        })
 
         await VisitPlan.update(
-
-            {
-
-                status:
-                    'ON VISIT'
-
-            },
-
-            {
-
-                where: {
-
-                    id:
-                        visit_plan_id
-
-                }
-
-            }
-
+            { status: 'ON VISIT' },
+            { where: { id: visit_plan_id } }
         )
 
         res.json({
-
-            message:
-                'Check-in berhasil',
-
+            message: 'Check-in berhasil',
             distance,
-
-            data: visit
-
+            data: visit,
         })
 
     } catch (err) {
-
         return sendServerError(res, err, 'VISIT CHECK-IN')
-
     }
 
 }
