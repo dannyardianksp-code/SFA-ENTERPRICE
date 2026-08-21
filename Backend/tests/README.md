@@ -36,6 +36,9 @@ tests/
 | `user-model.test.js` | deklarasi kolom `status` (dengan default `ACTIVE`) dan ENUM `role` di model User |
 | `user-management.test.js` | `assertUserManagement` sebagai gerbang ADMINISTRATOR untuk penulisan akun, gagal-tertutup untuk user kosong dan role tak dikenal; `wouldRemoveLastActiveAdministrator` sebagai keputusan lantai administrator |
 | `lock.util.test.js` | `isLockConflictError` mengenali `ER_LOCK_WAIT_TIMEOUT`/`ER_LOCK_DEADLOCK` lewat kode di `parent`/`original` (bukan substring pesan) dan **gagal-tertutup** untuk error lain; `applyLockWaitTimeout` menembak koneksi transaksinya sendiri; `restoreLockWaitTimeout` tidak pernah melempar sehingga tidak menutupi error asli |
+| `subtree-where.test.js` | arti `null` versus `[]` pada klausa subtree, dan koersi tipe pada gerbang sumber-tunggal |
+| `nullable-update.test.js` | arti tiga arah field update: tidak dikirim, string kosong, bernilai |
+| `boot-require.test.js` | ejaan `require` route di `app.js` dicocokkan dengan `git ls-files` |
 
 `customer.controller.test.js` bisa jalan tanpa database karena seluruh
 validasi parameter terjadi **sebelum** `User.findByPk` dipanggil.
@@ -70,6 +73,19 @@ data nyata di database dev sama saja merusaknya.
 Nomor urut kode yang terpakai **tidak kembali** setelah baris dihapus,
 sehingga deret kode akan berlubang. Aman di database dev.
 
+`tests/e2e/visit-plan.test.js` dan `tests/e2e/hierarchy-access.test.js`
+sempat membuat fixture-nya lewat `POST /api/visit-plans`, dan itu cuma
+berhasil karena endpoint itu belum punya penjaga kepemilikan. Begitu
+lubangnya ditutup (lihat "role ditulis dari body tanpa gerbang" di bawah
+— bedanya, ini soal kepemilikan, bukan role), 22 tes yang penyiapannya
+lewat endpoint tadi gagal serentak, bukan karena tesnya salah, tapi
+karena fixture yang lewat endpoint mewarisi aturan otorisasi endpoint
+itu — perubahan otorisasi yang sama sekali tidak berkaitan bisa merusak
+penyiapan tes yang tidak sedang menguji otorisasi. Builder fixture
+kedua berkas ini ditulis ulang untuk menyisipkan baris `visit_plans`
+**langsung lewat `mysql2`**, dihapus di `after()` lewat id yang
+ditangkap saat insert.
+
 `tests/e2e/visit-plan.test.js` membuat dua visit plan (hari ini dan
 lusa) lalu menghapusnya di `after()`. Yang lusa ada supaya batas atas
 rentang benar-benar diuji, bukan diasumsikan.
@@ -83,6 +99,24 @@ tidak bisa dibuat lewat API. Berkas ini juga menyisipkan satu baris
 `visit_activities` **yatim** (menunjuk `visit_id` yang tidak ada) langsung
 lewat `mysql2` untuk menguji `required: true` pada include `Visit`, lalu
 menghapusnya lagi di `after()` lokal blok itu.
+
+`tests/e2e/data-leak.test.js` membuat satu user sementara dengan keempat
+kolom `code`, `area_id`, `channel_id`, dan `supervisor_id` terisi, lalu
+menghapusnya di `after()` **berdasarkan id yang ditangkap, bukan
+berdasarkan `code`** — kalau perbaikan `nullableUpdate` gagal, `code`
+justru yang dikosongkan dan pembersihan berbasis `code` tidak akan
+menemukan barisnya.
+
+Ia juga membuat beberapa `visit_plans` pada tanggal `2026-12-30` yang
+tidak dipakai data sungguhan, dan menyisipkan satu baris
+`visit_activities` **yatim** (`visit_id = 999999901`) untuk menguji
+`required: true` — lewat kolom `notes`. `visit_activities` **tidak
+punya** kolom `activity_type`; draf awal berkas ini memakainya dan
+gagal di database sungguhan sebelum diperbaiki. Semuanya dihapus di
+`after()`.
+
+Akun sungguhan dipakai **hanya sebagai pemanggil baca-saja**. Tidak ada
+satu pun tes di berkas ini yang menjadikannya sasaran tulis.
 
 Blok `kontensi lock dijawab 503 yang bisa diulang` di
 `tests/e2e/user-management.test.js` **memaksa** kontensi lock, tidak
@@ -292,6 +326,50 @@ jangan dihapus tanpa membaca komentarnya:
   URL, sementara query-nya tetap mengenai baris yang sama persis.
   `parseId` (`src/utils/id.util.js`) menormalkan id sekali di awal
   sehingga penjaga dan `where` selalu membandingkan nilai yang sama.
+- **`null` berarti tidak dibatasi** — `ownerWhere(null)` harus
+  menghasilkan objek kosong. `{ [Op.in]: null }` adalah SQL yang tidak
+  sah, dan array kosong membuat administrator melihat nol.
+- **`area_id` tunggal sebagai aturan visibilitas** — `GET /api/users`
+  pernah memfilter `area_id: req.user.area_id`. Untuk MANAGER yang
+  `area_id`-nya NULL, Sequelize menerjemahkannya menjadi `IS NULL`,
+  sehingga ia justru melihat kedua administrator dan nol bawahannya.
+- **`field || null`** — pola ini mengubah "tidak dikirim" menjadi NULL.
+  Setiap penyuntingan user lewat web mengosongkan `code` dan `area_id`,
+  dan `area_id` itulah yang memberi makan hak akses wilayah SPG.
+- **`required: true` pada include Visit — buktinya bukan menghapus
+  barisnya.** Sequelize sendiri **menyimpulkan** `required: true` kapan
+  pun sebuah include membawa `where`
+  (`node_modules/sequelize/lib/model.js`:
+  `if (include.required === void 0) { include.required = !!include.where }`).
+  Include Visit di atas selalu membawa `where: visitWhere`, jadi
+  "teeth-proof" naif — menghapus baris `required: true` lalu melihat
+  apakah tesnya tetap hijau — **tidak membuktikan apa pun**: Sequelize
+  menyimpulkan nilai `true` yang sama persis dari `where`-nya sendiri.
+  Yang benar-benar membuktikan guard ini teruji adalah mengganti
+  nilainya jadi `required: false` **secara eksplisit** dan melihat tes
+  baris yatim gagal. Baris eksplisit `required: true` itu sendiri tetap
+  dipertahankan sebagai pertahanan lapis kedua: kalau suatu saat
+  `where`-nya dihapus tapi baris `required: true` terlupa ikut dihapus,
+  baris eksplisit itulah yang mencegah Sequelize diam-diam menyimpulkan
+  ulang `required` menjadi `false`. Dicatat di sini supaya orang
+  berikutnya yang menguji ini tidak menyimpulkan guard-nya sudah teruji
+  hanya dari menghapus baris itu.
+- **spread `req.body` pada create** — `POST /api/visit-plans` pernah
+  menyebar seluruh body, sehingga `user_id` bisa ditulis siapa pun. Ia
+  juga tidak punya gerbang role sama sekali, sehingga SPG bisa membuat
+  jadwal kunjungan.
+- **`user_id: 0` dari administrator lolos NOT NULL — dibuktikan
+  langsung, bukan cuma dinalar.** `POST /api/visit-plans` sempat
+  menerima `user_id: 0` dari administrator dan **benar-benar membuat**
+  visit plan yatim — baris id 820, dipastikan lewat `SELECT` langsung ke
+  tabelnya sebelum dihapus. `visit_plans` tidak punya foreign key sama
+  sekali, jadi NOT NULL saja tidak melindunginya. Id dari body request
+  kini dinormalkan lewat `parseId` sebelum dipakai.
+- **ejaan `require` peka huruf besar-kecil** — filesystem Windows tidak
+  peka huruf besar-kecil, jadi ejaan yang salah boot di sini dan gagal
+  `MODULE_NOT_FOUND` di Linux. Tesnya membandingkan dengan `git ls-files`,
+  bukan `fs.readdir`, karena readdir melaporkan ejaan salah pun sebagai
+  ada.
 
 ## Urutan rilis
 
@@ -421,3 +499,40 @@ Dicatat supaya tidak terbaca sebagai regresi:
 - `POST /api/auth/login` kini menjawab **400** untuk `email` atau `password`
   yang bukan string; sebelumnya objek menghasilkan 500 dan array diam-diam
   menjadi klausa `IN`.
+- **`GET /api/users` menyempit tajam.** SPG dari 11 user menjadi 1
+  (dirinya). MANAGER dari 3 (kedua administrator dan dirinya) menjadi 9
+  bawahannya, tanpa satu pun administrator. SUPERVISOR dari 3 menjadi 4
+  (dirinya ikut). ADMINISTRATOR tetap 11.
+- **`GET /api/users/:id` menolak 403** di luar subtree pemanggil.
+- **`GET /api/orders` menyempit** dari semua order menjadi subtree.
+- **`GET /api/visits/:id/products` menolak 403** di luar subtree, dan id
+  yang tidak ada kini menjawab **404, bukan 500**.
+- **`GET /api/visit-activities/visit/:id`** mengembalikan nol baris untuk
+  kunjungan di luar subtree.
+- **`POST /api/visit-plans` menolak SPG dengan 403.** Sebelumnya siapa pun
+  yang punya token bisa membuat jadwal kunjungan.
+- **`PUT /api/users/:id` berhenti mengosongkan** `code`, `area_id`,
+  `channel_id`, dan `supervisor_id` ketika field itu tidak dikirim.
+
+## Yang masih terbuka
+
+Dicatat supaya tidak hilang, bukan sebagai pekerjaan yang tertunda tanpa
+alasan:
+
+- **Multi-area tidak punya jalur tulis.** `area_ids` di form web tidak
+  diproses di `POST /api/users` maupun `PUT /api/users/:id`, dan
+  `userArea.routes.js` hanya mendaftarkan satu route GET. Hanya satu user
+  punya baris `user_areas`, dan itu disisipkan manual. Ini fitur yang
+  hilang, bukan kebocoran — sub-proyek tersendiri.
+- **`sfa-web` membaca `data.error`** sementara backend mengirim
+  `{ message }`. Penolakan 403 yang baru akan muncul di web sebagai
+  `alert(undefined)`.
+- **`GET /api/users/:id/areas`** nol pemanggil di ketiga aplikasi.
+- **`parseId` memakai `Number()`, bukan validasi tipe.** `Number([5])`
+  adalah `5`, dan `Number(true)` adalah `1` — jadi `parseId([5])` dan
+  `parseId(true)` sama-sama lolos sebagai id yang sah. Ini belum jadi
+  celah: setiap pemanggil lain memakai `req.params.id`, yang selalu
+  string dari URL, dan array maupun boolean tidak pernah muncul di sana.
+  `POST /api/visit-plans` adalah pemanggil **pertama** yang menerapkan
+  `parseId` ke nilai dari body JSON, bukan dari `req.params`, dan body
+  JSON-lah yang membuat koersi ini benar-benar bisa dicapai.
