@@ -1,6 +1,7 @@
 const Visit = require('../models/visit.model')
 const Customer = require('../models/customer.model')
 const User = require('../models/user.model')
+const Area = require('../models/area.model')
 const CustomerGroup = require('../models/customerGroup.model')
 const Product = require('../models/product.model')
 const { getDistance } = require('geolib')
@@ -20,6 +21,25 @@ const {
 } = require('../utils/access.util')
 
 const { parseId } = require('../utils/id.util')
+
+/**
+ * Mengambil user beserta area yang di-assign, bentuk yang dibutuhkan
+ * assertAreaChannelAccess. req.user dari auth.middleware TIDAK
+ * memuat AssignedAreas (tidak ada include di sana), jadi dipanggil
+ * ulang di sini -- sama seperti findUserWithAreas di
+ * customer.controller.js.
+ */
+const findUserWithAreas = (id) =>
+    User.findByPk(id, {
+        include: [
+            {
+                model: Area,
+                as: 'AssignedAreas',
+                attributes: ['id'],
+                through: { attributes: [] },
+            },
+        ],
+    })
 
 
 
@@ -114,9 +134,15 @@ exports.checkIn = async (req, res) => {
         }
 
         // Satu aturan, sama dengan endpoint lain: multi-area lewat
-        // user_areas, bukan perbandingan area_id tunggal.
+        // user_areas, bukan perbandingan area_id tunggal. req.user
+        // dari auth.middleware tidak memuat AssignedAreas, jadi user
+        // dimuat ulang di sini -- tanpa ini assertAreaChannelAccess
+        // diam-diam jatuh ke fallback area_id tunggal untuk SETIAP
+        // request, tidak pernah benar-benar memeriksa user_areas.
+        const userDenganArea = await findUserWithAreas(req.user.id)
+
         const gerbangArea = assertAreaChannelAccess(
-            req.user,
+            userDenganArea,
             customer.area_id,
             customer.channel_id
         )
@@ -131,7 +157,7 @@ exports.checkIn = async (req, res) => {
             visit_plan_id,
             latitude,
             longitude,
-            location_accuracy: accuracy,
+            location_accuracy: akurasi,
             checkin_time: new Date(),
         })
 
