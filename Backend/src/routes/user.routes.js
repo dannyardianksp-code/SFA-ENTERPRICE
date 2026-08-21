@@ -48,6 +48,10 @@ const {
     withShortLockWait,
 } = require('../utils/lock.util')
 
+const {
+    nullableUpdate,
+} = require('../utils/update.util')
+
 
 /**
  * Jawaban seragam untuk kedua handler saat transaksinya kalah balapan
@@ -801,29 +805,28 @@ router.put(
 
                 }
 
+                const perubahan = { name, email, role }
+
+                // Field yang TIDAK dikirim klien tidak boleh ditulis NULL.
+                // Sequelize membuang key bernilai undefined, tapi pola lama
+                // `field || null` mengubah undefined menjadi null — dan
+                // null tidak dibuang. Form edit di web tidak mengirim code
+                // maupun area_id, sehingga setiap penyuntingan nama
+                // mengosongkan keduanya.
+                for (const field of [
+                    'code',
+                    'area_id',
+                    'channel_id',
+                    'supervisor_id',
+                ]) {
+                    if (req.body[field] !== undefined) {
+                        perubahan[field] = nullableUpdate(req.body[field])
+                    }
+                }
+
                 await User.update(
 
-                    {
-
-                        name,
-
-                        email,
-
-                        role,
-
-                        area_id:
-                            area_id || null,
-
-                        channel_id:
-                            channel_id || null,
-
-                        supervisor_id:
-                            supervisor_id || null,
-
-                        code:
-                            code || null
-
-                    },
+                    perubahan,
 
                     {
 

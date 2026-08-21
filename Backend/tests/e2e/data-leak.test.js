@@ -756,3 +756,133 @@ describe('POST /api/visit-plans', () => {
     })
 
 })
+
+
+describe('PUT /api/users/:id tidak menghapus field yang tidak dikirim', () => {
+
+    const SEMENTARA = {
+        code: 'UJI-NULLABLE-15082026',
+        email: 'uji.nullable.15082026@contoh.invalid',
+    }
+
+    let idSementara
+
+    before(async () => {
+        await db.query(
+            'DELETE FROM users WHERE code = ? OR email = ?',
+            [SEMENTARA.code, SEMENTARA.email]
+        )
+
+        // Keempat kolom yang jadi korban pola lama diisi dengan
+        // sengaja, supaya penghapusannya bisa terdeteksi.
+        const [hasil] = await db.query(
+            `INSERT INTO users
+                (code, name, email, password, role, status,
+                 area_id, channel_id, supervisor_id)
+             VALUES (?, ?, ?, ?, 'SPG', 'ACTIVE', 1, 2, 3)`,
+            [
+                SEMENTARA.code,
+                'User Uji Nullable',
+                SEMENTARA.email,
+                'bukan-hash-sungguhan',
+            ]
+        )
+
+        idSementara = hasil.insertId
+    })
+
+    // Dihapus berdasarkan id yang ditangkap, BUKAN berdasarkan code:
+    // kalau perbaikannya gagal, code-nya justru yang di-NULL-kan dan
+    // pembersihan berbasis code tidak akan menemukan barisnya.
+    after(async () => {
+        if (idSementara) {
+            await db.query('DELETE FROM users WHERE id = ?', [idSementara])
+        }
+    })
+
+    const kolomDari = async (id) => {
+        const [r] = await db.query(
+            'SELECT code, area_id, channel_id, supervisor_id FROM users WHERE id = ?',
+            [id]
+        )
+
+        return r[0]
+    }
+
+    // Tes inti sub-proyek ini. Form edit di web tidak pernah mengirim
+    // code maupun area_id, jadi menyunting nama saja HARUS membiarkan
+    // keempat kolom itu utuh.
+    test('menyunting hanya name membiarkan keempat kolom utuh', async () => {
+        const sebelum = await kolomDari(idSementara)
+
+        const { status } = await kirim(
+            'PUT',
+            `/api/users/${idSementara}`,
+            ADMIN,
+            { name: 'Nama Sudah Diubah', email: SEMENTARA.email, role: 'SPG' }
+        )
+
+        assert.strictEqual(status, 200)
+
+        const sesudah = await kolomDari(idSementara)
+
+        assert.deepStrictEqual(sesudah, sebelum)
+        assert.strictEqual(sesudah.code, SEMENTARA.code)
+        assert.strictEqual(Number(sesudah.area_id), 1)
+        assert.strictEqual(Number(sesudah.channel_id), 2)
+        assert.strictEqual(Number(sesudah.supervisor_id), 3)
+    })
+
+    test('nama benar-benar tersimpan', async () => {
+        const [r] = await db.query(
+            'SELECT name FROM users WHERE id = ?',
+            [idSementara]
+        )
+
+        assert.strictEqual(r[0].name, 'Nama Sudah Diubah')
+    })
+
+    // Kemampuan mengosongkan dengan sengaja harus tetap ada — itu yang
+    // dikirim web ketika select supervisor dikosongkan.
+    test('string kosong mengosongkan kolomnya', async () => {
+        const { status } = await kirim(
+            'PUT',
+            `/api/users/${idSementara}`,
+            ADMIN,
+            {
+                name: 'Nama Sudah Diubah',
+                email: SEMENTARA.email,
+                role: 'SPG',
+                supervisor_id: '',
+            }
+        )
+
+        assert.strictEqual(status, 200)
+
+        const sesudah = await kolomDari(idSementara)
+
+        assert.strictEqual(sesudah.supervisor_id, null)
+
+        // Yang lain TIDAK ikut terhapus.
+        assert.strictEqual(sesudah.code, SEMENTARA.code)
+        assert.strictEqual(Number(sesudah.area_id), 1)
+    })
+
+    test('nilai baru tersimpan sebagai nilai, bukan null', async () => {
+        const { status } = await kirim(
+            'PUT',
+            `/api/users/${idSementara}`,
+            ADMIN,
+            {
+                name: 'Nama Sudah Diubah',
+                email: SEMENTARA.email,
+                role: 'SPG',
+                area_id: 3,
+            }
+        )
+
+        assert.strictEqual(status, 200)
+        assert.strictEqual(Number((await kolomDari(idSementara)).area_id), 3)
+    })
+
+})
