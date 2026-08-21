@@ -513,6 +513,15 @@ exports.uploadExcel = async (req, res) => {
         // mana pun bisa mengunggah spreadsheet berisi kode sales siapa
         // saja dan membuat jadwal kunjungan untuk seluruh perusahaan.
         if (!PLAN_WRITER_ROLES.includes(req.user.role)) {
+
+            // Multer sudah menulis berkasnya ke disk sebelum handler
+            // ini sempat memeriksa apa pun. /uploads disajikan tanpa
+            // autentikasi (lihat tests/README.md), jadi berkas yang
+            // tidak dihapus di sini menjadi bisa dibaca siapa pun tanpa
+            // token -- penolakan yang tidak membersihkan dirinya sendiri
+            // sama saja dengan menerima uploadnya.
+            fs.unlinkSync(req.file.path)
+
             return sendError(
                 res,
                 403,
@@ -610,6 +619,13 @@ exports.uploadExcel = async (req, res) => {
             // subtree tidak boleh menggagalkan seluruh upload, sama
             // seperti Sales Code atau Customer Code yang tidak
             // ditemukan di atas dan di bawah.
+            //
+            // Alasannya SENGAJA disamakan dengan "tidak ditemukan":
+            // supervisor tidak perlu tahu apakah sebuah kode sales itu
+            // benar-benar tidak ada atau hanya di luar jangkauannya.
+            // Membedakan keduanya membuat file berisi kode tebakan bisa
+            // dipakai memetakan kode sales siapa saja yang ada di
+            // perusahaan, sama seperti 403-sebelum-404 di endpoint lain.
             const gerbangBaris =
                 assertWithinSubtree(bolehDilihat, user.id)
 
@@ -619,7 +635,7 @@ exports.uploadExcel = async (req, res) => {
 
                     row,
 
-                    reason: 'Sales Code di luar jangkauan Anda'
+                    reason: 'Sales Code tidak ditemukan'
 
                 })
 
@@ -731,6 +747,14 @@ exports.uploadExcel = async (req, res) => {
     }
 
     catch (err) {
+
+        // Sama alasannya dengan penolakan role: berkas yang gagal
+        // diproses tidak boleh tertinggal di /uploads yang tanpa
+        // autentikasi. req.file mungkin belum ada kalau error terjadi
+        // sebelum multer selesai menulis.
+        if (req.file?.path) {
+            fs.unlinkSync(req.file.path)
+        }
 
         return sendServerError(
             res,

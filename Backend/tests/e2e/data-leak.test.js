@@ -622,6 +622,17 @@ describe('POST /api/visit-plans', () => {
         )
 
         customerUji = c[0]?.id ?? null
+
+        // Dipersempit ke user_id yang benar-benar dipakai tes di blok
+        // ini (SPG, SPG_LUAR, 37), bukan seluruh tanggal -- supaya
+        // pembersihan ini tidak bisa menyentuh jadwal sungguhan siapa
+        // pun. Ini yang membuat sesi yang mati di tengah jalan bisa
+        // pulih sendiri di jalan berikutnya, tanpa perlu operasi manual
+        // ke database.
+        await db.query(
+            'DELETE FROM visit_plans WHERE visit_date = ? AND user_id IN (?, ?, ?)',
+            [TANGGAL, SPG, SPG_LUAR, 37]
+        )
     })
 
     after(async () => {
@@ -948,6 +959,15 @@ describe('POST /api/visit-plans/upload', () => {
         )
 
         customerCodeUji = c[0]?.code ?? null
+
+        // Dipersempit ke user_id yang dipakai blok ini (SPG dan
+        // SPG_LUAR, lewat kode JKT001/SBY001), bukan seluruh tanggal --
+        // supaya sesi yang mati di tengah bisa pulih sendiri tanpa
+        // menyentuh jadwal sungguhan siapa pun.
+        await db.query(
+            'DELETE FROM visit_plans WHERE visit_date = ? AND user_id IN (?, ?)',
+            ['2026-12-29', SPG, SPG_LUAR]
+        )
     })
 
     after(async () => {
@@ -1021,9 +1041,13 @@ describe('POST /api/visit-plans/upload', () => {
         assert.strictEqual(data.inserted, 1)
         assert.strictEqual(data.failed, 1)
         assert.strictEqual(data.errors.length, 1)
+        // Pesannya SENGAJA sama dengan "kode tidak ditemukan": supervisor
+        // tidak perlu tahu apakah kode sales itu benar-benar tidak ada
+        // atau hanya di luar jangkauannya. Membedakan keduanya membuka
+        // celah menebak kode sales siapa saja di perusahaan.
         assert.strictEqual(
             data.errors[0].reason,
-            'Sales Code di luar jangkauan Anda'
+            'Sales Code tidak ditemukan'
         )
 
         assert.strictEqual(await jumlahPadaUpload(SPG), sebelumDalam + 1)
