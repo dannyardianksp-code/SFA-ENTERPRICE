@@ -34,6 +34,7 @@ tests/
 | `password.util.test.js` | alfabet tanpa karakter yang mudah tertukar, panjang, dan keacakan password sementara |
 | `id.util.test.js` | `parseId` menolak apa pun yang bukan angka bulat positif murni, termasuk `'2abc'` yang MySQL sendiri akan mengoersi jadi baris 2 |
 | `user-model.test.js` | deklarasi kolom `status` (dengan default `ACTIVE`) dan ENUM `role` di model User |
+| `visit-model.test.js` | deklarasi kolom `location_accuracy` di model Visit |
 | `user-management.test.js` | `assertUserManagement` sebagai gerbang ADMINISTRATOR untuk penulisan akun, gagal-tertutup untuk user kosong dan role tak dikenal; `wouldRemoveLastActiveAdministrator` sebagai keputusan lantai administrator |
 | `lock.util.test.js` | `isLockConflictError` mengenali `ER_LOCK_WAIT_TIMEOUT`/`ER_LOCK_DEADLOCK` lewat kode di `parent`/`original` (bukan substring pesan) dan **gagal-tertutup** untuk error lain; `applyLockWaitTimeout` menembak koneksi transaksinya sendiri; `restoreLockWaitTimeout` tidak pernah melempar sehingga tidak menutupi error asli |
 | `subtree-where.test.js` | arti `null` versus `[]` pada klausa subtree, dan koersi tipe pada gerbang sumber-tunggal |
@@ -163,6 +164,11 @@ Ia sengaja tidak mereset password user sungguhan: mereset password Danny
 membuat aplikasi mobile tidak bisa login, dan tes yang mati di tengah akan
 meninggalkan akun itu dengan password acak yang tidak diketahui siapa pun —
 termasuk tesnya sendiri.
+
+`tests/e2e/checkin-checkout.test.js` membuat `visit_plans` dan `visits`
+sementaranya sendiri, dihapus di `after()` berdasarkan id yang
+ditangkap. Akun sungguhan (SPG 1, 37, 34, SUPERVISOR 3) dipakai hanya
+sebagai pemanggil.
 
 `tests/e2e/user-management.test.js` membuat lima user sekali pakai langsung
 lewat `mysql2`:
@@ -446,6 +452,16 @@ jangan dihapus tanpa membaca komentarnya:
   baris tulis memakai `nullableUpdate(0)` yang mengembalikan `0` apa
   adanya dan benar-benar menyimpannya sebagai `'0'`. Keduanya kini
   memanggil `nullableUpdate` yang sama persis di kedua sisi.
+- **plan tanpa pemeriksaan kepemilikan pada checkIn** — visit_plan_id
+  dari body dipakai tanpa memeriksa plan.user_id, sehingga siapa pun
+  bisa check-in ke plan milik orang lain.
+- **customer_id dari body pada checkIn** — dikirim terpisah dari
+  visit_plan_id, tidak diperiksa cocok dengan plan.customer_id. Klien
+  bisa check-in ke plan A tapi mencatat lokasi customer B.
+- **checkOut tanpa gerbang kepemilikan** — siapa pun dengan token yang
+  sah bisa checkout kunjungan siapa pun.
+- **res.json sebelum VisitPlan.update pada checkOut** — kegagalan
+  update sebelumnya tidak pernah terlihat klien.
 
 ## Urutan rilis
 
@@ -610,22 +626,20 @@ Dicatat supaya tidak terbaca sebagai regresi:
   persis begini), keduanya tidak sepakat: penjaga melihat `0 || null`
   sebagai "tidak berubah" dan meloloskannya, padahal baris tulis
   benar-benar menyimpan `0` sebagai `'0'`.
+- **checkIn menolak check-in ke plan milik orang lain** dengan 403.
+- **checkIn menolak akurasi GPS di atas 50 meter**, diperiksa sebelum
+  jarak.
+- **checkIn mengabaikan customer_id dari body**, selalu memakai
+  customer_id milik plan.
+- **checkOut menolak 403 di luar subtree** pemilik kunjungan.
 
 ## Yang masih terbuka
 
 Dicatat supaya tidak hilang, bukan sebagai pekerjaan yang tertunda tanpa
 alasan:
 
-- **Tiga kebocoran ditemukan review akhir branch ini dan SENGAJA TIDAK
+- **Dua kebocoran ditemukan review akhir branch ini dan SENGAJA TIDAK
   diperbaiki di sini** — masing-masing dengan alasannya:
-  - **`POST /api/visits/:id/checkout`**
-    (`src/controllers/visit.controller.js:421`) memuat kunjungan lewat
-    id TANPA pemeriksaan subtree sama sekali, mengembalikan seluruh
-    barisnya, dan mengalirkan `VisitPlan.update({status:'COMPLETED'})`
-    ke jadwal milik user lain mana pun. Ini bagian dari sub-proyek
-    check-in/check-out — sub-proyek berikutnya setelah branch ini,
-    bukan bagian dari kebocoran user/visit-plan yang jadi lingkup
-    branch ini.
   - **`POST /api/visit-activities`**
     (`src/controllers/visitActivity.controller.js:34`) mengambil
     `visit_id` langsung dari body tanpa mencari induknya lebih dulu.
@@ -640,13 +654,6 @@ alasan:
     melayani folder upload tanpa auth sama sekali. Foto aktivitas bisa
     dibaca siapa pun yang menebak atau mendapatkan nama filenya, tanpa
     token.
-- **Klaim "satu aturan untuk seluruh bacaan" branch ini BELUM lengkap.**
-  Ini bukan basa-basi yang dilunakkan: selama `checkOut` mengembalikan
-  baris kunjungan DAN jadwal milik user lain tanpa pemeriksaan subtree
-  (lihat poin `checkout` di atas), klaim itu punya pengecualian yang
-  belum ditutup. Mencatatnya di sini sebagai celah yang diketahui lebih
-  aman daripada membiarkan klaimnya terbaca sebagai selesai padahal
-  tidak.
 - **`GET /api/customers/:id`** (`customer.controller.js:372`) tidak
   membatasi apa pun — token siapa pun bisa membaca customer mana pun
   lewat id-nya, termasuk yang di luar area/channel pemanggil.
