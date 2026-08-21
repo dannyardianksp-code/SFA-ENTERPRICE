@@ -330,63 +330,52 @@ exports.getById = async (
 
 }
 
-exports.checkOut =
-    async (req, res) => {
+exports.checkOut = async (req, res) => {
 
-        try {
+    try {
 
-            const visit =
-                await Visit.findByPk(
-                    req.params.id
-                )
+        const id = parseId(req.params.id)
 
-            if (!visit) {
-
-                return res.status(404).json({
-
-                    message:
-                        'Visit tidak ditemukan'
-
-                })
-
-            }
-
-            visit.checkout_time =
-                new Date()
-
-            await visit.save()
-
-            res.json({
-
-                message:
-                    'Check-out berhasil',
-
-                data: visit
-
-            })
-
-            await VisitPlan.update(
-
-                {
-
-                    status: 'COMPLETED'
-
-                },
-
-                {
-
-                    where: {
-                        id: visit.visit_plan_id
-                    }
-
-                }
-
-            )
-
-        } catch (err) {
-
-            return sendServerError(res, err, 'VISIT CHECK-OUT')
-
+        if (id === null) {
+            return sendError(res, 400, 'Id kunjungan tidak valid.')
         }
 
+        const visit = await Visit.findByPk(id)
+
+        if (!visit) {
+            return sendError(res, 404, 'Kunjungan tidak ditemukan.')
+        }
+
+        // visit.user_id -- pemilik kunjungan, bukan pemanggil. Untuk
+        // SPG yang checkout kunjungannya sendiri, visit.user_id ===
+        // req.user.id selalu ada di subtree-nya sendiri. Supervisor
+        // yang membantu menutup kunjungan bawahannya juga tercakup.
+        const bolehDilihat = await resolveSubordinateUserIds(req.user)
+
+        const gerbang = assertWithinSubtree(bolehDilihat, visit.user_id)
+
+        if (gerbang) {
+            return sendError(res, gerbang.status, gerbang.message)
+        }
+
+        visit.checkout_time = new Date()
+        await visit.save()
+
+        // Ditulis SEBELUM respons dikirim -- sebelumnya res.json
+        // dikirim lebih dulu, sehingga kalau update ini gagal, klien
+        // sudah terlanjur menerima jawaban sukses.
+        await VisitPlan.update(
+            { status: 'COMPLETED' },
+            { where: { id: visit.visit_plan_id } }
+        )
+
+        res.json({
+            message: 'Check-out berhasil',
+            data: visit,
+        })
+
+    } catch (err) {
+        return sendServerError(res, err, 'VISIT CHECK-OUT')
     }
+
+}

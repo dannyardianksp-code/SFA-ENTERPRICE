@@ -426,3 +426,104 @@ describe('POST /api/visits/checkin', () => {
     })
 
 })
+
+
+describe('POST /api/visits/:id/checkout', () => {
+
+    let customerUji
+    let visitId
+
+    before(async () => {
+        customerUji = await ambilCustomerUji()
+
+        if (!customerUji) return
+
+        const planId = await buatPlanUntuk(SPG, customerUji.id)
+
+        const [hasil] = await db.query(
+            `INSERT INTO visits
+                (user_id, customer_id, visit_plan_id, checkin_time,
+                 latitude, longitude, location_accuracy)
+             VALUES (?, ?, ?, NOW(), ?, ?, 10)`,
+            [SPG, customerUji.id, planId, customerUji.latitude, customerUji.longitude]
+        )
+
+        visitId = hasil.insertId
+        visitIdsDibuat.push(visitId)
+    })
+
+    test('user di luar subtree ditolak 403', async (t) => {
+        if (!customerUji) {
+            t.skip('tidak ada customer dengan koordinat di database')
+            return
+        }
+
+        const { status } = await kirim(
+            'POST',
+            `/api/visits/${visitId}/checkout`,
+            SPG_LUAR
+        )
+
+        assert.strictEqual(status, 403)
+
+        const [row] = await db.query(
+            'SELECT checkout_time FROM visits WHERE id = ?',
+            [visitId]
+        )
+
+        assert.strictEqual(row[0].checkout_time, null)
+    })
+
+    test('supervisor dari pemilik kunjungan boleh checkout', async (t) => {
+        if (!customerUji) {
+            t.skip('tidak ada customer dengan koordinat di database')
+            return
+        }
+
+        const { status } = await kirim(
+            'POST',
+            `/api/visits/${visitId}/checkout`,
+            SUPERVISOR
+        )
+
+        assert.strictEqual(status, 200)
+
+        const [row] = await db.query(
+            'SELECT checkout_time FROM visits WHERE id = ?',
+            [visitId]
+        )
+
+        assert.ok(row[0].checkout_time !== null)
+
+        const [plan] = await db.query(
+            `SELECT status FROM visit_plans
+             WHERE id = (SELECT visit_plan_id FROM visits WHERE id = ?)`,
+            [visitId]
+        )
+
+        // Bukan hanya checkout_time -- status di visit_plans juga
+        // benar-benar COMPLETED, bukan hanya kolom visits yang berubah.
+        assert.strictEqual(plan[0].status, 'COMPLETED')
+    })
+
+    test('kunjungan yang tidak ada menghasilkan 404', async () => {
+        const { status } = await kirim(
+            'POST',
+            '/api/visits/99999999/checkout',
+            SPG
+        )
+
+        assert.strictEqual(status, 404)
+    })
+
+    test('id non-numerik ditolak 400', async () => {
+        const { status } = await kirim(
+            'POST',
+            '/api/visits/12abc/checkout',
+            SPG
+        )
+
+        assert.strictEqual(status, 400)
+    })
+
+})
