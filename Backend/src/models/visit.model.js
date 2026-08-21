@@ -15,7 +15,12 @@ const Visit = db.define('Visit', {
     latitude: DataTypes.STRING,
     longitude: DataTypes.STRING,
     checkout_time: DataTypes.DATE,
-    visit_plan_id: DataTypes.INTEGER
+    visit_plan_id: DataTypes.INTEGER,
+
+    // Radius ketidakpastian bacaan GPS saat check-in, dalam meter.
+    // Ditolak di atas 50 sebelum jarak ke customer dihitung — lihat
+    // exports.checkIn.
+    location_accuracy: DataTypes.DECIMAL(7, 2),
 
 }, {
     tableName: 'visits',
