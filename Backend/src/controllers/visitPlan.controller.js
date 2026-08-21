@@ -91,6 +91,19 @@ exports.getAll =
             // eksplisit lewat spgDateRange — sebelumnya tanggalnya
             // dihitung UTC, sehingga tiap pagi 00:00-07:00 WIB yang
             // muncul adalah kemarin + hari ini.
+            //
+            // PERINGATAN: cabang ini menimpa whereCondition SELURUHNYA,
+            // termasuk klausa user_id dari ownerWhere(bolehDilihat) di
+            // atas -- dan itu memang disengaja, BUKAN celah. Ia hanya
+            // aman karena SPG adalah role daun: subtree-nya persis
+            // [dirinya sendiri], sehingga user_id: loginUser.id di sini
+            // MENULIS ULANG batasan yang sama persis dengan yang sudah
+            // dihasilkan ownerWhere, bukan melonggarkannya. Menghapus
+            // `user_id: loginUser.id` sebagai "redundan" akan membuka
+            // kembali kebocoran: whereCondition tersisa hanya
+            // { visit_date: {...} } tanpa batasan pemilik sama sekali,
+            // dan SPG mana pun akan melihat jadwal SEMUA orang pada
+            // rentang tanggal itu.
             if (loginUser.role === 'SPG') {
 
                 const [hariIni, besok] = spgDateRange()
@@ -238,6 +251,32 @@ exports.create =
 
             if (gerbang) {
                 return sendError(res, gerbang.status, gerbang.message)
+            }
+
+            // Diperiksa SETELAH gerbang kepemilikan, sengaja: pemanggil
+            // yang di luar subtree-nya tidak perlu diberi tahu apakah
+            // id targetnya ada atau tidak -- ia sudah ditolak 403 lebih
+            // dulu di atas.
+            //
+            // visit_plans TIDAK PUNYA foreign key sama sekali (diverifikasi
+            // langsung ke information_schema.KEY_COLUMN_USAGE). parseId di
+            // atas hanya memastikan bentuknya "bilangan bulat >= 1" --
+            // ADMINISTRATOR (subordinateIds === null, lolos gerbang di atas
+            // tanpa pernah melihat targetUserId) yang mengirim id yang sah
+            // secara bentuk tapi tidak ada barisnya akan menulis baris
+            // yatim yang menunjuk user atau customer yang tidak pernah ada,
+            // dan tidak ada apa pun di bawahnya yang menangkap itu.
+            const [pemilik, pelanggan] = await Promise.all([
+                User.findByPk(targetUserId),
+                Customer.findByPk(targetCustomerId),
+            ])
+
+            if (!pemilik || !pelanggan) {
+                return sendError(
+                    res,
+                    400,
+                    'user_id atau customer_id tidak ditemukan.'
+                )
             }
 
             // Daftar field EKSPLISIT menggantikan { ...req.body }.
@@ -469,6 +508,18 @@ exports.uploadExcel = async (req, res) => {
 
     try {
 
+        // Gerbang role dulu, sebelum file apa pun dibaca -- sama seperti
+        // create. Endpoint ini dulu tidak punya penjaga sama sekali: SPG
+        // mana pun bisa mengunggah spreadsheet berisi kode sales siapa
+        // saja dan membuat jadwal kunjungan untuk seluruh perusahaan.
+        if (!PLAN_WRITER_ROLES.includes(req.user.role)) {
+            return sendError(
+                res,
+                403,
+                'Hanya supervisor ke atas yang boleh membuat jadwal kunjungan.'
+            )
+        }
+
         const workbook =
             XLSX.readFile(req.file.path)
 
@@ -486,6 +537,15 @@ exports.uploadExcel = async (req, res) => {
         let duplicate = 0
 
         const errors = []
+
+        // Diambil SEKALI di sini, di luar loop baris -- satu query untuk
+        // seluruh file, bukan satu query per baris. Baris spreadsheet
+        // bisa berjumlah ratusan; menghitung ulang subtree pemanggil
+        // untuk tiap baris akan membebani database tanpa mengubah
+        // jawabannya sama sekali, karena subtree pemanggil tidak
+        // berubah selama satu request berjalan.
+        const bolehDilihat =
+            await resolveSubordinateUserIds(req.user)
 
         for (const row of rows) {
 
@@ -534,6 +594,32 @@ exports.uploadExcel = async (req, res) => {
                     row,
 
                     reason: 'Sales Code tidak ditemukan'
+
+                })
+
+                continue
+
+            }
+
+            //--------------------------------
+            // KEPEMILIKAN
+            //--------------------------------
+
+            // Baris ini di luar jangkauan pemanggil. Baris lain dalam
+            // file yang sama tetap diproses -- satu baris di luar
+            // subtree tidak boleh menggagalkan seluruh upload, sama
+            // seperti Sales Code atau Customer Code yang tidak
+            // ditemukan di atas dan di bawah.
+            const gerbangBaris =
+                assertWithinSubtree(bolehDilihat, user.id)
+
+            if (gerbangBaris) {
+
+                errors.push({
+
+                    row,
+
+                    reason: 'Sales Code di luar jangkauan Anda'
 
                 })
 

@@ -38,7 +38,7 @@ tests/
 | `lock.util.test.js` | `isLockConflictError` mengenali `ER_LOCK_WAIT_TIMEOUT`/`ER_LOCK_DEADLOCK` lewat kode di `parent`/`original` (bukan substring pesan) dan **gagal-tertutup** untuk error lain; `applyLockWaitTimeout` menembak koneksi transaksinya sendiri; `restoreLockWaitTimeout` tidak pernah melempar sehingga tidak menutupi error asli |
 | `subtree-where.test.js` | arti `null` versus `[]` pada klausa subtree, dan koersi tipe pada gerbang sumber-tunggal |
 | `nullable-update.test.js` | arti tiga arah field update: tidak dikirim, string kosong, bernilai |
-| `boot-require.test.js` | ejaan `require` route di `app.js` dicocokkan dengan `git ls-files` |
+| `boot-require.test.js` | ejaan `require` route di `app.js` dicocokkan dengan `git ls-files`; `t.skip` (bukan meledak) kalau `git` tidak tersedia atau direktorinya bukan working copy git |
 
 `customer.controller.test.js` bisa jalan tanpa database karena seluruh
 validasi parameter terjadi **sebelum** `User.findByPk` dipanggil.
@@ -105,15 +105,38 @@ kolom `code`, `area_id`, `channel_id`, dan `supervisor_id` terisi, lalu
 menghapusnya di `after()` **berdasarkan id yang ditangkap, bukan
 berdasarkan `code`** — kalau perbaikan `nullableUpdate` gagal, `code`
 justru yang dikosongkan dan pembersihan berbasis `code` tidak akan
-menemukan barisnya.
+menemukan barisnya. Pre-clean fixture ini (lewat `code` ATAU `email`)
+sengaja dijalankan di `before()` TINGKAT BERKAS, bukan di `before()`
+milik describe-nya sendiri yang dideklarasikan paling akhir — lihat
+"Kenapa `--test-concurrency=1` load-bearing" di atas untuk alasannya.
 
-Ia juga membuat beberapa `visit_plans` pada tanggal `2026-12-30` yang
-tidak dipakai data sungguhan, dan menyisipkan satu baris
-`visit_activities` **yatim** (`visit_id = 999999901`) untuk menguji
-`required: true` — lewat kolom `notes`. `visit_activities` **tidak
-punya** kolom `activity_type`; draf awal berkas ini memakainya dan
-gagal di database sungguhan sebelum diperbaiki. Semuanya dihapus di
-`after()`.
+Ia juga membuat satu administrator sementara ber-`code` NULL (meniru
+kedua administrator sungguhan) untuk menguji bahwa `PUT /api/users/:id`
+menolak `{code: 0}` dari dirinya sendiri, dihapus di `after()` lewat id
+yang ditangkap. **Bukan administrator 2 atau 29** — keduanya tidak
+pernah jadi sasaran tulis di berkas ini.
+
+Ia juga membuat beberapa `visit_plans` pada tanggal `2026-12-30`
+(endpoint `POST /api/visit-plans`) dan `2026-12-29` (endpoint
+`POST /api/visit-plans/upload`, diuji lewat unggahan `.xlsx` sungguhan
+yang dibangun di memori dengan paket `xlsx` dan dikirim sebagai
+`multipart/form-data` memakai `FormData`/`Blob` bawaan Node — bukan cuma
+memanggil controller-nya langsung) yang tidak dipakai data sungguhan
+hari ini. Baris yang benar-benar tersimpan ditangkap id-nya dan dihapus
+satu per satu di `after()` — kedua tanggal itu tetap dipakai untuk
+pengukuran `COUNT`, tapi TIDAK LAGI sebagai kunci `DELETE`, karena
+keduanya tanggal masa depan yang bisa sah-sah saja diisi importer Excel
+sebelum tes ini berjalan lagi.
+
+Berkas ini juga menyisipkan satu baris `visit_activities` **yatim**
+(`visit_id = 999999901`) untuk menguji `required: true` — lewat kolom
+`notes`. `visit_activities` **tidak punya** kolom `activity_type`; draf
+awal berkas ini memakainya dan gagal di database sungguhan sebelum
+diperbaiki. Fixture `visits` di berkas yang sama ditandai lewat kolom
+`latitude` (dipinjam sebagai penanda teks, bukan koordinat sungguhan)
+supaya bisa ditemukan dan dipulihkan kalau proses tes mati di tengah,
+sama seperti fixture `sales_orders` menandai dirinya lewat `doc_no`
+berawalan `'UJI-'`. Semuanya dihapus di `after()`.
 
 Akun sungguhan dipakai **hanya sebagai pemanggil baca-saja**. Tidak ada
 satu pun tes di berkas ini yang menjadikannya sasaran tulis.
@@ -217,9 +240,29 @@ kebetulan masuk ke subtree-nya), sementara assertion ADMINISTRATOR
 membandingkan terhadap `SELECT COUNT(*) FROM users` yang dibaca saat itu
 juga (kebal terhadap baris sementara ADMIN-tak-terbatas manapun, tapi
 tidak menutup kebocoran subtree). `--test-concurrency=1` tetap dibutuhkan
-untuk lapis pertama; ia melindungi dari skenario yang belum pernah
-terjadi hari ini tapi bisa terjadi kalau berkas e2e mendatang menyisipkan
-baris sementara dengan `supervisor_id` di dalam subtree 3 atau 30.
+untuk lapis pertama.
+
+**Skenario itu BUKAN cuma hipotesis — ia sudah ada di berkas ini hari
+ini.** Fixture user sementara di blok "PUT /api/users/:id tidak
+menghapus field yang tidak dikirim" (di bawah) disisipkan dengan
+`supervisor_id = 3`, yang berarti baris itu duduk DI DALAM subtree 3
+maupun subtree 30 sekaligus — persis dua subtree yang diperiksa
+assertion daftar id eksplisit di atas. Pre-clean-nya sempat hidup di
+`before()` milik describe-nya sendiri, yang dideklarasikan paling akhir
+di berkas ini — jauh setelah assertion SUPERVISOR/MANAGER tadi. Proses
+tes yang mati di antara `INSERT` dan `DELETE` fixture itu meninggalkan
+barisnya, dan run berikutnya akan mengevaluasi assertion daftar id
+eksplisit SEBELUM pre-clean describe yang belakangan itu sempat berjalan
+— membuat kedua tes itu merah dengan pesan yang terbaca seolah filter
+subtree-nya bocor, padahal yang bocor cuma proses tes sebelumnya.
+Pre-clean-nya sudah dipindahkan ke `before()` tingkat berkas supaya
+selalu berjalan lebih dulu (lihat komentar di sana), tapi bentuk
+interferensinya sendiri tetap nyata selama berkas ini menyisipkan baris
+sementara di dalam subtree yang sama dengan yang diuji — itulah yang
+membuat `--test-concurrency=1` **load-bearing, bukan pencegahan
+seadanya**: tanpanya, berkas e2e lain yang kebetulan berjalan bersamaan
+dan menyisipkan baris dengan `supervisor_id` di dalam subtree 3 atau 30
+bisa memicu kegagalan yang sama persis, kapan saja.
 
 ## Kenapa tes ini ada
 
@@ -370,6 +413,39 @@ jangan dihapus tanpa membaca komentarnya:
   `MODULE_NOT_FOUND` di Linux. Tesnya membandingkan dengan `git ls-files`,
   bukan `fs.readdir`, karena readdir melaporkan ejaan salah pun sebagai
   ada.
+- **`POST /api/visit-plans/upload` tidak punya gerbang sama sekali —
+  ditemukan review akhir SETELAH `create` sudah diperbaiki.** Endpoint
+  ini menyimpulkan pemilik tiap baris dari kolom "Sales Code" di
+  spreadsheet lewat `User.findOne`, lalu langsung `VisitPlan.create`,
+  tanpa gerbang role maupun `assertWithinSubtree` — sehingga SPG mana
+  pun yang punya token bisa mengunggah spreadsheet berisi kode sales
+  siapa saja dan membuat jadwal kunjungan untuk seluruh perusahaan lewat
+  jalur upload massal, persis lubang yang sama dengan `create` sebelum
+  gerbangnya dipasang, hanya lewat pintu yang berbeda. Subtree pemanggil
+  kini diambil SEKALI di luar loop baris (satu query untuk seluruh
+  file), dan tiap baris diperiksa `assertWithinSubtree` sebelum ditulis
+  — baris yang gagal dilaporkan lewat mekanisme error per-baris yang
+  sudah ada, bukan menggagalkan seluruh upload.
+- **id yang sah bentuknya tapi tidak ada barisnya, lolos sampai
+  `INSERT`** — `parseId` hanya memastikan "bilangan bulat >= 1"; ia
+  tidak pernah memeriksa apakah barisnya ADA. Karena `visit_plans` tidak
+  punya foreign key sama sekali, administrator (satu-satunya role yang
+  `assertWithinSubtree`-nya tidak pernah melihat `user_id`) yang
+  mengirim `user_id` atau `customer_id` yang sah bentuknya tapi tidak
+  ada baris sungguhannya tetap bisa membuat jadwal yatim yang menunjuk
+  user atau customer yang tidak pernah ada. `POST /api/visit-plans`
+  kini memeriksa keberadaan keduanya lewat `findByPk` setelah gerbang
+  kepemilikan, sebelum `create`.
+- **penjaga dan baris tulis yang menormalkan berbeda untuk field yang
+  sama** — penjaga "tidak boleh mengubah code sendiri" di
+  `PUT /api/users/:id` memakai `code || null`, sementara baris tulis di
+  bawahnya memakai `nullableUpdate`. Untuk administrator ber-`code` NULL
+  (kedua administrator sungguhan persis begini), `{code: 0}` membuat
+  penjaga menghitung `0 || null` menjadi `null` — sama dengan `code`
+  sekarang — dan meloloskannya sebagai "tidak ada perubahan", padahal
+  baris tulis memakai `nullableUpdate(0)` yang mengembalikan `0` apa
+  adanya dan benar-benar menyimpannya sebagai `'0'`. Keduanya kini
+  memanggil `nullableUpdate` yang sama persis di kedua sisi.
 
 ## Urutan rilis
 
@@ -513,12 +589,67 @@ Dicatat supaya tidak terbaca sebagai regresi:
   yang punya token bisa membuat jadwal kunjungan.
 - **`PUT /api/users/:id` berhenti mengosongkan** `code`, `area_id`,
   `channel_id`, dan `supervisor_id` ketika field itu tidak dikirim.
+- **`POST /api/visit-plans/upload` menolak SPG dengan 403**, dan
+  memfilter tiap baris spreadsheet lewat subtree pemanggil. Sebelumnya
+  endpoint ini tidak punya gerbang apa pun — sama seperti `create`
+  sebelum perbaikannya sendiri, tapi lewat jalur upload massal. Baris
+  yang pemiliknya di luar subtree kini dilaporkan lewat mekanisme error
+  per-baris yang sudah ada (`errors[]`), bukan menggagalkan seluruh
+  upload.
+- **`POST /api/visit-plans` dan `uploadExcel` menolak `user_id`/
+  `customer_id` yang bentuknya sah tapi tidak menunjuk baris mana pun**
+  (`400`, tanpa baris tersimpan). Sebelumnya id yang lolos `parseId`
+  (bilangan bulat positif) langsung dipakai tanpa diperiksa
+  keberadaannya, dan `visit_plans` tidak punya foreign key sama sekali
+  untuk menangkapnya.
+- **`PUT /api/users/:id` untuk diri sendiri kini menolak `{code: 0}`**
+  (dan nilai falsy senada seperti `false`). Sebelumnya penjaga
+  "tidak boleh mengubah code sendiri" memakai normalisasi `|| null`
+  sementara baris tulis di bawahnya memakai `nullableUpdate` — pada
+  administrator yang `code`-nya NULL (kedua administrator sungguhan
+  persis begini), keduanya tidak sepakat: penjaga melihat `0 || null`
+  sebagai "tidak berubah" dan meloloskannya, padahal baris tulis
+  benar-benar menyimpan `0` sebagai `'0'`.
 
 ## Yang masih terbuka
 
 Dicatat supaya tidak hilang, bukan sebagai pekerjaan yang tertunda tanpa
 alasan:
 
+- **Tiga kebocoran ditemukan review akhir branch ini dan SENGAJA TIDAK
+  diperbaiki di sini** — masing-masing dengan alasannya:
+  - **`POST /api/visits/:id/checkout`**
+    (`src/controllers/visit.controller.js:421`) memuat kunjungan lewat
+    id TANPA pemeriksaan subtree sama sekali, mengembalikan seluruh
+    barisnya, dan mengalirkan `VisitPlan.update({status:'COMPLETED'})`
+    ke jadwal milik user lain mana pun. Ini bagian dari sub-proyek
+    check-in/check-out — sub-proyek berikutnya setelah branch ini,
+    bukan bagian dari kebocoran user/visit-plan yang jadi lingkup
+    branch ini.
+  - **`POST /api/visit-activities`**
+    (`src/controllers/visitActivity.controller.js:34`) mengambil
+    `visit_id` langsung dari body tanpa mencari induknya lebih dulu.
+    Inilah jalur yang bisa MEMBUAT SENDIRI baris yatim yang justru
+    ditutupi `required: true` pada include Visit di
+    `GET /api/visit-activities/visit/:id` (lihat bagian "Kenapa tes ini
+    ada" di atas) — `required: true` menyembunyikan baris yatim dari
+    hasil baca, tapi tidak mencegah baris yatim itu tercipta lewat jalur
+    tulis ini. Ini bagian dari sub-proyek activity-input setelah
+    check-in/check-out.
+  - **`app.js:38`** (`app.use('/uploads', express.static('uploads'))`)
+    melayani folder upload tanpa auth sama sekali. Foto aktivitas bisa
+    dibaca siapa pun yang menebak atau mendapatkan nama filenya, tanpa
+    token.
+- **Klaim "satu aturan untuk seluruh bacaan" branch ini BELUM lengkap.**
+  Ini bukan basa-basi yang dilunakkan: selama `checkOut` mengembalikan
+  baris kunjungan DAN jadwal milik user lain tanpa pemeriksaan subtree
+  (lihat poin `checkout` di atas), klaim itu punya pengecualian yang
+  belum ditutup. Mencatatnya di sini sebagai celah yang diketahui lebih
+  aman daripada membiarkan klaimnya terbaca sebagai selesai padahal
+  tidak.
+- **`GET /api/customers/:id`** (`customer.controller.js:372`) tidak
+  membatasi apa pun — token siapa pun bisa membaca customer mana pun
+  lewat id-nya, termasuk yang di luar area/channel pemanggil.
 - **Multi-area tidak punya jalur tulis.** `area_ids` di form web tidak
   diproses di `POST /api/users` maupun `PUT /api/users/:id`, dan
   `userArea.routes.js` hanya mendaftarkan satu route GET. Hanya satu user

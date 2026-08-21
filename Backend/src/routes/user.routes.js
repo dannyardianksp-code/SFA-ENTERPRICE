@@ -743,12 +743,30 @@ router.put(
                     )
                 }
 
-                // Dinormalkan `|| null` persis seperti saat ditulis di
-                // bawah, supaya form yang mengirim string kosong untuk
-                // code yang memang NULL tidak terbaca sebagai perubahan.
+                // Dinormalkan lewat nullableUpdate, PERSIS fungsi yang
+                // sama dipakai saat ditulis di bawah -- bukan cuma pola
+                // yang mirip. Yang dijamin: penjaga ini dan baris tulis
+                // di bawah SELALU sepakat tentang apakah suatu nilai
+                // sama dengan "tidak berubah", karena keduanya memanggil
+                // fungsi normalisasi yang sama persis.
+                //
+                // `|| null` yang lama TIDAK menjamin itu. Kedua
+                // administrator sungguhan (id 2 dan 29) punya code NULL.
+                // Admin yang mengirim { code: 0 } ke akunnya sendiri:
+                // penjaga lama menghitung `0 || null` -> null, sama
+                // dengan code-nya sekarang (null), jadi PENJAGA MELIHAT
+                // "tidak ada perubahan" dan meloloskannya -- padahal
+                // baris tulis di bawah memakai nullableUpdate(0), yang
+                // mengembalikan 0 apa adanya (bukan string kosong, bukan
+                // null), lalu MySQL menyimpannya sebagai string '0'.
+                // `false` bernasib sama: `false || null` juga jatuh ke
+                // null di sisi penjaga sementara nullableUpdate(false)
+                // tetap false. Guard yang lama meloloskan perubahan
+                // sungguhan sebagai "tidak ada perubahan" justru karena
+                // ia TIDAK memakai fungsi yang sama dengan baris tulis.
                 if (
                     code !== undefined &&
-                    (code || null) !== (req.user.code || null)
+                    nullableUpdate(code) !== nullableUpdate(req.user.code)
                 ) {
                     return sendError(
                         res,

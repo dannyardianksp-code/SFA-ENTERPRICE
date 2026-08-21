@@ -19,19 +19,43 @@ const REPO = path.join(BACKEND, '..')
  */
 describe('ejaan require peka huruf besar-kecil', () => {
 
-    test('app.js tidak me-require ejaan yang tidak dilacak git', () => {
+    test('app.js tidak me-require ejaan yang tidak dilacak git', (t) => {
         const isi = fs.readFileSync(
             path.join(BACKEND, 'src', 'app.js'),
             'utf8'
         )
 
-        const dilacak = execFileSync(
-            'git',
-            ['ls-files', 'Backend/src'],
-            { cwd: REPO, encoding: 'utf8' }
-        )
-            .split('\n')
-            .filter(Boolean)
+        // git bisa tidak ada sama sekali (spawnSync ENOENT) atau ada
+        // tapi REPO bukan working copy git — misalnya tarball rilis
+        // yang diekstrak tanpa riwayat git. Keduanya bukan kegagalan
+        // tes ini: tesnya menguji ejaan require, bukan lingkungan CI.
+        // Tanpa try/catch, tes ini meledak dengan pesan mentah dari
+        // child_process ("spawnSync git ENOENT") yang tidak menjelaskan
+        // apa-apa ke siapa pun yang belum tahu ceritanya — dan tes yang
+        // meledak begitu di CI biasanya berakhir DIHAPUS, bukan
+        // diperbaiki.
+        let dilacak
+
+        try {
+
+            dilacak = execFileSync(
+                'git',
+                ['ls-files', 'Backend/src'],
+                { cwd: REPO, encoding: 'utf8' }
+            )
+                .split('\n')
+                .filter(Boolean)
+
+        } catch (err) {
+
+            t.skip(
+                `git tidak tersedia untuk memverifikasi ejaan require (${err.message}). ` +
+                'Kemungkinan besar tidak ada binary git di PATH, atau direktori ini bukan working copy git (mis. tarball rilis).'
+            )
+
+            return
+
+        }
 
         const cocok = [...isi.matchAll(
             /require\('\.\/(routes\/[A-Za-z0-9._-]+)'\)/g

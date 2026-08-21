@@ -4,6 +4,7 @@ const { test, describe, before, after } = require('node:test')
 const assert = require('node:assert')
 const jwt = require('jsonwebtoken')
 const mysql = require('mysql2/promise')
+const XLSX = require('xlsx')
 
 const BASE = process.env.TEST_BASE_URL || 'http://localhost:1000'
 
@@ -14,6 +15,26 @@ const ADMIN = 2
 const SUPERVISOR = 3        // anak dari 30; punya 1, 37, 38
 const MANAGER = 30          // punya 3, 31, 33 dan cucunya
 const SPG_LUAR = 34         // anak dari 33 — di luar subtree 3
+
+// `visits` tidak punya kolom teks bebas seperti `doc_no` milik
+// sales_orders untuk menandai baris fixture. `latitude` dipinjam untuk
+// itu: kolomnya STRING dan tidak pernah dibaca sebagai koordinat oleh
+// tes mana pun di berkas ini. Sama seperti fixture sales_orders yang
+// menandai dirinya lewat `doc_no` berawalan 'UJI-', baris `visits` yang
+// dibuat berkas ini semuanya bisa ditemukan lewat
+// `WHERE latitude = ?` [VISIT_FIXTURE_MARKER] -- pemulihan setelah
+// proses tes mati di tengah tidak lagi bergantung pada asumsi tak
+// tertulis bahwa user 34 tidak pernah punya kunjungan sungguhan.
+const VISIT_FIXTURE_MARKER = 'UJI-VISIT-FIXTURE-DATA-LEAK'
+
+// Dipakai oleh blok "PUT /api/users/:id tidak menghapus field yang
+// tidak dikirim" di bawah. Didefinisikan di sini, di tingkat berkas --
+// bukan di dalam describe-nya sendiri -- supaya pre-clean-nya bisa
+// dijalankan di before() tingkat berkas (lihat komentar di sana).
+const SEMENTARA = {
+    code: 'UJI-NULLABLE-15082026',
+    email: 'uji.nullable.15082026@contoh.invalid',
+}
 
 let db
 
@@ -48,6 +69,58 @@ const kirim = async (method, path, userId, body) => {
 const daftarDari = (data) =>
     Array.isArray(data) ? data : (data?.data ?? [])
 
+/**
+ * Membangun buffer .xlsx sungguhan di memori dari array of object, lalu
+ * mengunggahnya sebagai multipart/form-data ke
+ * POST /api/visit-plans/upload -- dipakai untuk MEMBUKTIKAN gerbang FIX 1
+ * (lihat blok "POST /api/visit-plans/upload" di bawah) lewat request HTTP
+ * sungguhan, bukan lewat memanggil controller-nya langsung.
+ *
+ * FormData dan Blob bawaan Node (tanpa dependency tambahan) cukup untuk
+ * ini sejak Node 18 -- fetch bawaan mengurus header dan boundary
+ * multipart-nya sendiri selama body-nya instance FormData.
+ */
+const kirimExcel = async (userId, rows) => {
+    const sheet = XLSX.utils.json_to_sheet(rows)
+    const workbook = XLSX.utils.book_new()
+
+    XLSX.utils.book_append_sheet(workbook, sheet, 'Sheet1')
+
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' })
+
+    const form = new FormData()
+
+    form.append(
+        'file',
+        new Blob([buffer], {
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        }),
+        'uji-upload.xlsx'
+    )
+
+    const headers = {}
+
+    if (userId !== null) {
+        headers.Authorization = 'Bearer ' + tokenUntuk(userId)
+    }
+
+    const res = await fetch(BASE + '/api/visit-plans/upload', {
+        method: 'POST',
+        headers,
+        body: form,
+    })
+
+    let data = null
+
+    try {
+        data = await res.json()
+    } catch {
+        data = null
+    }
+
+    return { status: res.status, data }
+}
+
 before(async () => {
     try {
         await fetch(BASE + '/api/users')
@@ -63,6 +136,24 @@ before(async () => {
         password: process.env.DB_PASS,
         database: process.env.DB_NAME,
     })
+
+    // Pre-clean fixture "PUT /api/users/:id" ini SENGAJA dijalankan di
+    // sini, di before() tingkat BERKAS -- bukan di before() milik
+    // describe-nya sendiri, yang dideklarasikan paling akhir di berkas
+    // ini. User sementara itu punya supervisor_id = 3, sehingga ia
+    // duduk DI DALAM subtree 3 maupun subtree 30 sekaligus. Kalau
+    // pre-clean-nya menunggu sampai describe-nya sendiri berjalan, satu
+    // proses tes yang mati di antara INSERT dan DELETE meninggalkan
+    // barisnya, dan run BERIKUTNYA akan mengevaluasi assertion daftar id
+    // eksplisit SUPERVISOR/MANAGER ("GET /api/users memakai subtree",
+    // jauh lebih awal di berkas ini) SEBELUM pre-clean describe yang
+    // belakangan itu sempat menghapusnya -- kedua tes itu merah, dan
+    // pesannya terbaca seolah filter subtree bocor, padahal yang bocor
+    // cuma proses tes sebelumnya.
+    await db.query(
+        'DELETE FROM users WHERE code = ? OR email = ?',
+        [SEMENTARA.code, SEMENTARA.email]
+    )
 })
 
 after(async () => {
@@ -320,8 +411,8 @@ describe('GET /api/visits/:id/products memakai subtree', () => {
         // Product lengkap. Tanpa itu, handler lama gagal karena null
         // chain, bukan karena kebocoran datanya sendiri terbukti.
         const [resultLuar] = await db.query(
-            'INSERT INTO visits (user_id, customer_id) VALUES (?, ?)',
-            [SPG_LUAR, 2]
+            'INSERT INTO visits (user_id, customer_id, latitude) VALUES (?, ?, ?)',
+            [SPG_LUAR, 2, VISIT_FIXTURE_MARKER]
         )
         visitLuarFixtureId = resultLuar.insertId
     })
@@ -409,8 +500,8 @@ describe('GET /api/visit-activities/visit/:id memakai subtree', () => {
 
     before(async () => {
         const [luar] = await db.query(
-            'INSERT INTO visits (user_id, customer_id) VALUES (?, ?)',
-            [SPG_LUAR, 2]
+            'INSERT INTO visits (user_id, customer_id, latitude) VALUES (?, ?, ?)',
+            [SPG_LUAR, 2, VISIT_FIXTURE_MARKER]
         )
         visitLuar = luar.insertId
 
@@ -510,11 +601,20 @@ describe('GET /api/visit-activities/visit/:id memakai subtree', () => {
 
 describe('POST /api/visit-plans', () => {
 
-    // Tanggal yang tidak dipakai data sungguhan, supaya pembersihan
-    // bisa dikunci padanya tanpa menyentuh jadwal siapa pun.
+    // Tanggal yang tidak dipakai data sungguhan HARI INI, dipakai HANYA
+    // untuk pengukuran COUNT (jumlahPada/totalPada) di bawah -- bukan
+    // lagi sebagai kunci pembersihan. Baris ini adalah tanggal MASA
+    // DEPAN, dan importer Excel (`uploadExcel`) bisa sah-sah saja
+    // mengisinya dengan jadwal sungguhan sebelum tes ini jalan lagi.
+    // Menghapus lewat `WHERE visit_date = ?` saja -- seperti sebelumnya
+    // -- akan ikut memusnahkan jadwal sungguhan itu. Baris yang
+    // benar-benar dibuat tes-tes di bawah ditangkap id-nya ke
+    // idsDibuat dan dihapus SATU PER SATU di after(), persis pola yang
+    // dipakai setiap blok lain di berkas ini.
     const TANGGAL = '2026-12-30'
 
     let customerUji
+    const idsDibuat = []
 
     before(async () => {
         const [c] = await db.query(
@@ -522,18 +622,12 @@ describe('POST /api/visit-plans', () => {
         )
 
         customerUji = c[0]?.id ?? null
-
-        await db.query(
-            'DELETE FROM visit_plans WHERE visit_date = ?',
-            [TANGGAL]
-        )
     })
 
     after(async () => {
-        await db.query(
-            'DELETE FROM visit_plans WHERE visit_date = ?',
-            [TANGGAL]
-        )
+        for (const id of idsDibuat) {
+            await db.query('DELETE FROM visit_plans WHERE id = ?', [id])
+        }
     })
 
     const jumlahPada = async (userId) => {
@@ -601,7 +695,7 @@ describe('POST /api/visit-plans', () => {
             return
         }
 
-        const { status } = await kirim('POST', '/api/visit-plans', SUPERVISOR, {
+        const { status, data } = await kirim('POST', '/api/visit-plans', SUPERVISOR, {
             user_id: SPG,
             customer_id: customerUji,
             visit_date: TANGGAL,
@@ -611,6 +705,8 @@ describe('POST /api/visit-plans', () => {
         // diandaikan.
         assert.strictEqual(status, 200)
         assert.strictEqual(await jumlahPada(SPG), 1)
+
+        idsDibuat.push(data.id)
     })
 
     // status HARUS dipaksa PENDING. Klien tidak boleh membuat jadwal
@@ -622,16 +718,18 @@ describe('POST /api/visit-plans', () => {
             return
         }
 
-        await kirim('POST', '/api/visit-plans', SUPERVISOR, {
+        const { data } = await kirim('POST', '/api/visit-plans', SUPERVISOR, {
             user_id: 37,
             customer_id: customerUji,
             visit_date: TANGGAL,
             status: 'COMPLETED',
         })
 
+        idsDibuat.push(data.id)
+
         const [r] = await db.query(
-            'SELECT status FROM visit_plans WHERE visit_date = ? AND user_id = 37',
-            [TANGGAL]
+            'SELECT status FROM visit_plans WHERE id = ?',
+            [data.id]
         )
 
         assert.strictEqual(r[0]?.status, 'PENDING')
@@ -755,23 +853,208 @@ describe('POST /api/visit-plans', () => {
         assert.strictEqual(await totalPada(), sebelum)
     })
 
+    // FIX 2 dari review akhir: visit_plans tidak punya foreign key sama
+    // sekali, dan parseId hanya memeriksa "bilangan bulat >= 1" -- id
+    // yang sah bentuknya tapi tidak menunjuk baris mana pun lolos
+    // begitu saja sampai sub-proyek ini. Keduanya dipanggil sebagai
+    // ADMINISTRATOR dengan alasan yang sama seperti keempat tes di
+    // atas: assertWithinSubtree(null, ...) tidak pernah melihat
+    // user_id/customer_id-nya, jadi administrator-lah satu-satunya
+    // yang bisa sampai ke pemeriksaan keberadaan baris ini.
+    test('ADMINISTRATOR: user_id yang tidak ada ditolak 400, tidak ada baris tersimpan', async (t) => {
+        if (customerUji === null) {
+            t.skip('tidak ada customer selain id 97 di database')
+            return
+        }
+
+        const sebelum = await totalPada()
+
+        const { status } = await kirim('POST', '/api/visit-plans', ADMIN, {
+            user_id: 999999,
+            customer_id: customerUji,
+            visit_date: TANGGAL,
+        })
+
+        assert.strictEqual(status, 400)
+        assert.strictEqual(await totalPada(), sebelum)
+
+        const [yatim] = await db.query(
+            'SELECT COUNT(*) n FROM visit_plans WHERE visit_date = ? AND user_id = 999999',
+            [TANGGAL]
+        )
+
+        assert.strictEqual(
+            Number(yatim[0].n),
+            0,
+            'baris yatim user_id tak-ada tidak boleh ada'
+        )
+    })
+
+    test('ADMINISTRATOR: customer_id yang tidak ada ditolak 400, tidak ada baris tersimpan', async () => {
+        const sebelum = await totalPada()
+
+        const { status } = await kirim('POST', '/api/visit-plans', ADMIN, {
+            user_id: SPG,
+            customer_id: 999999,
+            visit_date: TANGGAL,
+        })
+
+        assert.strictEqual(status, 400)
+        assert.strictEqual(await totalPada(), sebelum)
+
+        const [yatim] = await db.query(
+            'SELECT COUNT(*) n FROM visit_plans WHERE visit_date = ? AND customer_id = 999999',
+            [TANGGAL]
+        )
+
+        assert.strictEqual(
+            Number(yatim[0].n),
+            0,
+            'baris yatim customer_id tak-ada tidak boleh ada'
+        )
+    })
+
+})
+
+
+describe('POST /api/visit-plans/upload', () => {
+
+    // FIX 1 dari review akhir, dan satu-satunya CRITICAL-nya: endpoint
+    // ini menyimpulkan pemilik baris LANGSUNG dari kolom "Sales Code" di
+    // spreadsheet lewat User.findOne, lalu VisitPlan.create -- tanpa
+    // gerbang role dan tanpa assertWithinSubtree sama sekali. SPG mana
+    // pun yang punya token bisa mengunggah spreadsheet berisi kode sales
+    // siapa saja dan membuat jadwal kunjungan untuk SELURUH perusahaan.
+    //
+    // Tanggal sentinel SENGAJA berbeda dari blok "POST /api/visit-plans"
+    // di atas (2026-12-30) -- keduanya independen: kalau blok ini
+    // memakai tanggal yang sama, baris yang dibuat blok atas untuk
+    // (SPG, customerUji, TANGGAL) bisa membuat pemeriksaan DUPLICATE di
+    // uploadExcel diam-diam men-skip baris yang seharusnya diimpor di
+    // sini, tergantung urutan cleanup antar describe.
+    const TANGGAL_UPLOAD = new Date(2026, 11, 29) // 2026-12-29
+
+    // Kode sales sungguhan, bukan id -- uploadExcel mencari
+    // User.findOne({ where: { code } }), bukan by id.
+    const KODE_DALAM_SUBTREE = 'JKT001' // user 1 (SPG), anak dari supervisor 3
+    const KODE_LUAR_SUBTREE = 'SBY001'  // user 34 (SPG_LUAR), anak dari supervisor 33
+
+    let customerCodeUji
+    const idsDibuat = []
+
+    before(async () => {
+        const [c] = await db.query(
+            'SELECT code FROM customers WHERE id NOT IN (97, 123) AND code IS NOT NULL LIMIT 1'
+        )
+
+        customerCodeUji = c[0]?.code ?? null
+    })
+
+    after(async () => {
+        for (const id of idsDibuat) {
+            await db.query('DELETE FROM visit_plans WHERE id = ?', [id])
+        }
+    })
+
+    const jumlahPadaUpload = async (userId) => {
+        const [r] = await db.query(
+            'SELECT COUNT(*) n FROM visit_plans WHERE visit_date = ? AND user_id = ?',
+            ['2026-12-29', userId]
+        )
+
+        return Number(r[0].n)
+    }
+
+    // Bukti gerbang FIX 1 sisi SPG: request HTTP sungguhan, file .xlsx
+    // sungguhan, ditolak 403, dan TIDAK ADA baris tersimpan -- bukan cuma
+    // status HTTP-nya yang diperiksa.
+    test('SPG mengunggah file ditolak 403, tidak ada baris tersimpan', async (t) => {
+        if (customerCodeUji === null) {
+            t.skip('tidak ada customer selain id 97/123 di database')
+            return
+        }
+
+        const sebelum = await jumlahPadaUpload(SPG)
+
+        const { status } = await kirimExcel(SPG, [
+            {
+                'Sales Code': KODE_DALAM_SUBTREE, // SPG mencoba menjadwalkan dirinya sendiri
+                'Customer Code': customerCodeUji,
+                'Visit Date': TANGGAL_UPLOAD,
+            },
+        ])
+
+        assert.strictEqual(status, 403)
+        assert.strictEqual(await jumlahPadaUpload(SPG), sebelum)
+    })
+
+    // Bukti gerbang FIX 1 sisi SUPERVISOR: satu file, DUA baris -- satu
+    // dalam subtree-nya (harus diimpor) dan satu di luar subtree-nya
+    // (harus ditolak dan dilaporkan lewat mekanisme error per-baris yang
+    // SUDAH ADA di uploadExcel, bukan menggagalkan seluruh upload).
+    test('SUPERVISOR: baris dalam subtree diimpor, baris luar subtree dilaporkan sebagai error', async (t) => {
+        if (customerCodeUji === null) {
+            t.skip('tidak ada customer selain id 97/123 di database')
+            return
+        }
+
+        const sebelumDalam = await jumlahPadaUpload(SPG)
+        const sebelumLuar = await jumlahPadaUpload(SPG_LUAR)
+
+        const { status, data } = await kirimExcel(SUPERVISOR, [
+            {
+                'Sales Code': KODE_DALAM_SUBTREE,
+                'Customer Code': customerCodeUji,
+                'Visit Date': TANGGAL_UPLOAD,
+            },
+            {
+                'Sales Code': KODE_LUAR_SUBTREE,
+                'Customer Code': customerCodeUji,
+                'Visit Date': TANGGAL_UPLOAD,
+            },
+        ])
+
+        assert.strictEqual(status, 200)
+
+        // Baris pertama masuk, baris kedua dilaporkan -- upload TIDAK
+        // gagal seluruhnya karena satu baris di luar jangkauan.
+        assert.strictEqual(data.inserted, 1)
+        assert.strictEqual(data.failed, 1)
+        assert.strictEqual(data.errors.length, 1)
+        assert.strictEqual(
+            data.errors[0].reason,
+            'Sales Code di luar jangkauan Anda'
+        )
+
+        assert.strictEqual(await jumlahPadaUpload(SPG), sebelumDalam + 1)
+
+        // Baris di luar subtree TIDAK BOLEH tersimpan sama sekali.
+        assert.strictEqual(await jumlahPadaUpload(SPG_LUAR), sebelumLuar)
+
+        // Ditangkap untuk dihapus di after() -- lewat id, bukan lewat
+        // tanggal, konsisten dengan blok lain di berkas ini.
+        const [baris] = await db.query(
+            'SELECT id FROM visit_plans WHERE visit_date = ? AND user_id = ? ORDER BY id DESC LIMIT 1',
+            ['2026-12-29', SPG]
+        )
+
+        if (baris[0]) {
+            idsDibuat.push(baris[0].id)
+        }
+    })
+
 })
 
 
 describe('PUT /api/users/:id tidak menghapus field yang tidak dikirim', () => {
 
-    const SEMENTARA = {
-        code: 'UJI-NULLABLE-15082026',
-        email: 'uji.nullable.15082026@contoh.invalid',
-    }
+    // SEMENTARA didefinisikan di tingkat berkas (dekat konstanta lain
+    // di atas) karena pre-clean-nya kini berjalan di before() tingkat
+    // berkas, sebelum describe manapun -- lihat komentar di sana.
 
     let idSementara
 
     before(async () => {
-        await db.query(
-            'DELETE FROM users WHERE code = ? OR email = ?',
-            [SEMENTARA.code, SEMENTARA.email]
-        )
 
         // Keempat kolom yang jadi korban pola lama diisi dengan
         // sengaja, supaya penghapusannya bisa terdeteksi.
@@ -883,6 +1166,75 @@ describe('PUT /api/users/:id tidak menghapus field yang tidak dikirim', () => {
 
         assert.strictEqual(status, 200)
         assert.strictEqual(Number((await kolomDari(idSementara)).area_id), 3)
+    })
+
+})
+
+
+describe('PUT /api/users/:id menolak {code:0} pada diri sendiri', () => {
+
+    // FIX 5 dari review akhir. Penjaga lama membandingkan
+    // `code || null` sementara baris tulis di bawahnya memakai
+    // nullableUpdate -- keduanya sepakat untuk hampir semua nilai, TAPI
+    // berselisih persis pada `0`: `0 || null` jatuh ke null (dianggap
+    // "sama dengan code yang sekarang", yakni NULL, jadi LOLOS penjaga),
+    // sedangkan nullableUpdate(0) mengembalikan 0 apa adanya dan
+    // benar-benar tersimpan sebagai string '0'.
+    //
+    // KEDUA administrator sungguhan (id 2 dan 29) punya code NULL --
+    // persis pemicu bug ini. Administrator sekali-pakai di sini dibuat
+    // dengan code NULL yang sama supaya skenarionya identik, TANPA
+    // pernah menyentuh akun sungguhan 2 atau 29.
+    const EMAIL_ADMIN_UJI = 'uji.code-nol.15082026@contoh.invalid'
+
+    let idAdminUji
+
+    before(async () => {
+        // Sisa dari run yang pernah mati di tengah.
+        await db.query(
+            'DELETE FROM users WHERE email = ?',
+            [EMAIL_ADMIN_UJI]
+        )
+
+        const [hasil] = await db.query(
+            `INSERT INTO users (code, name, email, password, role, status)
+             VALUES (NULL, ?, ?, ?, 'ADMINISTRATOR', 'ACTIVE')`,
+            [
+                'Admin Uji Code Nol',
+                EMAIL_ADMIN_UJI,
+                'bukan-hash-sungguhan',
+            ]
+        )
+
+        idAdminUji = hasil.insertId
+    })
+
+    after(async () => {
+        if (idAdminUji) {
+            await db.query('DELETE FROM users WHERE id = ?', [idAdminUji])
+        }
+    })
+
+    test('ADMINISTRATOR mengirim {code:0} untuk dirinya sendiri ditolak 400, code tidak berubah', async () => {
+        const { status } = await kirim(
+            'PUT',
+            `/api/users/${idAdminUji}`,
+            idAdminUji,
+            { code: 0 }
+        )
+
+        assert.strictEqual(status, 400)
+
+        const [r] = await db.query(
+            'SELECT code FROM users WHERE id = ?',
+            [idAdminUji]
+        )
+
+        assert.strictEqual(
+            r[0].code,
+            null,
+            'code tidak boleh berubah dari NULL menjadi apa pun, termasuk string \'0\''
+        )
     })
 
 })
