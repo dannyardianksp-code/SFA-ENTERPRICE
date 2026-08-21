@@ -29,7 +29,12 @@ const {
 const {
     resolveSubordinateUserIds,
     PLAN_WRITER_ROLES,
+    ownerWhere,
+    assertWithinSubtree,
 } = require('../utils/access.util')
+
+const { parseId } =
+    require('../utils/id.util')
 
 
 
@@ -80,22 +85,25 @@ exports.getAll =
             const bolehDilihat =
                 await resolveSubordinateUserIds(loginUser)
 
-            if (bolehDilihat !== null) {
-
-                whereCondition = {
-
-                    user_id: {
-                        [Op.in]: bolehDilihat
-                    }
-
-                }
-
-            }
+            Object.assign(whereCondition, ownerWhere(bolehDilihat))
 
             // SPG melihat rencana hari ini dan besok. Rentangnya
             // eksplisit lewat spgDateRange — sebelumnya tanggalnya
             // dihitung UTC, sehingga tiap pagi 00:00-07:00 WIB yang
             // muncul adalah kemarin + hari ini.
+            //
+            // PERINGATAN: cabang ini menimpa whereCondition SELURUHNYA,
+            // termasuk klausa user_id dari ownerWhere(bolehDilihat) di
+            // atas -- dan itu memang disengaja, BUKAN celah. Ia hanya
+            // aman karena SPG adalah role daun: subtree-nya persis
+            // [dirinya sendiri], sehingga user_id: loginUser.id di sini
+            // MENULIS ULANG batasan yang sama persis dengan yang sudah
+            // dihasilkan ownerWhere, bukan melonggarkannya. Menghapus
+            // `user_id: loginUser.id` sebagai "redundan" akan membuka
+            // kembali kebocoran: whereCondition tersisa hanya
+            // { visit_date: {...} } tanpa batasan pemilik sama sekali,
+            // dan SPG mana pun akan melihat jadwal SEMUA orang pada
+            // rentang tanggal itu.
             if (loginUser.role === 'SPG') {
 
                 const [hariIni, besok] = spgDateRange()
@@ -189,10 +197,109 @@ exports.create =
 
         try {
 
+            // Gerbang role dulu, sebelum data apa pun disentuh.
+            // update dan delete sudah punya ini sejak sub-proyek
+            // visit-plan; create tidak punya apa pun.
+            if (!PLAN_WRITER_ROLES.includes(req.user.role)) {
+                return sendError(
+                    res,
+                    403,
+                    'Hanya supervisor ke atas yang boleh membuat jadwal kunjungan.'
+                )
+            }
+
+            const { user_id, customer_id, visit_date } = req.body
+
+            if (
+                user_id === undefined ||
+                customer_id === undefined ||
+                visit_date === undefined
+            ) {
+                return sendError(
+                    res,
+                    400,
+                    'user_id, customer_id, dan visit_date wajib diisi.'
+                )
+            }
+
+            // Dinormalkan SEBELUM gerbang kepemilikan, bukan sesudah.
+            // assertWithinSubtree mengembalikan "boleh" seketika saat
+            // subordinateIds === null (ADMINISTRATOR) TANPA PERNAH
+            // melihat user_id -- jadi untuk administrator, validasi
+            // inilah satu-satunya yang berdiri antara id yang cacat dan
+            // tabelnya. Tanpa ini: user_id: null gagal di database
+            // (kolom NOT NULL, sql_mode STRICT_TRANS_TABLES) dan
+            // tersurat sebagai 500; user_id: 0 justru LOLOS NOT NULL
+            // dan tersimpan sebagai baris yatim, karena visit_plans
+            // tidak punya foreign key sama sekali.
+            const targetUserId = parseId(user_id)
+            const targetCustomerId = parseId(customer_id)
+
+            if (targetUserId === null || targetCustomerId === null) {
+                return sendError(
+                    res,
+                    400,
+                    'user_id dan customer_id harus id yang sah.'
+                )
+            }
+
+            const bolehDilihat =
+                await resolveSubordinateUserIds(req.user)
+
+            const gerbang =
+                assertWithinSubtree(bolehDilihat, targetUserId)
+
+            if (gerbang) {
+                return sendError(res, gerbang.status, gerbang.message)
+            }
+
+            // Diperiksa SETELAH gerbang kepemilikan, sengaja: pemanggil
+            // yang di luar subtree-nya tidak perlu diberi tahu apakah
+            // id targetnya ada atau tidak -- ia sudah ditolak 403 lebih
+            // dulu di atas.
+            //
+            // visit_plans TIDAK PUNYA foreign key sama sekali (diverifikasi
+            // langsung ke information_schema.KEY_COLUMN_USAGE). parseId di
+            // atas hanya memastikan bentuknya "bilangan bulat >= 1" --
+            // ADMINISTRATOR (subordinateIds === null, lolos gerbang di atas
+            // tanpa pernah melihat targetUserId) yang mengirim id yang sah
+            // secara bentuk tapi tidak ada barisnya akan menulis baris
+            // yatim yang menunjuk user atau customer yang tidak pernah ada,
+            // dan tidak ada apa pun di bawahnya yang menangkap itu.
+            const [pemilik, pelanggan] = await Promise.all([
+                User.findByPk(targetUserId),
+                Customer.findByPk(targetCustomerId),
+            ])
+
+            if (!pemilik || !pelanggan) {
+                return sendError(
+                    res,
+                    400,
+                    'user_id atau customer_id tidak ditemukan.'
+                )
+            }
+
+            // Daftar field EKSPLISIT menggantikan { ...req.body }.
+            // Spread hanya dibatasi oleh atribut yang dideklarasikan
+            // model, dan user_id ada di antaranya — itulah lubang
+            // kepemilikannya. Daftar eksplisit membuat kolom baru di
+            // masa depan tidak otomatis bisa ditulis klien.
+            //
+            // user_id dan customer_id memakai nilai yang sudah
+            // dinormalkan parseId, bukan req.body mentah -- keduanya
+            // sudah dipastikan bilangan bulat positif di atas.
+            //
+            // status dipaksa PENDING dan TIDAK diambil dari body: update
+            // dan delete menolak jadwal non-PENDING, sehingga jadwal
+            // yang lahir COMPLETED terkunci selamanya.
             const data =
                 await VisitPlan.create({
 
-                    ...req.body,
+                    user_id: targetUserId,
+
+                    customer_id: targetCustomerId,
+
+                    visit_date,
 
                     status: 'PENDING'
 
@@ -209,7 +316,6 @@ exports.create =
             )
 
         }
-
 
     }
 
@@ -259,20 +365,11 @@ exports.update =
             const bolehDilihat =
                 await resolveSubordinateUserIds(loginUser)
 
-            if (
+            const gerbang =
+                assertWithinSubtree(bolehDilihat, visitPlan.user_id)
 
-                bolehDilihat !== null
-                &&
-                !bolehDilihat.includes(visitPlan.user_id)
-
-            ) {
-
-                return sendError(
-                    res,
-                    403,
-                    'Visit plan ini di luar jangkauan Anda.'
-                )
-
+            if (gerbang) {
+                return sendError(res, gerbang.status, gerbang.message)
             }
 
             // Status diperiksa SEBELUM data disentuh. Sebelumnya
@@ -365,20 +462,11 @@ exports.delete =
             const bolehDilihat =
                 await resolveSubordinateUserIds(loginUser)
 
-            if (
+            const gerbang =
+                assertWithinSubtree(bolehDilihat, visitPlan.user_id)
 
-                bolehDilihat !== null
-                &&
-                !bolehDilihat.includes(visitPlan.user_id)
-
-            ) {
-
-                return sendError(
-                    res,
-                    403,
-                    'Visit plan ini di luar jangkauan Anda.'
-                )
-
+            if (gerbang) {
+                return sendError(res, gerbang.status, gerbang.message)
             }
 
             // Diperiksa SEBELUM destroy. Sebelumnya barisnya dihapus
@@ -420,6 +508,27 @@ exports.uploadExcel = async (req, res) => {
 
     try {
 
+        // Gerbang role dulu, sebelum file apa pun dibaca -- sama seperti
+        // create. Endpoint ini dulu tidak punya penjaga sama sekali: SPG
+        // mana pun bisa mengunggah spreadsheet berisi kode sales siapa
+        // saja dan membuat jadwal kunjungan untuk seluruh perusahaan.
+        if (!PLAN_WRITER_ROLES.includes(req.user.role)) {
+
+            // Multer sudah menulis berkasnya ke disk sebelum handler
+            // ini sempat memeriksa apa pun. /uploads disajikan tanpa
+            // autentikasi (lihat tests/README.md), jadi berkas yang
+            // tidak dihapus di sini menjadi bisa dibaca siapa pun tanpa
+            // token -- penolakan yang tidak membersihkan dirinya sendiri
+            // sama saja dengan menerima uploadnya.
+            fs.unlinkSync(req.file.path)
+
+            return sendError(
+                res,
+                403,
+                'Hanya supervisor ke atas yang boleh membuat jadwal kunjungan.'
+            )
+        }
+
         const workbook =
             XLSX.readFile(req.file.path)
 
@@ -437,6 +546,15 @@ exports.uploadExcel = async (req, res) => {
         let duplicate = 0
 
         const errors = []
+
+        // Diambil SEKALI di sini, di luar loop baris -- satu query untuk
+        // seluruh file, bukan satu query per baris. Baris spreadsheet
+        // bisa berjumlah ratusan; menghitung ulang subtree pemanggil
+        // untuk tiap baris akan membebani database tanpa mengubah
+        // jawabannya sama sekali, karena subtree pemanggil tidak
+        // berubah selama satu request berjalan.
+        const bolehDilihat =
+            await resolveSubordinateUserIds(req.user)
 
         for (const row of rows) {
 
@@ -479,6 +597,39 @@ exports.uploadExcel = async (req, res) => {
                 })
 
             if (!user) {
+
+                errors.push({
+
+                    row,
+
+                    reason: 'Sales Code tidak ditemukan'
+
+                })
+
+                continue
+
+            }
+
+            //--------------------------------
+            // KEPEMILIKAN
+            //--------------------------------
+
+            // Baris ini di luar jangkauan pemanggil. Baris lain dalam
+            // file yang sama tetap diproses -- satu baris di luar
+            // subtree tidak boleh menggagalkan seluruh upload, sama
+            // seperti Sales Code atau Customer Code yang tidak
+            // ditemukan di atas dan di bawah.
+            //
+            // Alasannya SENGAJA disamakan dengan "tidak ditemukan":
+            // supervisor tidak perlu tahu apakah sebuah kode sales itu
+            // benar-benar tidak ada atau hanya di luar jangkauannya.
+            // Membedakan keduanya membuat file berisi kode tebakan bisa
+            // dipakai memetakan kode sales siapa saja yang ada di
+            // perusahaan, sama seperti 403-sebelum-404 di endpoint lain.
+            const gerbangBaris =
+                assertWithinSubtree(bolehDilihat, user.id)
+
+            if (gerbangBaris) {
 
                 errors.push({
 
@@ -596,6 +747,14 @@ exports.uploadExcel = async (req, res) => {
     }
 
     catch (err) {
+
+        // Sama alasannya dengan penolakan role: berkas yang gagal
+        // diproses tidak boleh tertinggal di /uploads yang tanpa
+        // autentikasi. req.file mungkin belum ada kalau error terjadi
+        // sebelum multer selesai menulis.
+        if (req.file?.path) {
+            fs.unlinkSync(req.file.path)
+        }
 
         return sendServerError(
             res,

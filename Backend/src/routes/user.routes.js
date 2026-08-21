@@ -32,8 +32,11 @@ const {
 
 const {
     assertUserManagement,
-    wouldRemoveLastActiveAdministrator,
     USER_ROLES,
+    wouldRemoveLastActiveAdministrator,
+    resolveSubordinateUserIds,
+    ownerWhere,
+    assertWithinSubtree,
 } = require('../utils/access.util')
 
 const {
@@ -44,6 +47,10 @@ const {
     isLockConflictError,
     withShortLockWait,
 } = require('../utils/lock.util')
+
+const {
+    nullableUpdate,
+} = require('../utils/update.util')
 
 
 /**
@@ -154,59 +161,19 @@ router.get(
             // Memuat ulang di sini hanya menambah satu query yang bisa
             // mengembalikan null — dan `null.role` di bawah akan menjadi
             // 500 tanpa sebab yang jelas.
-            let whereCondition = {}
 
-            // ======================
-            // SUPERVISOR
-            // ======================
+            // Satu aturan untuk seluruh bacaan: subtree supervisor_id.
+            // Aturan lama membandingkan area_id tunggal — kolom yang
+            // dikosongkan setiap penyuntingan lewat web — dan hanya
+            // menurun satu tingkat. Akibatnya SPG melihat seluruh bagan
+            // organisasi sementara MANAGER justru melihat kedua
+            // administrator dan nol bawahannya.
+            const bolehDilihat =
+                await resolveSubordinateUserIds(req.user)
 
-            if (
-
-                req.user.role ===
-                'SUPERVISOR'
-
-            ) {
-
-                whereCondition = {
-
-                    role:
-                        'SPG',
-
-                    supervisor_id:
-                        req.user.id,
-
-                    area_id:
-                        req.user.area_id,
-
-                    channel_id:
-                        req.user.channel_id
-
-                }
-
-            }
-
-            // ======================
-            // MANAGER
-            // ======================
-
-            if (
-
-                req.user.role ===
-                'MANAGER'
-
-            ) {
-
-                whereCondition = {
-
-                    area_id:
-                        req.user.area_id,
-
-                    channel_id:
-                        req.user.channel_id
-
-                }
-
-            }
+            // Kolomnya `id`, bukan `user_id`: yang difilter adalah baris
+            // user itu sendiri, bukan baris milik user.
+            const whereCondition = ownerWhere(bolehDilihat, 'id')
 
 
             const data =
@@ -609,6 +576,15 @@ router.get(
                 return sendError(res, 400, 'Id user tidak valid.')
             }
 
+            const bolehDilihat =
+                await resolveSubordinateUserIds(req.user)
+
+            const gerbang = assertWithinSubtree(bolehDilihat, id)
+
+            if (gerbang) {
+                return sendError(res, gerbang.status, gerbang.message)
+            }
+
             const data =
                 await User.findByPk(
 
@@ -767,12 +743,30 @@ router.put(
                     )
                 }
 
-                // Dinormalkan `|| null` persis seperti saat ditulis di
-                // bawah, supaya form yang mengirim string kosong untuk
-                // code yang memang NULL tidak terbaca sebagai perubahan.
+                // Dinormalkan lewat nullableUpdate, PERSIS fungsi yang
+                // sama dipakai saat ditulis di bawah -- bukan cuma pola
+                // yang mirip. Yang dijamin: penjaga ini dan baris tulis
+                // di bawah SELALU sepakat tentang apakah suatu nilai
+                // sama dengan "tidak berubah", karena keduanya memanggil
+                // fungsi normalisasi yang sama persis.
+                //
+                // `|| null` yang lama TIDAK menjamin itu. Kedua
+                // administrator sungguhan (id 2 dan 29) punya code NULL.
+                // Admin yang mengirim { code: 0 } ke akunnya sendiri:
+                // penjaga lama menghitung `0 || null` -> null, sama
+                // dengan code-nya sekarang (null), jadi PENJAGA MELIHAT
+                // "tidak ada perubahan" dan meloloskannya -- padahal
+                // baris tulis di bawah memakai nullableUpdate(0), yang
+                // mengembalikan 0 apa adanya (bukan string kosong, bukan
+                // null), lalu MySQL menyimpannya sebagai string '0'.
+                // `false` bernasib sama: `false || null` juga jatuh ke
+                // null di sisi penjaga sementara nullableUpdate(false)
+                // tetap false. Guard yang lama meloloskan perubahan
+                // sungguhan sebagai "tidak ada perubahan" justru karena
+                // ia TIDAK memakai fungsi yang sama dengan baris tulis.
                 if (
                     code !== undefined &&
-                    (code || null) !== (req.user.code || null)
+                    nullableUpdate(code) !== nullableUpdate(req.user.code)
                 ) {
                     return sendError(
                         res,
@@ -829,29 +823,28 @@ router.put(
 
                 }
 
+                const perubahan = { name, email, role }
+
+                // Field yang TIDAK dikirim klien tidak boleh ditulis NULL.
+                // Sequelize membuang key bernilai undefined, tapi pola lama
+                // `field || null` mengubah undefined menjadi null — dan
+                // null tidak dibuang. Form edit di web tidak mengirim code
+                // maupun area_id, sehingga setiap penyuntingan nama
+                // mengosongkan keduanya.
+                for (const field of [
+                    'code',
+                    'area_id',
+                    'channel_id',
+                    'supervisor_id',
+                ]) {
+                    if (req.body[field] !== undefined) {
+                        perubahan[field] = nullableUpdate(req.body[field])
+                    }
+                }
+
                 await User.update(
 
-                    {
-
-                        name,
-
-                        email,
-
-                        role,
-
-                        area_id:
-                            area_id || null,
-
-                        channel_id:
-                            channel_id || null,
-
-                        supervisor_id:
-                            supervisor_id || null,
-
-                        code:
-                            code || null
-
-                    },
+                    perubahan,
 
                     {
 

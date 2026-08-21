@@ -14,7 +14,11 @@ const {
 
 const {
     resolveSubordinateUserIds,
+    ownerWhere,
+    assertWithinSubtree,
 } = require('../utils/access.util')
+
+const { parseId } = require('../utils/id.util')
 
 
 
@@ -279,16 +283,7 @@ exports.getAll = async (req, res) => {
         const bolehDilihat =
             await resolveSubordinateUserIds(loginUser)
 
-        const where =
-            bolehDilihat === null
-
-                ? {}
-
-                : {
-                    user_id: {
-                        [Op.in]: bolehDilihat
-                    }
-                }
+        const where = ownerWhere(bolehDilihat)
 
         const data = await Visit.findAll({
 
@@ -321,7 +316,13 @@ exports.getProducts = async (req, res) => {
 
     try {
 
-        const visit = await Visit.findByPk(req.params.id, {
+        const id = parseId(req.params.id)
+
+        if (id === null) {
+            return sendError(res, 400, 'Id kunjungan tidak valid.')
+        }
+
+        const visit = await Visit.findByPk(id, {
 
             include: [
                 {
@@ -337,8 +338,25 @@ exports.getProducts = async (req, res) => {
 
         })
 
+        if (!visit) {
+            return sendError(res, 404, 'Kunjungan tidak ditemukan.')
+        }
+
+        const bolehDilihat =
+            await resolveSubordinateUserIds(req.user)
+
+        const gerbang =
+            assertWithinSubtree(bolehDilihat, visit.user_id)
+
+        if (gerbang) {
+            return sendError(res, gerbang.status, gerbang.message)
+        }
+
+        // Relasi mana pun di rantai ini bisa kosong kalau datanya belum
+        // lengkap. Tanpa penjaga ini, customer tanpa group menjadi 500
+        // alih-alih daftar kosong.
         const products =
-            visit.Customer.CustomerGroup.Products
+            visit.Customer?.CustomerGroup?.Products ?? []
 
         res.json(products)
 
@@ -383,20 +401,11 @@ exports.getById = async (
         const bolehDilihat =
             await resolveSubordinateUserIds(loginUser)
 
-        if (
+        const gerbang =
+            assertWithinSubtree(bolehDilihat, data.user_id)
 
-            bolehDilihat !== null
-            &&
-            !bolehDilihat.includes(data.user_id)
-
-        ) {
-
-            return sendError(
-                res,
-                403,
-                'Kunjungan ini di luar jangkauan Anda.'
-            )
-
+        if (gerbang) {
+            return sendError(res, gerbang.status, gerbang.message)
         }
 
         res.json(data)

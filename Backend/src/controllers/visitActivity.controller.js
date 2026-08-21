@@ -21,7 +21,11 @@ const { sendError, sendServerError } =
 
 const {
     resolveSubordinateUserIds,
+    ownerWhere,
 } = require('../utils/access.util')
+
+const { parseId } =
+    require('../utils/id.util')
 
 // ======================
 // CREATE
@@ -119,16 +123,7 @@ exports.getAll = async (req, res) => {
         const bolehDilihat =
             await resolveSubordinateUserIds(loginUser)
 
-        const visitWhere =
-            bolehDilihat === null
-
-                ? {}
-
-                : {
-                    user_id: {
-                        [Op.in]: bolehDilihat
-                    }
-                }
+        const visitWhere = ownerWhere(bolehDilihat)
 
         const {
 
@@ -268,19 +263,43 @@ exports.getByVisit =
 
         try {
 
+            const id = parseId(req.params.id)
+
+            if (id === null) {
+                return sendError(res, 400, 'Id kunjungan tidak valid.')
+            }
+
+            const bolehDilihat =
+                await resolveSubordinateUserIds(req.user)
+
             const data =
 
                 await VisitActivity.findAll({
 
                     where: {
 
-                        visit_id:
-                            req.params.id
+                        visit_id: id
 
                     },
 
                     include: [
 
+                        {
+                            model: Visit,
+
+                            // required: true WAJIB. Tanpa itu Sequelize
+                            // menghasilkan LEFT JOIN, dan baris activity
+                            // yang visit_id-nya menunjuk kunjungan tidak
+                            // ada — atau di luar subtree — tetap lolos
+                            // dengan Visit: null.
+                            required: true,
+
+                            where: ownerWhere(bolehDilihat),
+                        },
+
+                        // Include asli, dipertahankan supaya
+                        // sfa-web/app/visit-detail/[id]/page.tsx tetap
+                        // dapat a.Activity?.name.
                         {
 
                             model: Activity,

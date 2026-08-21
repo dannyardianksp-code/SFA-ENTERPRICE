@@ -92,25 +92,26 @@ after(async () => {
 })
 
 /**
- * POST /api/visit-plans menyalin req.body apa adanya dan TIDAK memeriksa
- * kepemilikan, jadi tes bisa membuat rencana milik user lain. Itu justru
- * yang dibutuhkan untuk membuktikan cakupan subtree.
+ * Baris disisipkan LANGSUNG lewat mysql2, bukan lewat
+ * POST /api/visit-plans. `create` sekarang menggerbang role DAN
+ * kepemilikan (assertWithinSubtree pada user_id), jadi endpoint itu
+ * tidak lagi bisa dipinjam untuk membuat rencana atas nama user lain
+ * -- meminjamnya di sini hanya akan meminjam gerbang otorisasi yang
+ * tidak sedang diuji oleh describe block di bawah. Insert langsung
+ * tetap menghasilkan baris milik user lain, yang justru dibutuhkan
+ * untuk membuktikan cakupan subtree pada GET/PUT/DELETE.
  */
 const buatRencana = async (userId) => {
-    const res = await kirim('POST', '/api/visit-plans', DANNY, 'SPG', {
-        user_id: userId,
-        customer_id: customerId,
-        visit_date: localDateString(),
-    })
-
-    assert.ok(
-        res.status === 200 || res.status === 201,
-        `gagal membuat rencana untuk user ${userId}: ${JSON.stringify(res.body)}`
+    const c = await db()
+    const [hasil] = await c.query(
+        'INSERT INTO visit_plans (user_id, customer_id, visit_date, status) VALUES (?, ?, ?, ?)',
+        [userId, customerId, localDateString(), 'PENDING']
     )
+    await c.end()
 
-    dibuat.push(res.body.id)
+    dibuat.push(hasil.insertId)
 
-    return res.body.id
+    return hasil.insertId
 }
 
 
