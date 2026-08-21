@@ -68,10 +68,11 @@ describe('GET /api/visit-plans (SPG)', () => {
     // bergantung pada data yang kebetulan ada, dan tesnya lulus secara
     // hampa saat tabelnya kosong.
     //
-    // POST /api/visit-plans TIDAK mengambil user_id dari token — ia
-    // menyalin req.body apa adanya. Jadi user_id harus dikirim
-    // eksplisit, kalau tidak rencananya tidak akan pernah muncul di
-    // respons dan tesnya gagal dengan alasan yang menyesatkan.
+    // Baris disisipkan LANGSUNG lewat mysql2, bukan lewat
+    // POST /api/visit-plans: create sekarang menggerbang role
+    // (SUPERVISOR ke atas), sedangkan tes ini memakai token SPG murni
+    // untuk menguji GET-nya sendiri. Memanggil endpoint create di sini
+    // hanya akan meminjam gerbang otorisasi yang tidak sedang diuji.
     before(async () => {
         const customers = await get('/api/customers')
 
@@ -87,20 +88,24 @@ describe('GET /api/visit-plans (SPG)', () => {
         hariIni = ini
         lusa = addDaysLocal(new Date(), 2)
 
-        for (const visitDate of [hariIni, lusa]) {
-            const res = await post('/api/visit-plans', {
-                user_id: USER_ID,
-                customer_id: customerId,
-                visit_date: visitDate,
-            })
+        const mysql = require('mysql2/promise')
+        const c = await mysql.createConnection({
+            host: process.env.DB_HOST,
+            user: process.env.DB_USER,
+            password: process.env.DB_PASS,
+            database: process.env.DB_NAME,
+        })
 
-            assert.ok(
-                res.status === 200 || res.status === 201,
-                `gagal membuat rencana ${visitDate}: ${JSON.stringify(res.body)}`
+        for (const visitDate of [hariIni, lusa]) {
+            const [hasil] = await c.query(
+                'INSERT INTO visit_plans (user_id, customer_id, visit_date, status) VALUES (?, ?, ?, ?)',
+                [USER_ID, customerId, visitDate, 'PENDING']
             )
 
-            dibuat.push(res.body.id)
+            dibuat.push(hasil.insertId)
         }
+
+        await c.end()
     })
 
     after(async () => {
