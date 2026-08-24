@@ -40,6 +40,7 @@ tests/
 | `subtree-where.test.js` | arti `null` versus `[]` pada klausa subtree, dan koersi tipe pada gerbang sumber-tunggal |
 | `nullable-update.test.js` | arti tiga arah field update: tidak dikirim, string kosong, bernilai |
 | `boot-require.test.js` | ejaan `require` route di `app.js` dicocokkan dengan `git ls-files`; `t.skip` (bukan meledak) kalau `git` tidak tersedia atau direktorinya bukan working copy git |
+| `activity-field-rules.test.js` | aturan field per tipe activity dan validasi qty |
 
 `customer.controller.test.js` bisa jalan tanpa database karena seluruh
 validasi parameter terjadi **sebelum** `User.findByPk` dipanggil.
@@ -73,6 +74,11 @@ data nyata di database dev sama saja merusaknya.
 
 Nomor urut kode yang terpakai **tidak kembali** setelah baris dihapus,
 sehingga deret kode akan berlubang. Aman di database dev.
+
+`tests/e2e/visit-activity-create.test.js` membuat `visits` dan
+`visit_activities` sementaranya sendiri, dihapus di `after()`
+berdasarkan id tertangkap -- termasuk **menghapus berkas foto dari
+disk**, bukan cuma barisnya di database.
 
 `tests/e2e/visit-plan.test.js` dan `tests/e2e/hierarchy-access.test.js`
 sempat membuat fixture-nya lewat `POST /api/visit-plans`, dan itu cuma
@@ -382,6 +388,14 @@ jangan dihapus tanpa membaca komentarnya:
   pernah memfilter `area_id: req.user.area_id`. Untuk MANAGER yang
   `area_id`-nya NULL, Sequelize menerjemahkannya menjadi `IS NULL`,
   sehingga ia justru melihat kedua administrator dan nol bawahannya.
+- **`visit_id` tanpa pemeriksaan kepemilikan pada create activity** —
+  siapa pun bisa mencatat activity untuk kunjungan siapa pun, dan bisa
+  membuat sendiri baris yatim yang justru disembunyikan `required: true`
+  pada `GET /api/visit-activities/visit/:id`.
+- **`activity_id` tanpa validasi** — nilai di luar 1-11 gagal di FK
+  constraint MySQL sebagai 500, bukan 400 yang bersih.
+- **check-out tanpa activity** — sebelumnya bisa langsung checkout
+  tanpa mencatat apa pun selama kunjungan.
 - **`field || null`** — pola ini mengubah "tidak dikirim" menjadi NULL.
   Setiap penyuntingan user lewat web mengosongkan `code` dan `area_id`,
   dan `area_id` itulah yang memberi makan hak akses wilayah SPG.
@@ -632,24 +646,19 @@ Dicatat supaya tidak terbaca sebagai regresi:
 - **checkIn mengabaikan customer_id dari body**, selalu memakai
   customer_id milik plan.
 - **checkOut menolak 403 di luar subtree** pemilik kunjungan.
+- **`POST /api/visit-activities` menolak 403** kalau `visit_id` bukan
+  milik pemanggil, dan 400 kalau field wajib tipe activity tidak
+  lengkap.
+- **`checkOut` menolak 400** kalau kunjungan belum punya activity
+  tercatat sama sekali.
 
 ## Yang masih terbuka
 
 Dicatat supaya tidak hilang, bukan sebagai pekerjaan yang tertunda tanpa
 alasan:
 
-- **Dua kebocoran ditemukan review akhir branch ini dan SENGAJA TIDAK
-  diperbaiki di sini** — masing-masing dengan alasannya:
-  - **`POST /api/visit-activities`**
-    (`src/controllers/visitActivity.controller.js:34`) mengambil
-    `visit_id` langsung dari body tanpa mencari induknya lebih dulu.
-    Inilah jalur yang bisa MEMBUAT SENDIRI baris yatim yang justru
-    ditutupi `required: true` pada include Visit di
-    `GET /api/visit-activities/visit/:id` (lihat bagian "Kenapa tes ini
-    ada" di atas) — `required: true` menyembunyikan baris yatim dari
-    hasil baca, tapi tidak mencegah baris yatim itu tercipta lewat jalur
-    tulis ini. Ini bagian dari sub-proyek activity-input setelah
-    check-in/check-out.
+- **Satu kebocoran ditemukan review akhir branch ini dan SENGAJA TIDAK
+  diperbaiki di sini** — dengan alasannya:
   - **`app.js:38`** (`app.use('/uploads', express.static('uploads'))`)
     melayani folder upload tanpa auth sama sekali. Foto aktivitas bisa
     dibaca siapa pun yang menebak atau mendapatkan nama filenya, tanpa
