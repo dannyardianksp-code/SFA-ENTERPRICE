@@ -6,6 +6,7 @@ const CustomerGroup = require('../models/customerGroup.model')
 const Product = require('../models/product.model')
 const { getDistance } = require('geolib')
 const VisitPlan = require('../models/visitPlan.model')
+const VisitActivity = require('../models/visitActivity.model')
 const { Op } = require('sequelize')
 
 const {
@@ -408,6 +409,21 @@ exports.checkOut = async (req, res) => {
         // tap ganda di mobile maupun panggilan ulang dari sfa-web.
         if (visit.checkout_time) {
             return sendError(res, 400, 'Kunjungan ini sudah di-checkout sebelumnya.')
+        }
+
+        // Tujuan utama kunjungan adalah mencatat aktivitas di lapangan --
+        // tanpa gerbang ini, fitur activity bisa jadi rutin dilewati
+        // begitu saja dan checkout tetap lolos tanpa data apa pun.
+        const jumlahActivity = await VisitActivity.count({
+            where: { visit_id: visit.id },
+        })
+
+        if (jumlahActivity === 0) {
+            return sendError(
+                res,
+                400,
+                'Minimal satu activity harus dicatat sebelum check-out.'
+            )
         }
 
         visit.checkout_time = new Date()
