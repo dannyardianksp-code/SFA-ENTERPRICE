@@ -662,6 +662,12 @@ alasan:
   `userArea.routes.js` hanya mendaftarkan satu route GET. Hanya satu user
   punya baris `user_areas`, dan itu disisipkan manual. Ini fitur yang
   hilang, bukan kebocoran — sub-proyek tersendiri.
+- **checkOut tidak transaksional** — `visit.save()` dan `VisitPlan.update()`
+  terpisah tanpa wrapper transaksi. Kalau update kedua gagal setelah yang
+  pertama commit, `checkout_time` tersimpan tapi `visit_plans.status` tidak
+  pernah menjadi `COMPLETED` — status tidak sinkron sampai diperbaiki
+  manual. Di luar cakupan sub-proyek ini (urutan respons, bukan
+  atomisitas).
 - **`sfa-web` membaca `data.error`** sementara backend mengirim
   `{ message }`. Penolakan 403 yang baru akan muncul di web sebagai
   `alert(undefined)`.
