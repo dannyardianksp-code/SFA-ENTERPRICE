@@ -264,3 +264,62 @@ describe('POST /api/visit-activities', () => {
     })
 
 })
+
+describe('POST /api/visit-activities -- batas upload', () => {
+
+    let visitMilikSPG
+
+    before(async () => {
+        const [customerRow] = await db.query(
+            'SELECT id FROM customers WHERE id NOT IN (97, 123) LIMIT 1'
+        )
+
+        const [v] = await db.query(
+            `INSERT INTO visits (user_id, customer_id, checkin_time)
+             VALUES (?, ?, NOW())`,
+            [SPG, customerRow[0].id]
+        )
+
+        visitMilikSPG = v.insertId
+        visitIdsDibuat.push(visitMilikSPG)
+    })
+
+    test('berkas bukan gambar ditolak', async () => {
+        const form = new FormData()
+
+        form.append('visit_id', String(visitMilikSPG))
+        form.append('activity_id', '11')
+        form.append(
+            'photo',
+            new Blob([Buffer.from('bukan gambar')], { type: 'text/plain' }),
+            'uji.txt'
+        )
+
+        const res = await fetch(BASE + '/api/visit-activities', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + tokenUntuk(SPG) },
+            body: form,
+        })
+
+        assert.notStrictEqual(res.status, 200)
+
+        const [rows] = await db.query(
+            'SELECT id FROM visit_activities WHERE visit_id = ?',
+            [visitMilikSPG]
+        )
+
+        assert.strictEqual(rows.length, 0)
+    })
+
+    test('berkas gambar biasa tetap diterima', async () => {
+        const { status, data } = await kirimDenganFoto(
+            SPG,
+            { visit_id: visitMilikSPG, activity_id: 11 },
+            true
+        )
+
+        assert.strictEqual(status, 200)
+        activityIdsDibuat.push(data.id)
+    })
+
+})
