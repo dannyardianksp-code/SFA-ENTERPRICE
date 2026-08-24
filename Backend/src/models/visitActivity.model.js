@@ -18,8 +18,11 @@ const VisitActivity =
 
             },
 
+            // int(11) dengan FK ke activities.id -- model ini
+            // sebelumnya salah mendeklarasikan STRING, kebetulan tidak
+            // masalah karena koersi longgar MySQL, tapi salah.
             activity_id:
-                DataTypes.STRING,
+                DataTypes.INTEGER,
 
             product_name:
                 DataTypes.STRING,

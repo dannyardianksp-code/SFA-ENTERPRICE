@@ -27,6 +27,11 @@ const {
 const { parseId } =
     require('../utils/id.util')
 
+const {
+    ACTIVITY_FIELD_RULES,
+    validateActivityFields,
+} = require('../utils/activity-field-rules.util')
+
 // ======================
 // CREATE
 // ======================
@@ -35,61 +40,65 @@ exports.create = async (req, res) => {
 
     try {
 
-        const data = {
+        const visitId = parseId(req.body.visit_id)
 
-            visit_id:
-                req.body.visit_id,
-
-            activity_id:
-                req.body.activity_id,
-
-            product_name:
-                req.body.product_name,
-
-            qty:
-                req.body.qty,
-
-            expired_date:
-                req.body.expired_date,
-
-            normal_price:
-                req.body.normal_price,
-
-            promo_price:
-                req.body.promo_price,
-
-            notes:
-                req.body.notes,
-
-            photo_url:
-                req.file
-
-                    ?
-
-                    `/uploads/${req.file.filename}`
-
-                    :
-
-                    null
-
+        if (visitId === null) {
+            return sendError(res, 400, 'Id kunjungan tidak valid.')
         }
 
-        const activity =
+        const visit = await Visit.findByPk(visitId)
 
-            await VisitActivity.create(data)
+        if (!visit) {
+            return sendError(res, 404, 'Kunjungan tidak ditemukan.')
+        }
 
-        res.json(activity)
+        // Personal, sama seperti checkIn -- SPG mencatat activity
+        // kunjungannya sendiri, bukan milik orang lain.
+        if (visit.user_id !== req.user.id) {
+            return sendError(res, 403, 'Kunjungan ini bukan milik Anda.')
+        }
 
-    }
+        const activityId = parseId(req.body.activity_id)
 
-    catch (err) {
+        if (activityId === null) {
+            return sendError(res, 400, 'Id tipe activity tidak valid.')
+        }
 
-        return sendServerError(
-            res,
-            err,
-            'CREATE VISIT ACTIVITY'
+        const pesanValidasi = validateActivityFields(
+            activityId,
+            req.body,
+            Boolean(req.file)
         )
 
+        if (pesanValidasi) {
+            return sendError(res, 400, pesanValidasi)
+        }
+
+        // Field eksplisit, bukan spread req.body -- pelajaran yang sama
+        // dari POST /api/visit-plans di sub-proyek kebocoran data.
+        const activity = await VisitActivity.create({
+            visit_id: visitId,
+            activity_id: activityId,
+            product_name: req.body.product_name || null,
+            qty: req.body.qty ? Number(req.body.qty) : null,
+            expired_date: req.body.expired_date || null,
+            normal_price: req.body.normal_price || null,
+            promo_price: req.body.promo_price || null,
+            notes: req.body.notes || null,
+            photo_url: req.file ? `/uploads/${req.file.filename}` : null,
+        })
+
+        // Dimuat ulang dengan include Activity supaya bentuk responsnya
+        // sama dengan getAll/getByVisit -- mobile langsung dapat nama
+        // tipe tanpa request kedua.
+        const hasil = await VisitActivity.findByPk(activity.id, {
+            include: [{ model: Activity, as: 'Activity' }],
+        })
+
+        res.json(hasil)
+
+    } catch (err) {
+        return sendServerError(res, err, 'CREATE VISIT ACTIVITY')
     }
 
 }
