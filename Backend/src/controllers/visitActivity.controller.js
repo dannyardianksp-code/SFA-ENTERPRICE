@@ -1,3 +1,5 @@
+const fs = require('fs')
+
 const { Op } =
     require('sequelize')
 
@@ -43,18 +45,32 @@ exports.create = async (req, res) => {
         const visitId = parseId(req.body.visit_id)
 
         if (visitId === null) {
+            // Multer sudah menulis berkasnya ke disk sebelum handler ini
+            // sempat memeriksa apa pun. /uploads disajikan tanpa
+            // autentikasi (lihat tests/README.md), jadi berkas yang tidak
+            // dihapus di sini menjadi bisa dibaca siapa pun tanpa token --
+            // penolakan yang tidak membersihkan dirinya sendiri sama saja
+            // dengan menerima uploadnya.
+            if (req.file) fs.unlinkSync(req.file.path)
             return sendError(res, 400, 'Id kunjungan tidak valid.')
         }
 
         const visit = await Visit.findByPk(visitId)
 
         if (!visit) {
+            // Sama seperti di atas -- kunjungan tidak ditemukan tidak
+            // boleh meninggalkan berkas yang sudah terlanjur ditulis
+            // multer sebelum baris ini dievaluasi.
+            if (req.file) fs.unlinkSync(req.file.path)
             return sendError(res, 404, 'Kunjungan tidak ditemukan.')
         }
 
         // Personal, sama seperti checkIn -- SPG mencatat activity
         // kunjungannya sendiri, bukan milik orang lain.
         if (visit.user_id !== req.user.id) {
+            // Sama seperti di atas -- penolakan kepemilikan bukan alasan
+            // untuk membiarkan berkas yang sudah tertulis ke disk.
+            if (req.file) fs.unlinkSync(req.file.path)
             return sendError(res, 403, 'Kunjungan ini bukan milik Anda.')
         }
 
@@ -71,6 +87,9 @@ exports.create = async (req, res) => {
         )
 
         if (pesanValidasi) {
+            // Sama seperti di atas -- validasi field yang gagal juga
+            // tidak boleh meninggalkan berkas yatim di /uploads.
+            if (req.file) fs.unlinkSync(req.file.path)
             return sendError(res, 400, pesanValidasi)
         }
 
