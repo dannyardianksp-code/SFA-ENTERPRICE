@@ -130,10 +130,12 @@ after(async () => {
 
         // Cleanup orphan files: foto uji yang tertinggal karena request ditolak
         // sebelum row DB tercipta (multer tulis file SEBELUM controller validate).
-        // Scan semua *-uji.jpg yang dibuat sejak test mulai.
+        // Scan semua *-uji.jpg dan *-uji.txt yang dibuat sejak test mulai --
+        // .txt ikut disertakan karena "batas upload" mengirim fixture non-image
+        // dengan nama itu untuk menguji fileFilter.
         const dirUpload = path.join(__dirname, '..', '..', 'uploads')
         for (const nama of fs.readdirSync(dirUpload)) {
-            if (!nama.endsWith('-uji.jpg')) continue
+            if (!nama.endsWith('-uji.jpg') && !nama.endsWith('-uji.txt')) continue
             const waktuBerkas = Number(nama.split('-')[0])
             if (Number.isFinite(waktuBerkas) && waktuBerkas >= mulaiUji) {
                 fs.unlinkSync(path.join(dirUpload, nama))
@@ -213,6 +215,35 @@ describe('POST /api/visit-activities', () => {
         )
 
         assert.strictEqual(rows.length, 0)
+    })
+
+    test('SPG mencoba mencatat activity untuk kunjungan SPG lain dengan foto terlampir: disk tetap bersih setelah 403', async () => {
+        // Bukan cuma status code -- multer sudah menulis berkasnya ke
+        // disk SEBELUM controller sempat memeriksa kepemilikan. Kalau
+        // jalur 403 tidak menghapusnya, berkas itu tertinggal permanen
+        // di /uploads (disajikan tanpa auth) walau baris DB-nya sendiri
+        // tidak pernah tercipta. Nama berkasnya tidak bisa diketahui di
+        // muka karena multer menamainya `Date.now()-originalname`, jadi
+        // dibuktikan lewat pembanding isi direktori sebelum/sesudah.
+        const dirUpload = path.join(__dirname, '..', '..', 'uploads')
+        const sebelum = new Set(fs.readdirSync(dirUpload))
+
+        const { status } = await kirimDenganFoto(
+            SPG,
+            { visit_id: visitMilikSPGLuar, activity_id: 11 },
+            true
+        )
+
+        assert.strictEqual(status, 403)
+
+        const sesudah = fs.readdirSync(dirUpload)
+        const berkasBaru = sesudah.filter((nama) => !sebelum.has(nama))
+
+        assert.deepStrictEqual(
+            berkasBaru,
+            [],
+            `berkas tertinggal di /uploads setelah 403: ${berkasBaru.join(', ')}`
+        )
     })
 
     test('tipe STOCK tanpa qty: ditolak 400, tidak ada baris tersimpan', async () => {
@@ -301,6 +332,10 @@ describe('POST /api/visit-activities -- batas upload', () => {
     test('berkas bukan gambar ditolak', async () => {
         const form = new FormData()
 
+        // activity_id 11 mewajibkan foto (lihat activity-field-rules.util) --
+        // fileFilter field-aware sekarang meloloskan request ini ke multer
+        // dengan req.file KOSONG (cb(null, false), bukan melempar Error),
+        // dan validateActivityFields yang menolaknya bersih 400.
         form.append('visit_id', String(visitMilikSPG))
         form.append('activity_id', '11')
         form.append(
@@ -315,7 +350,12 @@ describe('POST /api/visit-activities -- batas upload', () => {
             body: form,
         })
 
-        assert.notStrictEqual(res.status, 200)
+        const data = await res.json()
+
+        // 400 bersih dari validateActivityFields, BUKAN html/stack trace
+        // default Express -- itulah yang dibuktikan fix fileFilter.
+        assert.strictEqual(res.status, 400)
+        assert.match(data.message, /foto/i)
 
         const [rows] = await db.query(
             'SELECT id FROM visit_activities WHERE visit_id = ?',

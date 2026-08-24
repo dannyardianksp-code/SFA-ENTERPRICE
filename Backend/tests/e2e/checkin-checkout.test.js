@@ -17,6 +17,7 @@ const SUPERVISOR = 3
 let db
 const visitPlanIdsDibuat = []
 const visitIdsDibuat = []
+const activityIdsUjiGerbang = []
 
 const tokenUntuk = (id) =>
     jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '15m' })
@@ -138,6 +139,16 @@ before(async () => {
 
 after(async () => {
     if (db) {
+        // Dihapus SEBELUM visits induknya -- kalau urutannya dibalik,
+        // baris visit_activities ini jadi yatim begitu visit-nya lenyap
+        // duluan. Dipindahkan ke sini (bukan DELETE manual di tiap tes
+        // setelah blok assertion) supaya tetap dibersihkan walau
+        // assertion di atasnya gagal duluan dan melempar sebelum sempat
+        // menjalankan DELETE-nya sendiri.
+        for (const id of activityIdsUjiGerbang) {
+            await db.query('DELETE FROM visit_activities WHERE id = ?', [id])
+        }
+
         for (const id of visitIdsDibuat) {
             await db.query('DELETE FROM visits WHERE id = ?', [id])
         }
@@ -595,11 +606,13 @@ describe('POST /api/visits/:id/checkout', () => {
         // baris activity sebelum checkout diterima -- tes ini bukan
         // tentang gerbang itu, jadi activity-nya dipenuhi begitu saja
         // supaya fokus tes tetap pada wewenang supervisor.
-        await db.query(
+        const [hasilInsert] = await db.query(
             `INSERT INTO visit_activities (visit_id, activity_id, notes, created_at)
              VALUES (?, 11, 'uji gerbang checkout', NOW())`,
             [visitId]
         )
+
+        activityIdsUjiGerbang.push(hasilInsert.insertId)
 
         const { status } = await kirim(
             'POST',
@@ -625,11 +638,6 @@ describe('POST /api/visits/:id/checkout', () => {
         // Bukan hanya checkout_time -- status di visit_plans juga
         // benar-benar COMPLETED, bukan hanya kolom visits yang berubah.
         assert.strictEqual(plan[0].status, 'COMPLETED')
-
-        await db.query(
-            'DELETE FROM visit_activities WHERE visit_id = ? AND notes = ?',
-            [visitId, 'uji gerbang checkout']
-        )
     })
 
     // FIX 3: visitId di sini sudah di-checkout oleh tes sebelumnya.
@@ -705,11 +713,13 @@ describe('POST /api/visits/:id/checkout', () => {
         // Gerbang minimal-activity (task 4) mewajibkan minimal satu
         // baris activity sebelum checkout diterima -- tes ini menguji
         // transisi status plan, bukan gerbang itu sendiri.
-        await db.query(
+        const [hasilInsert] = await db.query(
             `INSERT INTO visit_activities (visit_id, activity_id, notes, created_at)
              VALUES (?, 11, 'uji gerbang checkout', NOW())`,
             [visitId]
         )
+
+        activityIdsUjiGerbang.push(hasilInsert.insertId)
 
         const { status } = await kirim(
             'POST',
@@ -725,11 +735,6 @@ describe('POST /api/visits/:id/checkout', () => {
         )
 
         assert.strictEqual(plan[0].status, 'COMPLETED')
-
-        await db.query(
-            'DELETE FROM visit_activities WHERE visit_id = ? AND notes = ?',
-            [visitId, 'uji gerbang checkout']
-        )
     })
 
 })
@@ -783,11 +788,13 @@ describe('POST /api/visits/:id/checkout -- gerbang minimal activity', () => {
             return
         }
 
-        await db.query(
+        const [hasilInsert] = await db.query(
             `INSERT INTO visit_activities (visit_id, activity_id, notes, created_at)
              VALUES (?, 11, 'uji gerbang checkout', NOW())`,
             [visitTanpaActivity]
         )
+
+        activityIdsUjiGerbang.push(hasilInsert.insertId)
 
         const { status } = await kirim(
             'POST',
@@ -803,11 +810,6 @@ describe('POST /api/visits/:id/checkout -- gerbang minimal activity', () => {
         )
 
         assert.ok(rows[0].checkout_time !== null)
-
-        await db.query(
-            'DELETE FROM visit_activities WHERE visit_id = ? AND notes = ?',
-            [visitTanpaActivity, 'uji gerbang checkout']
-        )
     })
 
 })
