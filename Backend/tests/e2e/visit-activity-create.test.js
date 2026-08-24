@@ -13,11 +13,13 @@ const BASE = process.env.TEST_BASE_URL || 'http://localhost:1000'
 // subtree 3.
 const SPG = 1
 const SPG_LUAR = 34
+const SUPERVISOR = 3
 
 let db
 const visitIdsDibuat = []
 const activityIdsDibuat = []
 const berkasDibuat = []
+const mulaiUji = Date.now()
 
 const tokenUntuk = (id) =>
     jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '15m' })
@@ -124,6 +126,18 @@ after(async () => {
 
         for (const id of visitIdsDibuat) {
             await db.query('DELETE FROM visits WHERE id = ?', [id])
+        }
+
+        // Cleanup orphan files: foto uji yang tertinggal karena request ditolak
+        // sebelum row DB tercipta (multer tulis file SEBELUM controller validate).
+        // Scan semua *-uji.jpg yang dibuat sejak test mulai.
+        const dirUpload = path.join(__dirname, '..', '..', 'uploads')
+        for (const nama of fs.readdirSync(dirUpload)) {
+            if (!nama.endsWith('-uji.jpg')) continue
+            const waktuBerkas = Number(nama.split('-')[0])
+            if (Number.isFinite(waktuBerkas) && waktuBerkas >= mulaiUji) {
+                fs.unlinkSync(path.join(dirUpload, nama))
+            }
         }
 
         await db.end()
@@ -320,6 +334,42 @@ describe('POST /api/visit-activities -- batas upload', () => {
 
         assert.strictEqual(status, 200)
         activityIdsDibuat.push(data.id)
+    })
+
+    test('fileFilter tidak merusak endpoint upload Excel (multer instance sama, field berbeda)', async () => {
+        // upload.middleware.js dipakai bersama oleh POST /api/visit-plans/upload
+        // (field 'file', bukan 'photo') -- fileFilter field-aware HARUS tetap
+        // meloloskan file non-image di jalur ini.
+        const XLSX = require('xlsx')
+
+        const sheet = XLSX.utils.json_to_sheet([
+            { 'Sales Code': 'TIDAK-ADA', 'Customer Code': 'TIDAK-ADA', 'Visit Date': '2026-01-01' },
+        ])
+        const workbook = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(workbook, sheet, 'Sheet1')
+        const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' })
+
+        const form = new FormData()
+        form.append(
+            'file',
+            new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+            'uji-regresi.xlsx'
+        )
+
+        const res = await fetch(BASE + '/api/visit-plans/upload', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + tokenUntuk(SUPERVISOR) },
+            body: form,
+        })
+
+        const data = await res.json()
+
+        // 200 dengan bentuk respons normal controller (inserted/failed/errors)
+        // membuktikan file TIDAK ditolak di layer multer/fileFilter -- kalau
+        // fileFilter masih unconditional, ini akan gagal duluan (400/500)
+        // sebelum sempat sampai body JSON ini.
+        assert.strictEqual(res.status, 200)
+        assert.strictEqual(typeof data.inserted, 'number')
     })
 
 })
