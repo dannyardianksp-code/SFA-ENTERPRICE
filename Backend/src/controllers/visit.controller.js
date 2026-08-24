@@ -9,6 +9,12 @@ const VisitPlan = require('../models/visitPlan.model')
 const { Op } = require('sequelize')
 
 const {
+    parseCoordinate,
+    isValidLatitude,
+    isValidLongitude,
+} = require('../utils/geo.util')
+
+const {
     sendError,
     sendServerError,
 } = require('../utils/response.util')
@@ -90,24 +96,54 @@ exports.checkIn = async (req, res) => {
         // Akurasi diperiksa SEBELUM jarak. Bacaan GPS yang buruk bisa
         // kebetulan menghasilkan jarak terhitung yang tampak dekat,
         // padahal posisi sebenarnya jauh.
-        const akurasi = Number(accuracy)
-
-        if (!Number.isFinite(akurasi) || akurasi > 50) {
+        //
+        // typeof dipakai, bukan Number(accuracy) -- Number(null) adalah
+        // 0, dan 0 <= 50 lolos sebagai bacaan GPS SEMPURNA. accuracy
+        // null/""/array hanya bisa ditolak dengan memeriksa tipenya
+        // dulu, bukan cuma hasil koersinya.
+        if (
+            typeof accuracy !== 'number' ||
+            !Number.isFinite(accuracy) ||
+            accuracy <= 0 ||
+            accuracy > 50
+        ) {
             return sendError(
                 res,
                 400,
-                `Akurasi lokasi terlalu rendah (±${accuracy} meter).`
+                `Akurasi lokasi tidak valid atau terlalu rendah (±${accuracy} meter).`
             )
+        }
+
+        // latitude/longitude divalidasi secara eksplisit sebelum dipakai
+        // menghitung jarak. parseFloat(undefined)/parseFloat("abc")
+        // menghasilkan NaN, dan NaN > 50 adalah false di JavaScript --
+        // tanpa penjaga ini, koordinat yang hilang atau rusak lolos
+        // begitu saja melewati pemeriksaan jarak di bawah.
+        const lat = parseCoordinate(latitude)
+        const lng = parseCoordinate(longitude)
+
+        if (!isValidLatitude(lat) || !isValidLongitude(lng)) {
+            return sendError(res, 400, 'Koordinat tidak valid.')
+        }
+
+        // Koordinat customer juga divalidasi -- baris customer dengan
+        // latitude/longitude NULL atau kosong menghasilkan NaN yang
+        // persis sama, walau bukan berasal dari klien yang jahat.
+        const customerLat = parseCoordinate(customer.latitude)
+        const customerLng = parseCoordinate(customer.longitude)
+
+        if (!isValidLatitude(customerLat) || !isValidLongitude(customerLng)) {
+            return sendError(res, 400, 'Lokasi customer belum tercatat.')
         }
 
         const distance = getDistance(
             {
-                latitude: parseFloat(latitude),
-                longitude: parseFloat(longitude),
+                latitude: lat,
+                longitude: lng,
             },
             {
-                latitude: parseFloat(customer.latitude),
-                longitude: parseFloat(customer.longitude),
+                latitude: customerLat,
+                longitude: customerLng,
             }
         )
 
@@ -118,27 +154,16 @@ exports.checkIn = async (req, res) => {
             })
         }
 
-        const existingVisit = await Visit.findOne({
-            where: {
-                user_id: req.user.id,
-                customer_id: plan.customer_id,
-                checkout_time: null,
-            },
-        })
-
-        if (existingVisit) {
-            return res.json({
-                message: 'Visit masih berjalan',
-                data: existingVisit,
-            })
-        }
-
         // Satu aturan, sama dengan endpoint lain: multi-area lewat
         // user_areas, bukan perbandingan area_id tunggal. req.user
         // dari auth.middleware tidak memuat AssignedAreas, jadi user
         // dimuat ulang di sini -- tanpa ini assertAreaChannelAccess
         // diam-diam jatuh ke fallback area_id tunggal untuk SETIAP
         // request, tidak pernah benar-benar memeriksa user_areas.
+        //
+        // Gerbang area diperiksa SEBELUM cek kunjungan terbuka di
+        // bawah, mengikuti urutan spec -- bukan sebaliknya seperti
+        // sebelumnya.
         const userDenganArea = await findUserWithAreas(req.user.id)
 
         const gerbangArea = assertAreaChannelAccess(
@@ -151,13 +176,33 @@ exports.checkIn = async (req, res) => {
             return sendError(res, gerbangArea.status, gerbangArea.message)
         }
 
+        // Dikunci ke visit_plan_id, bukan ke pasangan user_id+customer_id
+        // -- kunci lama mengembalikan visit MANAPUN yang masih terbuka
+        // untuk user+customer ini, termasuk yang berasal dari plan LAIN,
+        // sehingga check-in pada plan kedua secara diam-diam ditumpangi
+        // data plan pertama tanpa pernah menyentuh plan kedua sama
+        // sekali.
+        const existingVisit = await Visit.findOne({
+            where: {
+                visit_plan_id,
+                checkout_time: null,
+            },
+        })
+
+        if (existingVisit) {
+            return res.json({
+                message: 'Visit masih berjalan',
+                data: existingVisit,
+            })
+        }
+
         const visit = await Visit.create({
             user_id: req.user.id,
             customer_id: plan.customer_id,
             visit_plan_id,
             latitude,
             longitude,
-            location_accuracy: akurasi,
+            location_accuracy: accuracy,
             checkin_time: new Date(),
         })
 
@@ -356,6 +401,13 @@ exports.checkOut = async (req, res) => {
 
         if (gerbang) {
             return sendError(res, gerbang.status, gerbang.message)
+        }
+
+        // Tanpa penjaga ini, checkout kedua pada visit yang sama diam-
+        // diam menimpa checkout_time yang sudah tercatat -- baik dari
+        // tap ganda di mobile maupun panggilan ulang dari sfa-web.
+        if (visit.checkout_time) {
+            return sendError(res, 400, 'Kunjungan ini sudah di-checkout sebelumnya.')
         }
 
         visit.checkout_time = new Date()

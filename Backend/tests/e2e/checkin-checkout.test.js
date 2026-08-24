@@ -425,6 +425,117 @@ describe('POST /api/visits/checkin', () => {
         assert.strictEqual(visits.length, 0)
     })
 
+    // Teeth-proof FIX 1: sebelumnya latitude/longitude yang hilang
+    // menghasilkan NaN di getDistance, dan NaN > 50 adalah false --
+    // request tanpa koordinat sama sekali lolos ke Visit.create dengan
+    // kolom latitude/longitude NULL.
+    test('checkIn tanpa latitude/longitude ditolak 400, bukan lolos sebagai NaN', async (t) => {
+        if (!customerUji) {
+            t.skip('tidak ada customer dengan koordinat di database')
+            return
+        }
+
+        const planId = await buatPlanUntuk(SPG, customerUji.id)
+
+        const { status } = await kirim(
+            'POST',
+            '/api/visits/checkin',
+            SPG,
+            { visit_plan_id: planId, accuracy: 10 }
+        )
+
+        assert.strictEqual(status, 400)
+
+        const [visits] = await db.query(
+            'SELECT id FROM visits WHERE visit_plan_id = ?',
+            [planId]
+        )
+
+        assert.strictEqual(visits.length, 0)
+    })
+
+    // Teeth-proof FIX 2: sebelumnya Number(null) adalah 0, dan
+    // Number.isFinite(0) benar -- accuracy: null diperlakukan sebagai
+    // bacaan GPS SEMPURNA alih-alih ditolak.
+    test('checkIn dengan accuracy null ditolak 400, bukan diperlakukan sebagai akurasi sempurna', async (t) => {
+        if (!customerUji) {
+            t.skip('tidak ada customer dengan koordinat di database')
+            return
+        }
+
+        const planId = await buatPlanUntuk(SPG, customerUji.id)
+
+        const { status } = await kirim(
+            'POST',
+            '/api/visits/checkin',
+            SPG,
+            {
+                visit_plan_id: planId,
+                latitude: Number(customerUji.latitude),
+                longitude: Number(customerUji.longitude),
+                accuracy: null,
+            }
+        )
+
+        assert.strictEqual(status, 400)
+
+        const [visits] = await db.query(
+            'SELECT id FROM visits WHERE visit_plan_id = ?',
+            [planId]
+        )
+
+        assert.strictEqual(visits.length, 0)
+    })
+
+    // NB: bukan dua panggilan checkIn berurutan lewat HTTP -- panggilan
+    // kedua yang sungguhan akan selalu kena `plan.status !== 'PENDING'`
+    // (step 3, tidak diubah fix ini) lebih dulu dan pulang 400 "Visit
+    // already started", tidak pernah sampai ke pengecekan visit terbuka
+    // di step 8. Cabang itu hanya tercapai lewat jendela race: Visit
+    // sudah ter-commit tapi VisitPlan.update belum, sehingga
+    // findByPk(visit_plan_id) yang dibaca ulang masih melihat status
+    // PENDING walau baris Visit untuk plan ini sudah ada dan masih
+    // terbuka. Disisipkan langsung lewat mysql2 untuk meniru jendela
+    // itu secara deterministik -- pola yang sama dipakai
+    // hierarchy-access.test.js untuk status non-PENDING yang tidak bisa
+    // dibuat lewat API.
+    test('checkIn pada plan yang sudah punya visit terbuka (jendela race) mengembalikan visit yang sama, bukan baris baru', async (t) => {
+        if (!customerUji) {
+            t.skip('tidak ada customer dengan koordinat di database')
+            return
+        }
+
+        const planId = await buatPlanUntuk(SPG, customerUji.id)
+
+        const [hasil] = await db.query(
+            `INSERT INTO visits
+                (user_id, customer_id, visit_plan_id, checkin_time,
+                 latitude, longitude, location_accuracy)
+             VALUES (?, ?, ?, NOW(), ?, ?, 10)`,
+            [SPG, customerUji.id, planId, customerUji.latitude, customerUji.longitude]
+        )
+
+        const visitIdLama = hasil.insertId
+        visitIdsDibuat.push(visitIdLama)
+
+        const { status, data } = await kirim(
+            'POST',
+            '/api/visits/checkin',
+            SPG,
+            { visit_plan_id: planId, ...koordinatBaik() }
+        )
+
+        assert.strictEqual(status, 200)
+        assert.strictEqual(data.data.id, visitIdLama)
+
+        const [visits] = await db.query(
+            'SELECT id FROM visits WHERE visit_plan_id = ?',
+            [planId]
+        )
+
+        assert.strictEqual(visits.length, 1)
+    })
+
 })
 
 
@@ -506,6 +617,37 @@ describe('POST /api/visits/:id/checkout', () => {
         assert.strictEqual(plan[0].status, 'COMPLETED')
     })
 
+    // FIX 3: visitId di sini sudah di-checkout oleh tes sebelumnya.
+    // Memanggilnya lagi dulu diam-diam menimpa checkout_time -- tap
+    // ganda di mobile atau panggilan ulang dari sfa-web tidak boleh
+    // menggeser waktu checkout yang sudah tercatat.
+    test('checkout kedua pada visit yang sama ditolak 400, tidak menimpa checkout_time', async (t) => {
+        if (!customerUji) {
+            t.skip('tidak ada customer dengan koordinat di database')
+            return
+        }
+
+        const [sebelum] = await db.query(
+            'SELECT checkout_time FROM visits WHERE id = ?',
+            [visitId]
+        )
+
+        const { status } = await kirim(
+            'POST',
+            `/api/visits/${visitId}/checkout`,
+            SPG
+        )
+
+        assert.strictEqual(status, 400)
+
+        const [sesudah] = await db.query(
+            'SELECT checkout_time FROM visits WHERE id = ?',
+            [visitId]
+        )
+
+        assert.deepStrictEqual(sesudah[0].checkout_time, sebelum[0].checkout_time)
+    })
+
     test('kunjungan yang tidak ada menghasilkan 404', async () => {
         const { status } = await kirim(
             'POST',
@@ -524,6 +666,41 @@ describe('POST /api/visits/:id/checkout', () => {
         )
 
         assert.strictEqual(status, 400)
+    })
+
+    test('SPG check-out kunjungannya sendiri: status benar-benar COMPLETED', async (t) => {
+        if (!customerUji) {
+            t.skip('tidak ada customer dengan koordinat di database')
+            return
+        }
+
+        const planId = await buatPlanUntuk(SPG, customerUji.id)
+
+        const [hasil] = await db.query(
+            `INSERT INTO visits
+                (user_id, customer_id, visit_plan_id, checkin_time,
+                 latitude, longitude, location_accuracy)
+             VALUES (?, ?, ?, NOW(), ?, ?, 10)`,
+            [SPG, customerUji.id, planId, customerUji.latitude, customerUji.longitude]
+        )
+
+        const visitId = hasil.insertId
+        visitIdsDibuat.push(visitId)
+
+        const { status } = await kirim(
+            'POST',
+            `/api/visits/${visitId}/checkout`,
+            SPG
+        )
+
+        assert.strictEqual(status, 200)
+
+        const [plan] = await db.query(
+            'SELECT status FROM visit_plans WHERE id = ?',
+            [planId]
+        )
+
+        assert.strictEqual(plan[0].status, 'COMPLETED')
     })
 
 })

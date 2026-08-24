@@ -668,9 +668,20 @@ alasan:
   pernah menjadi `COMPLETED` — status tidak sinkron sampai diperbaiki
   manual. Di luar cakupan sub-proyek ini (urutan respons, bukan
   atomisitas).
-- **`sfa-web` membaca `data.error`** sementara backend mengirim
-  `{ message }`. Penolakan 403 yang baru akan muncul di web sebagai
-  `alert(undefined)`.
+- **checkIn juga tidak transaksional** — bentuknya sama persis:
+  `Visit.create()` lalu `VisitPlan.update()` sebagai dua tulisan
+  terpisah tanpa wrapper transaksi. Kalau update kedua gagal setelah
+  yang pertama commit, baris `Visit` sudah ada tapi `visit_plans.status`
+  tidak pernah menjadi `ON VISIT` — plan tetap tampak `PENDING` walau
+  kunjungannya sudah tercatat. Sama seperti catatan `checkOut` di atas,
+  di luar cakupan sub-proyek ini.
+- **`sfa-web` membaca `data.error`** untuk sebagian endpoint, sementara
+  backend mengirim `{ message }`. **Tidak berlaku untuk checkout**:
+  `sfa-web/app/visit-detail/[id]/page.tsx`, `handleCheckout`, membaca
+  `alert(data.message)` — `data.error` tidak muncul sama sekali di
+  berkas itu — sehingga 400 baru dari FIX 3 (checkout kedua ditolak)
+  tampil dengan pesan yang benar, bukan `alert(undefined)`. Catatan ini
+  tetap berlaku untuk endpoint lain yang belum diperiksa di sini.
 - **`GET /api/users/:id/areas`** nol pemanggil di ketiga aplikasi.
 - **`parseId` memakai `Number()`, bukan validasi tipe.** `Number([5])`
   adalah `5`, dan `Number(true)` adalah `1` — jadi `parseId([5])` dan
