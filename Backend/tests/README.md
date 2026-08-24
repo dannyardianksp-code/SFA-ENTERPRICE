@@ -80,6 +80,31 @@ sehingga deret kode akan berlubang. Aman di database dev.
 berdasarkan id tertangkap -- termasuk **menghapus berkas foto dari
 disk**, bukan cuma barisnya di database.
 
+### Upload berkas (Task 3)
+
+`src/middleware/upload.middleware.js` (multer) dipakai bersama oleh dua
+endpoint: `POST /api/visit-activities` (field `'photo'`) dan
+`POST /api/visit-plans/upload` (field `'file'`, import Excel). Satu
+instance, dua konsumen berbeda tipe berkas yang diizinkan.
+
+- `limits.fileSize` dibatasi 5MB untuk kedua field -- upload di atas itu
+  ditolak multer sebelum handler mana pun jalan.
+- `fileFilter` **field-aware**: hanya field `'photo'` yang diperiksa
+  mimetype (`image/*`). Kondisinya `file.fieldname === 'photo'`, jadi
+  upload lewat field `'file'` (Excel `.xlsx`) tidak pernah kena cek
+  mimetype ini sama sekali -- kalau fileFilter tidak field-aware, upload
+  Excel akan ditolak sebagai "bukan gambar" karena mimetype-nya memang
+  bukan `image/*`.
+- Berkas non-image di field `'photo'` ditolak lewat `cb(null, false)`,
+  BUKAN `cb(new Error(...))`. Melempar Error dari fileFilter membuat
+  Express 5 (tanpa error handler global -- lihat "Yang masih terbuka")
+  mengirim halaman HTML default berisi **stack trace lengkap dengan path
+  filesystem absolut server** ke klien mana pun yang mengirim file
+  non-image. `cb(null, false)` membuat multer diam-diam tidak
+  melampirkan `req.file` dan tetap lanjut ke handler normal, yang lalu
+  menolaknya 400 bersih lewat `validateActivityFields` (tipe activity
+  yang mewajibkan foto akan melihat `req.file` kosong).
+
 `tests/e2e/visit-plan.test.js` dan `tests/e2e/hierarchy-access.test.js`
 sempat membuat fixture-nya lewat `POST /api/visit-plans`, dan itu cuma
 berhasil karena endpoint itu belum punya penjaga kepemilikan. Begitu
@@ -173,8 +198,16 @@ termasuk tesnya sendiri.
 
 `tests/e2e/checkin-checkout.test.js` membuat `visit_plans` dan `visits`
 sementaranya sendiri, dihapus di `after()` berdasarkan id yang
-ditangkap. Akun sungguhan (SPG 1, 37, 34, SUPERVISOR 3) dipakai hanya
-sebagai pemanggil.
+ditangkap. Di tiga gerbang checkout (checkout oleh supervisor, checkout
+oleh SPG sendiri, dan gerbang minimal-activity) berkas ini juga
+menyisipkan satu baris `visit_activities` langsung lewat `mysql2` supaya
+gerbang minimal-activity (task 4) tidak menolak checkout-nya -- id
+baris itu ditangkap ke array `activityIdsUjiGerbang` top-level dan
+dihapus di `after()` yang sama, BUKAN lewat `DELETE` manual di akhir
+tiap tes: kalau assertion di atasnya gagal duluan, `DELETE` manual di
+baris berikutnya tidak pernah jalan, dan baris `visit_activities` itu
+jadi yatim setelah `visit` induknya ikut dihapus `after()`. Akun
+sungguhan (SPG 1, 37, 34, SUPERVISOR 3) dipakai hanya sebagai pemanggil.
 
 `tests/e2e/user-management.test.js` membuat lima user sekali pakai langsung
 lewat `mysql2`:
@@ -700,3 +733,25 @@ alasan:
   `POST /api/visit-plans` adalah pemanggil **pertama** yang menerapkan
   `parseId` ke nilai dari body JSON, bukan dari `req.params`, dan body
   JSON-lah yang membuat koersi ini benar-benar bisa dicapai.
+- **Supervisor tidak bisa checkout kunjungan bawahan yang belum punya
+  activity tercatat sama sekali.** `POST /api/visit-activities` bersifat
+  personal (`visit.user_id !== req.user.id` menolak 403) -- supervisor
+  tidak bisa mencatatkan activity ATAS NAMA bawahannya untuk memenuhi
+  gerbang minimal-activity, dan gerbang itu sendiri menolak 400 kalau
+  supervisor langsung mencoba checkout. Kasus SPG resign atau HP hilang
+  sebelum sempat mencatat satu activity pun butuh intervensi manual
+  database (INSERT `visit_activities` atau checkout langsung lewat SQL)
+  -- tidak ada jalur API untuk situasi ini.
+- **`qty` divalidasi numerik, `normal_price`/`promo_price`/`expired_date`
+  tidak.** `validateActivityFields` (`activity-field-rules.util.js`)
+  memeriksa `qty` harus bilangan bulat non-negatif, tapi ketiga field
+  lainnya hanya diperiksa "terisi" (lihat pengecekan `required` di atas
+  fungsi yang sama) -- format yang salah (mis. `normal_price: 'abc'`,
+  `expired_date: 'bukan-tanggal'`) lolos ke `VisitActivity.create` dan
+  bisa menghasilkan 500 dari MySQL (strict mode) alih-alih 400 bersih.
+- **Error handler global Express masih belum ada** (dicatat sejak Task
+  3). Fix `fileFilter` di atas hanya menutup jalur penolakan tipe file --
+  jalur `limits.fileSize` (upload di atas 5MB) masih menghasilkan error
+  `LIMIT_FILE_SIZE` yang tidak ditangkap, jatuh ke error handler default
+  Express, dan berakhir sebagai 500 dengan halaman HTML bawaan, bukan
+  pesan 400 bersih.
