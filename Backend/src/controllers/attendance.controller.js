@@ -64,11 +64,16 @@ exports.checkIn = async (req, res) => {
 
     } catch (err) {
 
+        // Kalau ada error database apa pun setelah multer menulis foto
+        // ke disk, berkasnya harus ikut dihapus -- kalau tidak, bocor
+        // permanen jadi berkas yatim di disk. Dihapus di awal blok
+        // catch, terlepas dari jenis errornya.
+        if (req.file) fs.unlinkSync(req.file.path)
+
         // Dua request checkin nyaris bersamaan bisa lolos dari cek
         // findOne di atas (race condition) SEBELUM unique constraint
         // (user_id, tanggal) di database mencegah baris kedua tercipta.
         if (err.name === 'SequelizeUniqueConstraintError') {
-            if (req.file) fs.unlinkSync(req.file.path)
             return sendError(res, 400, 'Anda sudah absen masuk hari ini.')
         }
 
@@ -124,17 +129,46 @@ exports.checkOut = async (req, res) => {
             return sendError(res, 400, 'Koordinat tidak valid.')
         }
 
-        attendance.clock_out_time = new Date()
-        attendance.clock_out_latitude = latitude ?? null
-        attendance.clock_out_longitude = longitude ?? null
-        attendance.clock_out_accuracy = accuracyNum
-        attendance.clock_out_photo_url = `/uploads/${req.file.filename}`
+        const [jumlahTerupdate] = await Attendance.update(
+            {
+                clock_out_time: new Date(),
+                clock_out_latitude: latitude ?? null,
+                clock_out_longitude: longitude ?? null,
+                clock_out_accuracy: accuracyNum,
+                clock_out_photo_url: `/uploads/${req.file.filename}`,
+            },
+            {
+                where: {
+                    id: attendance.id,
+                    // Bersyarat pada clock_out_time masih null --
+                    // inilah yang membuat UPDATE ini atomik terhadap
+                    // race. Kalau dua request checkout nyaris
+                    // bersamaan lolos cek `findOne` di atas (baca
+                    // stale), cuma SATU UPDATE yang benar-benar
+                    // mengubah baris (clock_out_time waktu itu masih
+                    // null); yang kedua dapat affected rows 0 karena
+                    // kondisi WHERE-nya sudah tidak cocok lagi.
+                    clock_out_time: null,
+                },
+            }
+        )
 
-        await attendance.save()
+        if (jumlahTerupdate === 0) {
+            fs.unlinkSync(req.file.path)
+            return sendError(res, 400, 'Anda sudah absen pulang hari ini.')
+        }
 
-        res.json(attendance)
+        const hasil = await Attendance.findByPk(attendance.id)
+
+        res.json(hasil)
 
     } catch (err) {
+
+        // Kalau ada error database apa pun setelah multer menulis foto
+        // ke disk, berkasnya harus ikut dihapus -- kalau tidak, bocor
+        // permanen jadi berkas yatim di disk.
+        if (req.file) fs.unlinkSync(req.file.path)
+
         return sendServerError(res, err, 'ATTENDANCE CHECKOUT')
     }
 
