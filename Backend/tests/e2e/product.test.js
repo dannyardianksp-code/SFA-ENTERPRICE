@@ -125,6 +125,26 @@ describe('POST /api/products', () => {
         assert.strictEqual(rows[0].category, null)
     })
 
+    test('category COMPETITOR tersimpan apa adanya', async () => {
+        const { status, data } = await kirim('POST', '/api/products', {
+            code: 'UJI-PRODUK-004',
+            name: 'Produk Kompetitor Uji',
+            price: 1000,
+            uom: 'PCS',
+            category: 'COMPETITOR',
+        })
+
+        assert.strictEqual(status, 200)
+        produkIdsDibuat.push(data.id)
+
+        const [rows] = await db.query(
+            'SELECT category FROM products WHERE id = ?',
+            [data.id]
+        )
+
+        assert.strictEqual(rows[0].category, 'COMPETITOR')
+    })
+
 })
 
 
