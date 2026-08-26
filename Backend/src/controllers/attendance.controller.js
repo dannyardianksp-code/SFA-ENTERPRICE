@@ -76,3 +76,66 @@ exports.checkIn = async (req, res) => {
     }
 
 }
+
+exports.checkOut = async (req, res) => {
+
+    try {
+
+        const { latitude, longitude, accuracy } = req.body
+
+        const tanggal = localDateString()
+
+        const attendance = await Attendance.findOne({
+            where: { user_id: req.user.id, tanggal }
+        })
+
+        if (!attendance) {
+            if (req.file) fs.unlinkSync(req.file.path)
+            return sendError(res, 400, 'Anda belum absen masuk hari ini.')
+        }
+
+        if (attendance.clock_out_time) {
+            if (req.file) fs.unlinkSync(req.file.path)
+            return sendError(res, 400, 'Anda sudah absen pulang hari ini.')
+        }
+
+        if (!req.file) {
+            return sendError(res, 400, 'Foto wajib diisi untuk absen pulang.')
+        }
+
+        const accuracyNum = accuracy === undefined ? null : Number(accuracy)
+
+        if (
+            accuracyNum !== null &&
+            (!Number.isFinite(accuracyNum) || accuracyNum <= 0)
+        ) {
+            fs.unlinkSync(req.file.path)
+            return sendError(res, 400, 'Akurasi lokasi tidak valid.')
+        }
+
+        const lat = parseCoordinate(latitude)
+        const lng = parseCoordinate(longitude)
+
+        if (
+            (latitude !== undefined && !isValidLatitude(lat)) ||
+            (longitude !== undefined && !isValidLongitude(lng))
+        ) {
+            fs.unlinkSync(req.file.path)
+            return sendError(res, 400, 'Koordinat tidak valid.')
+        }
+
+        attendance.clock_out_time = new Date()
+        attendance.clock_out_latitude = latitude ?? null
+        attendance.clock_out_longitude = longitude ?? null
+        attendance.clock_out_accuracy = accuracyNum
+        attendance.clock_out_photo_url = `/uploads/${req.file.filename}`
+
+        await attendance.save()
+
+        res.json(attendance)
+
+    } catch (err) {
+        return sendServerError(res, err, 'ATTENDANCE CHECKOUT')
+    }
+
+}

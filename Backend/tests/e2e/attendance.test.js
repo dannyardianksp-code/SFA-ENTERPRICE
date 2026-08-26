@@ -18,13 +18,13 @@ const mulaiUji = Date.now()
 
 // id user "sekali pakai" yang dipakai beberapa test di bawah untuk
 // mengisolasi skenario (tanpa foto, koordinat rusak, tanpa lokasi,
-// race condition) dari SPG/SPG_LAIN yang datanya dipakai test lain.
-// Server ini cuma punya 11 user sungguhan (id tertinggi 38), jadi
-// baris usernya sendiri harus disiapkan di sini dulu -- auth
-// middleware memuat ulang user dari database tiap request, dan
+// race condition, checkout) dari SPG/SPG_LAIN yang datanya dipakai
+// test lain. Server ini cuma punya 11 user sungguhan (id tertinggi
+// 38), jadi baris usernya sendiri harus disiapkan di sini dulu --
+// auth middleware memuat ulang user dari database tiap request, dan
 // token untuk id yang tidak ada ditolak 401 sebelum sempat menyentuh
-// controller checkin sama sekali.
-const USER_ID_SEMENTARA = [999, 998, 997, 996]
+// controller checkin/checkout sama sekali.
+const USER_ID_SEMENTARA = [999, 998, 997, 996, 995, 994, 993, 992, 991, 990]
 
 const tokenUntuk = (id) =>
     jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '15m' })
@@ -308,6 +308,101 @@ describe('POST /api/attendances/checkin', () => {
             [996]
         )
         assert.strictEqual(rows[0].n, 1)
+    })
+
+})
+
+describe('POST /api/attendances/checkout', () => {
+
+    const bersihkanHariIni = async (userId) => {
+        const c = await mysql.createConnection({
+            host: process.env.DB_HOST, user: process.env.DB_USER,
+            password: process.env.DB_PASS, database: process.env.DB_NAME,
+        })
+        await c.query('DELETE FROM attendances WHERE user_id = ? AND tanggal = CURDATE()', [userId])
+        await c.end()
+    }
+
+    test('absen pulang sebelum absen masuk ditolak 400', async () => {
+        await bersihkanHariIni(995)
+
+        const { status, data } = await kirimDenganFoto(
+            995,
+            {},
+            true,
+            '/api/attendances/checkout'
+        )
+
+        assert.strictEqual(status, 400)
+        assert.match(data.message, /belum absen masuk/i)
+    })
+
+    test('absen pulang berhasil setelah absen masuk', async () => {
+        await bersihkanHariIni(994)
+
+        const masuk = await kirimDenganFoto(
+            994, { latitude: '-6.2', longitude: '106.8' }, true, '/api/attendances/checkin'
+        )
+        assert.strictEqual(masuk.status, 200)
+        attendanceIdsDibuat.push(masuk.data.id)
+
+        const pulang = await kirimDenganFoto(
+            994, { latitude: '-6.2', longitude: '106.8' }, true, '/api/attendances/checkout'
+        )
+
+        assert.strictEqual(pulang.status, 200)
+        assert.ok(pulang.data.clock_out_time)
+        assert.ok(pulang.data.clock_out_photo_url)
+        assert.strictEqual(pulang.data.id, masuk.data.id)
+    })
+
+    test('absen pulang dobel ditolak 400', async () => {
+        await bersihkanHariIni(993)
+
+        const masuk = await kirimDenganFoto(993, {}, true, '/api/attendances/checkin')
+        attendanceIdsDibuat.push(masuk.data.id)
+
+        const pulangPertama = await kirimDenganFoto(993, {}, true, '/api/attendances/checkout')
+        assert.strictEqual(pulangPertama.status, 200)
+
+        const pulangKedua = await kirimDenganFoto(993, {}, true, '/api/attendances/checkout')
+        assert.strictEqual(pulangKedua.status, 400)
+        assert.match(pulangKedua.data.message, /sudah absen pulang/i)
+    })
+
+    test('absen pulang tanpa foto ditolak 400', async () => {
+        await bersihkanHariIni(992)
+
+        const masuk = await kirimDenganFoto(992, {}, true, '/api/attendances/checkin')
+        attendanceIdsDibuat.push(masuk.data.id)
+
+        const { status } = await kirimDenganFoto(992, {}, false, '/api/attendances/checkout')
+        assert.strictEqual(status, 400)
+    })
+
+    test('dua pegawai berbeda absen hari yang sama tidak saling bentrok', async () => {
+        await bersihkanHariIni(991)
+        await bersihkanHariIni(990)
+
+        const a = await kirimDenganFoto(991, {}, true, '/api/attendances/checkin')
+        const b = await kirimDenganFoto(990, {}, true, '/api/attendances/checkin')
+
+        assert.strictEqual(a.status, 200)
+        assert.strictEqual(b.status, 200)
+        assert.notStrictEqual(a.data.id, b.data.id)
+
+        attendanceIdsDibuat.push(a.data.id, b.data.id)
+
+        const pulangA = await kirimDenganFoto(991, {}, true, '/api/attendances/checkout')
+        assert.strictEqual(pulangA.status, 200)
+        assert.strictEqual(pulangA.data.id, a.data.id)
+
+        // Milik B TIDAK ikut ter-checkout oleh request milik A.
+        const [rowB] = await db.query(
+            'SELECT clock_out_time FROM attendances WHERE id = ?',
+            [b.data.id]
+        )
+        assert.strictEqual(rowB[0].clock_out_time, null)
     })
 
 })
