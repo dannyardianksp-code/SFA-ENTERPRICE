@@ -8,8 +8,14 @@
  */
 const ACTIVITY_FIELD_RULES = {
     1: { required: ['product_name', 'photo'], optional: ['qty', 'notes'] },   // DISPLAY SEWA
-    2: { required: ['product_name', 'photo'], optional: ['qty', 'notes'] },   // DISPLAY REGULER
-    3: { required: ['notes', 'photo'], optional: ['product_name'] },          // COMPETITOR
+    2: {
+        required: ['product_name', 'qty', 'expired_date'],
+        optional: ['normal_price', 'promo_price', 'photo', 'notes'],
+    },                                                                        // DISPLAY REGULER -- sama dengan STOCK
+    3: {
+        required: ['product_name', 'qty', 'expired_date'],
+        optional: ['normal_price', 'promo_price', 'photo', 'notes'],
+    },                                                                        // COMPETITOR -- sama dengan STOCK
     4: {
         required: ['product_name', 'qty', 'expired_date'],
         optional: ['normal_price', 'promo_price', 'photo', 'notes'],

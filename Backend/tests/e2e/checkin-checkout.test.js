@@ -108,10 +108,10 @@ const ambilCustomerAreaKedua = async (userId) => {
     return customerRows[0] ?? null
 }
 
-const buatPlanUntuk = async (userId, customerId) => {
+const buatPlanUntukTanggal = async (userId, customerId, ekspresiTanggalSql) => {
     const [hasil] = await db.query(
         `INSERT INTO visit_plans (user_id, customer_id, visit_date, status)
-         VALUES (?, ?, CURDATE(), 'PENDING')`,
+         VALUES (?, ?, ${ekspresiTanggalSql}, 'PENDING')`,
         [userId, customerId]
     )
 
@@ -119,6 +119,9 @@ const buatPlanUntuk = async (userId, customerId) => {
 
     return hasil.insertId
 }
+
+const buatPlanUntuk = (userId, customerId) =>
+    buatPlanUntukTanggal(userId, customerId, 'CURDATE()')
 
 before(async () => {
     try {
@@ -208,6 +211,59 @@ describe('POST /api/visits/checkin', () => {
         // dipakai membuat plan -- bukan dari body request (body di
         // tes ini memang tidak mengirim customer_id sama sekali).
         assert.strictEqual(row[0].customer_id, customerUji.id)
+    })
+
+    test('SPG check-in ke plan bertanggal besok ditolak 400', async (t) => {
+        if (!customerUji) {
+            t.skip('tidak ada customer dengan koordinat di database')
+            return
+        }
+
+        const planId = await buatPlanUntukTanggal(
+            SPG,
+            customerUji.id,
+            'DATE_ADD(CURDATE(), INTERVAL 1 DAY)'
+        )
+
+        const { status } = await kirim(
+            'POST',
+            '/api/visits/checkin',
+            SPG,
+            { visit_plan_id: planId, ...koordinatBaik() }
+        )
+
+        assert.strictEqual(status, 400)
+
+        const [visits] = await db.query(
+            'SELECT id FROM visits WHERE visit_plan_id = ?',
+            [planId]
+        )
+
+        assert.strictEqual(visits.length, 0)
+    })
+
+    test('SPG check-in ke plan bertanggal kemarin tetap berhasil (susulan)', async (t) => {
+        if (!customerUji) {
+            t.skip('tidak ada customer dengan koordinat di database')
+            return
+        }
+
+        const planId = await buatPlanUntukTanggal(
+            SPG,
+            customerUji.id,
+            'DATE_SUB(CURDATE(), INTERVAL 1 DAY)'
+        )
+
+        const { status, data } = await kirim(
+            'POST',
+            '/api/visits/checkin',
+            SPG,
+            { visit_plan_id: planId, ...koordinatBaik() }
+        )
+
+        assert.strictEqual(status, 200)
+
+        visitIdsDibuat.push(data.data.id)
     })
 
     test('SPG check-in ke plan milik SPG lain ditolak 403', async (t) => {

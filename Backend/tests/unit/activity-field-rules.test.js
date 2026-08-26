@@ -106,12 +106,27 @@ describe('validateActivityFields', () => {
         assert.ok(hasil)
     })
 
-    // Tipe 3 = COMPETITOR. Wajib: notes, photo.
-    test('tipe COMPETITOR tanpa notes: ditolak', () => {
-        const hasil = validateActivityFields(3, {}, true)
+    // Tipe 3 = COMPETITOR, disamakan dengan STOCK (tipe 4): wajib
+    // product_name, qty, expired_date.
+    test('tipe COMPETITOR tanpa qty: ditolak', () => {
+        const hasil = validateActivityFields(
+            3,
+            { product_name: 'Produk kompetitor', expired_date: '2026-12-01' },
+            false
+        )
 
         assert.ok(hasil)
-        assert.match(hasil, /notes/i)
+        assert.match(hasil, /qty/i)
+    })
+
+    test('tipe COMPETITOR dengan semua field wajib: valid', () => {
+        const hasil = validateActivityFields(
+            3,
+            { product_name: 'Produk kompetitor', qty: '5', expired_date: '2026-12-01' },
+            false
+        )
+
+        assert.strictEqual(hasil, null)
     })
 
 })

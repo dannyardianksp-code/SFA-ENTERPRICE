@@ -8,6 +8,7 @@ const { getDistance } = require('geolib')
 const VisitPlan = require('../models/visitPlan.model')
 const VisitActivity = require('../models/visitActivity.model')
 const { Op } = require('sequelize')
+const { localDateString } = require('../utils/date.util')
 
 const {
     parseCoordinate,
@@ -83,6 +84,20 @@ exports.checkIn = async (req, res) => {
 
         if (plan.status !== 'PENDING') {
             return sendError(res, 400, 'Visit already started')
+        }
+
+        // visit_date bertipe DATEONLY -- Sequelize mengembalikannya
+        // sebagai string 'YYYY-MM-DD', jadi aman dibandingkan langsung
+        // secara leksikografis dengan tanggal lokal WIB. SPG boleh
+        // susulan check-in untuk tanggal lampau (hari ini atau
+        // sebelumnya), tapi belum boleh mendahului jadwal masa depan --
+        // rencana kunjungan besok cuma tampil sebagai lihat-lihat.
+        if (plan.visit_date > localDateString()) {
+            return sendError(
+                res,
+                400,
+                'Kunjungan ini terjadwal nanti, belum bisa check-in.'
+            )
         }
 
         // customer_id DIKUNCI dari plan, bukan dari body. Body yang
