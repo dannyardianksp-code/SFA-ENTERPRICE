@@ -392,6 +392,96 @@ describe('GET /api/visits — cakupan hierarki', () => {
 })
 
 
+describe('GET /api/visits -- ?mine=1 dan filter tanggal', () => {
+
+    const visitIdsDibuat = []
+
+    const buatVisit = async (userId, tanggalCheckin) => {
+        const conn = await db()
+        const [customerRow] = await conn.query(
+            'SELECT id FROM customers WHERE id NOT IN (97, 123) LIMIT 1'
+        )
+        const [hasil] = await conn.query(
+            `INSERT INTO visits (user_id, customer_id, checkin_time)
+             VALUES (?, ?, ?)`,
+            [userId, customerRow[0].id, tanggalCheckin]
+        )
+        await conn.end()
+
+        visitIdsDibuat.push(hasil.insertId)
+        return hasil.insertId
+    }
+
+    after(async () => {
+        if (visitIdsDibuat.length === 0) return
+        const conn = await db()
+        await conn.query('DELETE FROM visits WHERE id IN (?)', [visitIdsDibuat])
+        await conn.end()
+    })
+
+    test('tanpa ?mine=1: perilaku default TIDAK berubah -- tidak difilter tanggal (sfa-web memanggil endpoint ini tanpa parameter apa pun)', async () => {
+        const bulanLalu = '2020-01-15 08:00:00' // jauh di luar bulan berjalan manapun
+        const idLama = await buatVisit(DANNY, bulanLalu)
+
+        const res = await get('/api/visits', DANNY, 'SPG')
+
+        assert.strictEqual(res.status, 200)
+        assert.ok(
+            res.body.some(v => v.id === idLama),
+            'visit lama seharusnya tetap ikut tanpa ?mine=1 -- default TIDAK boleh memfilter tanggal'
+        )
+    })
+
+    test('dengan ?mine=1: visit bulan lalu TIDAK ikut, visit hari ini ikut', async () => {
+        const bulanLalu = '2020-01-15 08:00:00'
+        const idLama = await buatVisit(DANNY, bulanLalu)
+        const idBaru = await buatVisit(DANNY, `${localDateString()} 08:00:00`)
+
+        const res = await get('/api/visits?mine=1', DANNY, 'SPG')
+
+        assert.strictEqual(res.status, 200)
+
+        const ids = res.body.map(v => v.id)
+
+        assert.ok(!ids.includes(idLama), 'visit bulan lalu seharusnya di luar rentang default')
+        assert.ok(ids.includes(idBaru), 'visit hari ini seharusnya ikut (dalam bulan berjalan)')
+    })
+
+    test('dengan ?mine=1: SUPERVISOR cuma melihat visit miliknya sendiri, bukan bawahannya', async () => {
+        const idBawahan = await buatVisit(DANNY, `${localDateString()} 08:00:00`)
+        const idAtasan = await buatVisit(JAKARTA, `${localDateString()} 09:00:00`)
+
+        const res = await get('/api/visits?mine=1', JAKARTA, 'SUPERVISOR')
+
+        assert.strictEqual(res.status, 200)
+
+        const ids = res.body.map(v => v.id)
+
+        assert.ok(!ids.includes(idBawahan), 'supervisor dengan ?mine=1 tidak boleh melihat visit bawahan')
+        assert.ok(ids.includes(idAtasan), 'supervisor dengan ?mine=1 tetap melihat visitnya sendiri')
+    })
+
+    test('from/to eksplisit tanpa ?mine=1: tetap memfilter tanggal (subtree, bukan personal)', async () => {
+        const idLama = await buatVisit(DANNY, '2020-01-15 08:00:00')
+        const idBaru = await buatVisit(DANNY, `${localDateString()} 08:00:00`)
+
+        const res = await get(
+            `/api/visits?from=${localDateString()}&to=${localDateString()}`,
+            DANNY,
+            'SPG'
+        )
+
+        assert.strictEqual(res.status, 200)
+
+        const ids = res.body.map(v => v.id)
+
+        assert.ok(!ids.includes(idLama), 'from/to eksplisit seharusnya tetap memfilter walau tanpa mine=1')
+        assert.ok(ids.includes(idBaru))
+    })
+
+})
+
+
 describe('GET /api/visits/:id — kepemilikan', () => {
 
     let visitId = null

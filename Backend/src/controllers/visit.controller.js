@@ -258,6 +258,49 @@ exports.getAll = async (req, res) => {
 
         const where = ownerWhere(bolehDilihat)
 
+        // ?mine=1 -- opt-in eksplisit dipakai mobile (layar Laporan
+        // Kunjungan adalah riwayat PRIBADI, bukan dasbor pengawasan
+        // tim). Tanpa ini, akun non-leaf (mis. supervisor) melihat
+        // riwayat SELURUH subtree-nya bercampur jadi satu daftar --
+        // pola sama persis dengan fix ?mine=1 di GET /api/visit-plans.
+        // Perilaku default (tanpa param) TIDAK berubah -- konsumen lain
+        // endpoint ini (kalau ada, mis. dasbor web) tidak terpengaruh.
+        if (req.query.mine === '1') {
+            where.user_id = loginUser.id
+        }
+
+        // Rentang tanggal opsional -- HANYA diterapkan kalau diminta
+        // eksplisit lewat from/to, ATAU kalau ?mine=1 dipasang (default
+        // bulan berjalan buat kasus itu). TANPA salah satu dari dua
+        // sinyal itu, where.checkin_time TIDAK disentuh sama sekali --
+        // sfa-web/app/visits/page.tsx dan .../visits/map/page.tsx
+        // memanggil endpoint ini tanpa parameter apa pun sama sekali
+        // dan mengharapkan riwayat penuh; memaksakan default tanggal
+        // di jalur itu diam-diam mematahkan kedua halaman itu tanpa ada
+        // yang sadar (sfa-web di luar cakupan untuk diperbaiki).
+        const cocokTanggal = (nilai) =>
+            typeof nilai === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(nilai)
+
+        let dari = cocokTanggal(req.query.from) ? req.query.from : null
+        let sampai = cocokTanggal(req.query.to) ? req.query.to : null
+
+        if ((!dari || !sampai) && req.query.mine === '1') {
+            const [tahunIni, bulanIni] = localDateString().split('-')
+            const hariTerakhir =
+                new Date(Number(tahunIni), Number(bulanIni), 0).getDate()
+
+            dari = dari ?? `${tahunIni}-${bulanIni}-01`
+            sampai =
+                sampai ??
+                `${tahunIni}-${bulanIni}-${String(hariTerakhir).padStart(2, '0')}`
+        }
+
+        if (dari && sampai) {
+            where.checkin_time = {
+                [Op.between]: [`${dari} 00:00:00`, `${sampai} 23:59:59`]
+            }
+        }
+
         const data = await Visit.findAll({
 
             where,
