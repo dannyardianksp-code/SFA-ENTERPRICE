@@ -95,24 +95,30 @@ router.get(
                     }
 
                 })
-            // VISITED
+            // VISITED -- dihitung dari status rencana (COMPLETED), BUKAN
+            // dari baris Visit dengan checkin_time hari ini. Alasan:
+            // hitungan lama menghitung kunjungan yang "sedang
+            // berkunjung" (belum checkout) sebagai tercapai, dan juga
+            // menghitung kunjungan susulan ke customer yang sama dua
+            // kali -- keduanya bikin angka "tercapai" lebih besar dari
+            // targetVisit-nya sendiri. Status rencana konsisten dengan
+            // targetVisit di atas (sama-sama dihitung dari VisitPlan),
+            // jadi progress/remaining jadi masuk akal (target 4, ON
+            // VISIT tidak ikut terhitung sampai checkout).
 
             const visited =
-                await Visit.count({
+                await VisitPlan.count({
 
                     where: {
 
                         user_id:
                             userId,
 
-                        checkin_time: {
+                        visit_date:
+                            today,
 
-                            [Op.gte]:
-                                new Date(
-                                    `${today} 00:00:00`
-                                )
-
-                        }
+                        status:
+                            'COMPLETED'
 
                     }
 
@@ -120,13 +126,13 @@ router.get(
 
 
             const visitedMonth =
-                await Visit.count({
+                await VisitPlan.count({
 
                     where: {
 
                         user_id: userId,
 
-                        checkin_time: {
+                        visit_date: {
 
                             [Op.between]: [
 
@@ -135,7 +141,10 @@ router.get(
 
                             ]
 
-                        }
+                        },
+
+                        status:
+                            'COMPLETED'
 
                     }
 
