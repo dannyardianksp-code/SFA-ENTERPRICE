@@ -9,22 +9,22 @@ const path = require('path')
 
 const BASE = process.env.TEST_BASE_URL || 'http://localhost:1000'
 
-const SPG = 1
-const SPG_LAIN = 34
-
 let db
 const attendanceIdsDibuat = []
 const mulaiUji = Date.now()
 
-// id user "sekali pakai" yang dipakai beberapa test di bawah untuk
-// mengisolasi skenario (tanpa foto, koordinat rusak, tanpa lokasi,
-// race condition, checkout, getToday) dari SPG/SPG_LAIN yang datanya dipakai
-// test lain. Server ini cuma punya 11 user sungguhan (id tertinggi
-// 38), jadi baris usernya sendiri harus disiapkan di sini dulu --
-// auth middleware memuat ulang user dari database tiap request, dan
-// token untuk id yang tidak ada ditolak 401 sebelum sempat menyentuh
-// controller checkin/checkout/getToday sama sekali.
-const USER_ID_SEMENTARA = [999, 998, 997, 996, 995, 994, 993, 992, 991, 990, 989, 988]
+// id user "sekali pakai" yang dipakai SEMUA test di bawah untuk
+// mengisolasi skenario (checkin/checkout normal, tanpa foto, koordinat
+// rusak, tanpa lokasi, race condition, getToday, dst) satu sama lain.
+// Berkas ini SEMPAT memakai akun sungguhan (id 1 dan 34) untuk sebagian
+// test -- itu berbahaya karena bisa menghapus absen sungguhan pegawai
+// hari itu, jadi sekarang semua diganti fixture sintetis. Server ini
+// cuma punya 11 user sungguhan (id tertinggi 38), jadi baris usernya
+// sendiri harus disiapkan di sini dulu -- auth middleware memuat ulang
+// user dari database tiap request, dan token untuk id yang tidak ada
+// ditolak 401 sebelum sempat menyentuh controller checkin/checkout/
+// getToday sama sekali.
+const USER_ID_SEMENTARA = [999, 998, 997, 996, 995, 994, 993, 992, 991, 990, 989, 988, 987, 986, 985, 984]
 
 const tokenUntuk = (id) =>
     jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '15m' })
@@ -149,9 +149,9 @@ after(async () => {
 describe('POST /api/attendances/checkin', () => {
 
     before(async () => {
-        // Bersihkan absen SPG hari ini kalau kebetulan sudah ada dari
-        // pengujian manual/sesi sebelumnya -- test ini butuh mulai dari
-        // kondisi "belum absen".
+        // Bersihkan absen id fixture 987 hari ini kalau kebetulan sudah
+        // ada dari pengujian manual/sesi sebelumnya -- test ini butuh
+        // mulai dari kondisi "belum absen".
         const mysqlLib = require('mysql2/promise')
         const c = await mysqlLib.createConnection({
             host: process.env.DB_HOST, user: process.env.DB_USER,
@@ -159,14 +159,14 @@ describe('POST /api/attendances/checkin', () => {
         })
         await c.query(
             'DELETE FROM attendances WHERE user_id = ? AND tanggal = CURDATE()',
-            [SPG]
+            [987]
         )
         await c.end()
     })
 
     test('absen masuk berhasil, baris tercipta dengan tanggal hari ini', async () => {
         const { status, data } = await kirimDenganFoto(
-            SPG,
+            987,
             { latitude: '-6.2', longitude: '106.8', accuracy: '15' },
             true,
             '/api/attendances/checkin'
@@ -192,7 +192,7 @@ describe('POST /api/attendances/checkin', () => {
 
     test('absen masuk dobel di hari yang sama ditolak 400', async () => {
         const pertama = await kirimDenganFoto(
-            SPG_LAIN,
+            984,
             { latitude: '-6.2', longitude: '106.8', accuracy: '15' },
             true,
             '/api/attendances/checkin'
@@ -201,7 +201,7 @@ describe('POST /api/attendances/checkin', () => {
         attendanceIdsDibuat.push(pertama.data.id)
 
         const kedua = await kirimDenganFoto(
-            SPG_LAIN,
+            984,
             { latitude: '-6.2', longitude: '106.8', accuracy: '15' },
             true,
             '/api/attendances/checkin'
@@ -212,12 +212,12 @@ describe('POST /api/attendances/checkin', () => {
 
         const [rows] = await db.query(
             'SELECT COUNT(*) n FROM attendances WHERE user_id = ? AND tanggal = CURDATE()',
-            [SPG_LAIN]
+            [984]
         )
         assert.strictEqual(rows[0].n, 1)
     })
 
-    test('absen masuk tanpa foto ditolak 400', async (t) => {
+    test('absen masuk tanpa foto ditolak 400', async () => {
         const c = await mysql.createConnection({
             host: process.env.DB_HOST, user: process.env.DB_USER,
             password: process.env.DB_PASS, database: process.env.DB_NAME,
@@ -360,6 +360,7 @@ describe('POST /api/attendances/checkout', () => {
         await bersihkanHariIni(993)
 
         const masuk = await kirimDenganFoto(993, {}, true, '/api/attendances/checkin')
+        assert.strictEqual(masuk.status, 200)
         attendanceIdsDibuat.push(masuk.data.id)
 
         const pulangPertama = await kirimDenganFoto(993, {}, true, '/api/attendances/checkout')
@@ -374,6 +375,7 @@ describe('POST /api/attendances/checkout', () => {
         await bersihkanHariIni(992)
 
         const masuk = await kirimDenganFoto(992, {}, true, '/api/attendances/checkin')
+        assert.strictEqual(masuk.status, 200)
         attendanceIdsDibuat.push(masuk.data.id)
 
         const { status } = await kirimDenganFoto(992, {}, false, '/api/attendances/checkout')
@@ -403,6 +405,35 @@ describe('POST /api/attendances/checkout', () => {
             [b.data.id]
         )
         assert.strictEqual(rowB[0].clock_out_time, null)
+    })
+
+    test('dua request checkout nyaris bersamaan: tepat satu sukses, satu lagi 400 bersih, nol berkas yatim', async () => {
+        await bersihkanHariIni(986)
+
+        const masuk = await kirimDenganFoto(986, {}, true, '/api/attendances/checkin')
+        assert.strictEqual(masuk.status, 200)
+        attendanceIdsDibuat.push(masuk.data.id)
+
+        const dirUpload = path.join(__dirname, '..', '..', 'uploads')
+        const sebelum = fs.readdirSync(dirUpload)
+
+        const [hasil1, hasil2] = await Promise.all([
+            kirimDenganFoto(986, {}, true, '/api/attendances/checkout'),
+            kirimDenganFoto(986, {}, true, '/api/attendances/checkout'),
+        ])
+
+        const sukses = [hasil1, hasil2].filter(h => h.status === 200)
+        const ditolak = [hasil1, hasil2].filter(h => h.status === 400)
+
+        assert.strictEqual(sukses.length, 1, 'seharusnya tepat satu yang sukses')
+        assert.strictEqual(ditolak.length, 1, 'seharusnya tepat satu yang ditolak 400 (bukan 500 atau 200 keduanya)')
+
+        // Berkas foto dari request yang DITOLAK harus ikut terhapus
+        // (fs.unlinkSync di jalur affected-rows-0), jadi hanya SATU
+        // berkas foto baru yang bertahan -- milik request yang sukses.
+        const sesudah = fs.readdirSync(dirUpload)
+        const berkasBaru = sesudah.filter(n => !sebelum.includes(n))
+        assert.strictEqual(berkasBaru.length, 1, `seharusnya cuma 1 berkas baru bertahan, ada: ${JSON.stringify(berkasBaru)}`)
     })
 
 })
@@ -441,6 +472,7 @@ describe('GET /api/attendances/today', () => {
         await bersihkanHariIni(988)
 
         const masuk = await kirimDenganFoto(988, {}, true, '/api/attendances/checkin')
+        assert.strictEqual(masuk.status, 200)
         attendanceIdsDibuat.push(masuk.data.id)
 
         const { status, body } = await get(988)
@@ -449,6 +481,23 @@ describe('GET /api/attendances/today', () => {
         assert.strictEqual(body.id, masuk.data.id)
         assert.ok(body.clock_in_time)
         assert.strictEqual(body.clock_out_time, null)
+    })
+
+    test('setelah checkin dan checkout, GET /today menunjukkan keduanya terisi', async () => {
+        await bersihkanHariIni(985)
+
+        const masuk = await kirimDenganFoto(985, {}, true, '/api/attendances/checkin')
+        assert.strictEqual(masuk.status, 200)
+        attendanceIdsDibuat.push(masuk.data.id)
+
+        const pulang = await kirimDenganFoto(985, {}, true, '/api/attendances/checkout')
+        assert.strictEqual(pulang.status, 200)
+
+        const { status, body } = await get(985)
+
+        assert.strictEqual(status, 200)
+        assert.ok(body.clock_in_time, 'clock_in_time seharusnya terisi')
+        assert.ok(body.clock_out_time, 'clock_out_time seharusnya terisi')
     })
 
 })
