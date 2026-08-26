@@ -132,6 +132,24 @@ tidak bisa dibuat lewat API. Berkas ini juga menyisipkan satu baris
 lewat `mysql2` untuk menguji `required: true` pada include `Visit`, lalu
 menghapusnya lagi di `after()` lokal blok itu.
 
+### Absen pegawai (attendance)
+
+`tests/e2e/attendance.test.js` menguji `POST /api/attendances/checkin`,
+`POST /api/attendances/checkout`, dan `GET /api/attendances/today`.
+Satu baris per pegawai per hari lewat unique constraint database
+(`user_id`, `tanggal`) -- bukan cuma pemeriksaan aplikasi, supaya dua
+request checkin yang nyaris bersamaan (double-tap, retry jaringan)
+tidak bisa menghasilkan dua baris. Foto wajib untuk checkin maupun
+checkout; lokasi (latitude/longitude/accuracy) opsional dan TIDAK ada
+gerbang jarak/radius -- beda sengaja dari check-in kunjungan customer,
+karena pegawai sales lapangan absen dari mana saja.
+
+checkout dan getToday tidak menerima parameter id sama sekali --
+baris ditentukan dari `user_id` (token) + `tanggal` (dihitung server,
+zona Asia/Jakarta, sama seperti gerbang tanggal check-in kunjungan).
+Ownership melekat di cara query dibentuk, bukan diperiksa setelah
+baris ditemukan.
+
 `tests/e2e/data-leak.test.js` membuat satu user sementara dengan keempat
 kolom `code`, `area_id`, `channel_id`, dan `supervisor_id` terisi, lalu
 menghapusnya di `after()` **berdasarkan id yang ditangkap, bukan
