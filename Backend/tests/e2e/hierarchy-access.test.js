@@ -840,3 +840,105 @@ describe('GET /api/orders -- ?mine=1', () => {
     })
 
 })
+
+
+describe('GET /api/visit-activities -- ?mine=1 dan ?customer_id', () => {
+
+    const visitIdsDibuat = []
+    const activityIdsDibuat = []
+
+    const buatVisitDenganActivity = async (userId, customerId) => {
+        const conn = await db()
+        const [visitHasil] = await conn.query(
+            `INSERT INTO visits (user_id, customer_id, checkin_time)
+             VALUES (?, ?, NOW())`,
+            [userId, customerId]
+        )
+        const visitId = visitHasil.insertId
+        visitIdsDibuat.push(visitId)
+
+        const [activityHasil] = await conn.query(
+            `INSERT INTO visit_activities (visit_id, product_name, created_at)
+             VALUES (?, 'Produk Tes', NOW())`,
+            [visitId]
+        )
+        activityIdsDibuat.push(activityHasil.insertId)
+        await conn.end()
+
+        return { visitId, activityId: activityHasil.insertId }
+    }
+
+    after(async () => {
+        const conn = await db()
+        if (activityIdsDibuat.length > 0) {
+            await conn.query('DELETE FROM visit_activities WHERE id IN (?)', [activityIdsDibuat])
+        }
+        if (visitIdsDibuat.length > 0) {
+            await conn.query('DELETE FROM visits WHERE id IN (?)', [visitIdsDibuat])
+        }
+        await conn.end()
+    })
+
+    test('tanpa mine/customer_id: perilaku default TIDAK berubah -- activity bawahan tetap ikut', async () => {
+        const conn = await db()
+        const [customerRow] = await conn.query(
+            'SELECT id FROM customers WHERE id NOT IN (97, 123) LIMIT 1'
+        )
+        await conn.end()
+
+        const { activityId } = await buatVisitDenganActivity(DANNY, customerRow[0].id)
+
+        const res = await get('/api/visit-activities', JAKARTA, 'SUPERVISOR')
+
+        assert.strictEqual(res.status, 200)
+        assert.ok(
+            res.body.some(a => a.id === activityId),
+            'activity bawahan seharusnya tetap ikut tanpa parameter apa pun'
+        )
+    })
+
+    test('dengan ?mine=1: SUPERVISOR cuma melihat activity miliknya sendiri', async () => {
+        const conn = await db()
+        const [customerRow] = await conn.query(
+            'SELECT id FROM customers WHERE id NOT IN (97, 123) LIMIT 1'
+        )
+        await conn.end()
+
+        const bawahan = await buatVisitDenganActivity(DANNY, customerRow[0].id)
+        const atasan = await buatVisitDenganActivity(JAKARTA, customerRow[0].id)
+
+        const res = await get('/api/visit-activities?mine=1', JAKARTA, 'SUPERVISOR')
+
+        assert.strictEqual(res.status, 200)
+        const ids = res.body.map(a => a.id)
+
+        assert.ok(!ids.includes(bawahan.activityId), 'activity bawahan tidak boleh ikut dengan ?mine=1')
+        assert.ok(ids.includes(atasan.activityId), 'activity milik sendiri harus tetap ikut')
+    })
+
+    test('dengan ?customer_id: cuma activity dari kunjungan ke customer itu yang ikut', async () => {
+        const conn = await db()
+        const [customerRows] = await conn.query(
+            'SELECT id FROM customers WHERE id NOT IN (97, 123) LIMIT 2'
+        )
+        await conn.end()
+
+        const [customerA, customerB] = customerRows
+
+        const keA = await buatVisitDenganActivity(DANNY, customerA.id)
+        const keB = await buatVisitDenganActivity(DANNY, customerB.id)
+
+        const res = await get(
+            `/api/visit-activities?mine=1&customer_id=${customerA.id}`,
+            DANNY,
+            'SPG'
+        )
+
+        assert.strictEqual(res.status, 200)
+        const ids = res.body.map(a => a.id)
+
+        assert.ok(ids.includes(keA.activityId), 'activity ke customer yang diminta harus ikut')
+        assert.ok(!ids.includes(keB.activityId), 'activity ke customer lain tidak boleh ikut')
+    })
+
+})

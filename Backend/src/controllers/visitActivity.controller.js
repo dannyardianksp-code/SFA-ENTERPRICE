@@ -153,6 +153,21 @@ exports.getAll = async (req, res) => {
 
         const visitWhere = ownerWhere(bolehDilihat)
 
+        // ?mine=1 dan ?customer_id opsional -- opt-in eksplisit dipakai
+        // layar Report Customer (mobile), sama pola dengan ?mine=1 dan
+        // ?customer_id di GET /api/visits. Perilaku default (tanpa
+        // parameter) TIDAK berubah -- sfa-web/app/visits/activity/list
+        // /page.tsx memanggil endpoint ini tanpa mine/customer_id sama
+        // sekali dan mengharapkan daftar subtree penuh.
+        if (req.query.mine === '1') {
+            visitWhere.user_id = loginUser.id
+        }
+
+        const customerId = Number(req.query.customer_id)
+        if (Number.isInteger(customerId) && customerId > 0) {
+            visitWhere.customer_id = customerId
+        }
+
         const {
 
             startDate,
