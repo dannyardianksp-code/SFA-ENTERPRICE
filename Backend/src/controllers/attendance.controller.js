@@ -139,3 +139,21 @@ exports.checkOut = async (req, res) => {
     }
 
 }
+
+exports.getToday = async (req, res) => {
+
+    try {
+
+        const tanggal = localDateString()
+
+        const attendance = await Attendance.findOne({
+            where: { user_id: req.user.id, tanggal }
+        })
+
+        res.json(attendance)
+
+    } catch (err) {
+        return sendServerError(res, err, 'ATTENDANCE GET TODAY')
+    }
+
+}

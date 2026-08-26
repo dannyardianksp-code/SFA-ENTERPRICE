@@ -18,13 +18,13 @@ const mulaiUji = Date.now()
 
 // id user "sekali pakai" yang dipakai beberapa test di bawah untuk
 // mengisolasi skenario (tanpa foto, koordinat rusak, tanpa lokasi,
-// race condition, checkout) dari SPG/SPG_LAIN yang datanya dipakai
+// race condition, checkout, getToday) dari SPG/SPG_LAIN yang datanya dipakai
 // test lain. Server ini cuma punya 11 user sungguhan (id tertinggi
 // 38), jadi baris usernya sendiri harus disiapkan di sini dulu --
 // auth middleware memuat ulang user dari database tiap request, dan
 // token untuk id yang tidak ada ditolak 401 sebelum sempat menyentuh
-// controller checkin/checkout sama sekali.
-const USER_ID_SEMENTARA = [999, 998, 997, 996, 995, 994, 993, 992, 991, 990]
+// controller checkin/checkout/getToday sama sekali.
+const USER_ID_SEMENTARA = [999, 998, 997, 996, 995, 994, 993, 992, 991, 990, 989, 988]
 
 const tokenUntuk = (id) =>
     jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '15m' })
@@ -403,6 +403,52 @@ describe('POST /api/attendances/checkout', () => {
             [b.data.id]
         )
         assert.strictEqual(rowB[0].clock_out_time, null)
+    })
+
+})
+
+describe('GET /api/attendances/today', () => {
+
+    const bersihkanHariIni = async (userId) => {
+        const c = await mysql.createConnection({
+            host: process.env.DB_HOST, user: process.env.DB_USER,
+            password: process.env.DB_PASS, database: process.env.DB_NAME,
+        })
+        await c.query('DELETE FROM attendances WHERE user_id = ? AND tanggal = CURDATE()', [userId])
+        await c.end()
+    }
+
+    const get = async (userId) => {
+        const res = await fetch(BASE + '/api/attendances/today', {
+            headers: { Authorization: 'Bearer ' + tokenUntuk(userId) },
+        })
+        const text = await res.text()
+        let body
+        try { body = JSON.parse(text) } catch { body = text }
+        return { status: res.status, body }
+    }
+
+    test('null sebelum absen masuk', async () => {
+        await bersihkanHariIni(989)
+
+        const { status, body } = await get(989)
+
+        assert.strictEqual(status, 200)
+        assert.strictEqual(body, null)
+    })
+
+    test('baris lengkap setelah absen masuk', async () => {
+        await bersihkanHariIni(988)
+
+        const masuk = await kirimDenganFoto(988, {}, true, '/api/attendances/checkin')
+        attendanceIdsDibuat.push(masuk.data.id)
+
+        const { status, body } = await get(988)
+
+        assert.strictEqual(status, 200)
+        assert.strictEqual(body.id, masuk.data.id)
+        assert.ok(body.clock_in_time)
+        assert.strictEqual(body.clock_out_time, null)
     })
 
 })
