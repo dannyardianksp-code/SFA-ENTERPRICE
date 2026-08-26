@@ -28,8 +28,20 @@ exports.create = async (req, res) => {
 
     try {
 
+        // Field eksplisit, bukan Product.create(req.body) -- spread
+        // body langsung ke model membiarkan klien menulis kolom mana
+        // pun yang ada di tabel (termasuk id), bukan cuma yang memang
+        // dimaksudkan endpoint ini.
         const data =
-            await Product.create(req.body)
+            await Product.create({
+                code: req.body.code,
+                name: req.body.name,
+                price: req.body.price,
+                uom: req.body.uom,
+                is_active: req.body.is_active,
+                category: req.body.category,
+                photo_url: req.body.photo_url,
+            })
 
         res.json(data)
 
@@ -47,7 +59,15 @@ exports.update = async (req, res) => {
     try {
 
         await Product.update(
-            req.body,
+            {
+                code: req.body.code,
+                name: req.body.name,
+                price: req.body.price,
+                uom: req.body.uom,
+                is_active: req.body.is_active,
+                category: req.body.category,
+                photo_url: req.body.photo_url,
+            },
             {
                 where: {
                     id: req.params.id
