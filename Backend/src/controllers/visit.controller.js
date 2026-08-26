@@ -269,6 +269,14 @@ exports.getAll = async (req, res) => {
             where.user_id = loginUser.id
         }
 
+        // customer_id opsional -- dipakai layar riwayat kunjungan per
+        // customer. Sama seperti mine/from/to: hanya menyentuh where
+        // kalau eksplisit diminta, jadi tidak mengubah default.
+        const customerId = Number(req.query.customer_id)
+        if (Number.isInteger(customerId) && customerId > 0) {
+            where.customer_id = customerId
+        }
+
         // Rentang tanggal opsional -- HANYA diterapkan kalau diminta
         // eksplisit lewat from/to, ATAU kalau ?mine=1 dipasang (default
         // bulan berjalan buat kasus itu). TANPA salah satu dari dua

@@ -82,8 +82,20 @@ exports.getAll = async (req, res) => {
         const bolehDilihat =
             await resolveSubordinateUserIds(req.user)
 
+        const where = ownerWhere(bolehDilihat)
+
+        // ?mine=1 -- opt-in eksplisit dipakai mobile (layar Report Order
+        // adalah riwayat PRIBADI). Pola sama dengan ?mine=1 di
+        // GET /api/visits dan GET /api/visit-plans. Perilaku default
+        // (tanpa param) TIDAK berubah -- sfa-web/app/orders/page.tsx
+        // memanggil endpoint ini tanpa parameter apa pun dan
+        // mengharapkan daftar subtree penuh.
+        if (req.query.mine === '1') {
+            where.user_id = req.user.id
+        }
+
         const orders = await SalesOrder.findAll({
-            where: ownerWhere(bolehDilihat),
+            where,
             include: [
                 { model: Visit },
                 { model: Customer, attributes: ['name'] },

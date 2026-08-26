@@ -479,6 +479,44 @@ describe('GET /api/visits -- ?mine=1 dan filter tanggal', () => {
         assert.ok(ids.includes(idBaru))
     })
 
+    test('?customer_id: cuma visit ke customer itu yang ikut', async () => {
+        const conn = await db()
+        const [customerRows] = await conn.query(
+            'SELECT id FROM customers WHERE id NOT IN (97, 123) LIMIT 2'
+        )
+        await conn.end()
+
+        const [customerA, customerB] = customerRows
+
+        const buatVisitKeCustomer = async (customerId) => {
+            const c = await db()
+            const [hasil] = await c.query(
+                `INSERT INTO visits (user_id, customer_id, checkin_time)
+                 VALUES (?, ?, ?)`,
+                [DANNY, customerId.id, `${localDateString()} 08:00:00`]
+            )
+            await c.end()
+            visitIdsDibuat.push(hasil.insertId)
+            return hasil.insertId
+        }
+
+        const idA = await buatVisitKeCustomer(customerA)
+        const idB = await buatVisitKeCustomer(customerB)
+
+        const res = await get(
+            `/api/visits?mine=1&customer_id=${customerA.id}`,
+            DANNY,
+            'SPG'
+        )
+
+        assert.strictEqual(res.status, 200)
+
+        const ids = res.body.map(v => v.id)
+
+        assert.ok(ids.includes(idA), 'visit ke customer yang diminta harus ikut')
+        assert.ok(!ids.includes(idB), 'visit ke customer lain tidak boleh ikut')
+    })
+
 })
 
 
@@ -743,6 +781,62 @@ describe('PUT dan DELETE /api/visit-plans/:id', () => {
         await c.end()
 
         assert.strictEqual(rows.length, 0, 'barisnya masih ada')
+    })
+
+})
+
+
+describe('GET /api/orders -- ?mine=1', () => {
+
+    const orderIdsDibuat = []
+
+    const buatOrder = async (userId) => {
+        const conn = await db()
+        const [customerRow] = await conn.query(
+            'SELECT id FROM customers WHERE id NOT IN (97, 123) LIMIT 1'
+        )
+        const [hasil] = await conn.query(
+            `INSERT INTO sales_orders (doc_no, user_id, customer_id, doc_date, total, status)
+             VALUES (?, ?, ?, NOW(), 10000, 'DRAFT')`,
+            [`SO-TEST-${Date.now()}-${Math.random()}`, userId, customerRow[0].id]
+        )
+        await conn.end()
+
+        orderIdsDibuat.push(hasil.insertId)
+        return hasil.insertId
+    }
+
+    after(async () => {
+        if (orderIdsDibuat.length === 0) return
+        const conn = await db()
+        await conn.query('DELETE FROM sales_orders WHERE id IN (?)', [orderIdsDibuat])
+        await conn.end()
+    })
+
+    test('tanpa ?mine=1: perilaku default TIDAK berubah -- order bawahan tetap ikut (sfa-web memanggil endpoint ini tanpa parameter apa pun)', async () => {
+        const idBawahan = await buatOrder(DANNY)
+
+        const res = await get('/api/orders', JAKARTA, 'SUPERVISOR')
+
+        assert.strictEqual(res.status, 200)
+        assert.ok(
+            res.body.some(o => o.id === idBawahan),
+            'order bawahan seharusnya tetap ikut tanpa ?mine=1'
+        )
+    })
+
+    test('dengan ?mine=1: SUPERVISOR cuma melihat order miliknya sendiri, bukan bawahannya', async () => {
+        const idBawahan = await buatOrder(DANNY)
+        const idAtasan = await buatOrder(JAKARTA)
+
+        const res = await get('/api/orders?mine=1', JAKARTA, 'SUPERVISOR')
+
+        assert.strictEqual(res.status, 200)
+
+        const ids = res.body.map(o => o.id)
+
+        assert.ok(!ids.includes(idBawahan), 'order bawahan tidak boleh ikut dengan ?mine=1')
+        assert.ok(ids.includes(idAtasan), 'order milik sendiri harus tetap ikut')
     })
 
 })
