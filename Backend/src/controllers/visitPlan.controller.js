@@ -104,7 +104,16 @@ exports.getAll =
             // { visit_date: {...} } tanpa batasan pemilik sama sekali,
             // dan SPG mana pun akan melihat jadwal SEMUA orang pada
             // rentang tanggal itu.
-            if (loginUser.role === 'SPG') {
+            //
+            // ?mine=1 -- opt-in eksplisit dipakai mobile (layar "Rencana
+            // Kunjungan" adalah jadwal PRIBADI buat check-in, bukan
+            // dasbor pengawasan tim). Tanpa ini, akun non-SPG (mis.
+            // supervisor yang juga punya jadwal sendiri) melihat jadwal
+            // SELURUH subtree-nya tanpa batas tanggal saat login lewat
+            // mobile -- persis gerbang default di bawah, sengaja tidak
+            // diubah supaya sfa-web/app/visit-plans/page.tsx (dasbor
+            // manajemen tim lintas tanggal) tetap jalan seperti semula.
+            if (loginUser.role === 'SPG' || req.query.mine === '1') {
 
                 const [hariIni, besok] = spgDateRange()
 

@@ -188,3 +188,114 @@ describe('GET /api/visit-plans (SPG)', () => {
     })
 
 })
+
+
+describe('GET /api/visit-plans -- ?mine=1 untuk role non-SPG', () => {
+
+    // Supervisor sungguhan dari fixture yang sudah dipakai sub-proyek
+    // lain (subtree: 1, 3, 37, 38).
+    const SUPERVISOR = 3
+
+    const dibuat = []
+
+    let customerId = null
+    let hariIni = null
+    let lusa = null
+
+    const authHeaderUntuk = (userId, role) => ({
+        Authorization: 'Bearer ' + jwt.sign(
+            { id: userId, role },
+            process.env.JWT_SECRET,
+            { expiresIn: '10m' }
+        ),
+    })
+
+    const getSebagai = async (path, userId, role) => {
+        const res = await fetch(BASE + path, {
+            headers: authHeaderUntuk(userId, role),
+        })
+        const text = await res.text()
+        let body
+        try { body = JSON.parse(text) } catch { body = text }
+        return { status: res.status, body }
+    }
+
+    before(async () => {
+        const customers = await get('/api/customers')
+        customerId = customers.body[0].id
+
+        const [ini] = spgDateRange()
+        hariIni = ini
+        lusa = addDaysLocal(new Date(), 2)
+
+        const mysql = require('mysql2/promise')
+        const c = await mysql.createConnection({
+            host: process.env.DB_HOST,
+            user: process.env.DB_USER,
+            password: process.env.DB_PASS,
+            database: process.env.DB_NAME,
+        })
+
+        for (const visitDate of [hariIni, lusa]) {
+            const [hasil] = await c.query(
+                'INSERT INTO visit_plans (user_id, customer_id, visit_date, status) VALUES (?, ?, ?, ?)',
+                [SUPERVISOR, customerId, visitDate, 'PENDING']
+            )
+
+            dibuat.push(hasil.insertId)
+        }
+
+        await c.end()
+    })
+
+    after(async () => {
+        if (dibuat.length === 0) return
+
+        const mysql = require('mysql2/promise')
+        const c = await mysql.createConnection({
+            host: process.env.DB_HOST,
+            user: process.env.DB_USER,
+            password: process.env.DB_PASS,
+            database: process.env.DB_NAME,
+        })
+        await c.query('DELETE FROM visit_plans WHERE id IN (?)', [dibuat])
+        await c.end()
+    })
+
+    // Mengunci perilaku default TETAP tidak berubah -- ini yang dipakai
+    // sfa-web/app/visit-plans/page.tsx (dasbor manajemen tim lintas
+    // tanggal). Kalau test ini gagal, ?mine=1 salah diterapkan sebagai
+    // default alih-alih opt-in.
+    test('tanpa ?mine=1: SUPERVISOR tetap melihat rencana lusa (subtree, tanpa batas tanggal)', async () => {
+        const res = await getSebagai('/api/visit-plans', SUPERVISOR, 'SUPERVISOR')
+
+        assert.strictEqual(res.status, 200)
+        assert.ok(
+            res.body.some(p => p.visit_date === lusa && p.user_id === SUPERVISOR),
+            'perilaku default (dasbor tim) berubah -- rencana lusa seharusnya tetap terkirim'
+        )
+    })
+
+    test('dengan ?mine=1: SUPERVISOR TIDAK melihat rencana lusa (dibatasi hari ini/besok, sama seperti SPG)', async () => {
+        const res = await getSebagai('/api/visit-plans?mine=1', SUPERVISOR, 'SUPERVISOR')
+
+        assert.strictEqual(res.status, 200)
+        assert.ok(
+            !res.body.some(p => p.visit_date === lusa),
+            'rencana lusa seharusnya di luar rentang saat ?mine=1'
+        )
+        assert.ok(
+            res.body.some(p => p.visit_date === hariIni),
+            'rencana hari ini seharusnya tetap terkirim'
+        )
+    })
+
+    test('dengan ?mine=1: semua baris milik diri sendiri, bukan bawahan', async () => {
+        const res = await getSebagai('/api/visit-plans?mine=1', SUPERVISOR, 'SUPERVISOR')
+
+        for (const plan of res.body) {
+            assert.strictEqual(plan.user_id, SUPERVISOR)
+        }
+    })
+
+})
