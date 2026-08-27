@@ -85,7 +85,10 @@ export default function LoginPage() {
 
         } else {
 
-            alert('Login gagal')
+            // data.message dari server sudah spesifik (mis. "Akun Anda
+            // tidak aktif...") -- alert generik sebelumnya menutupi
+            // pesan itu sama sekali.
+            alert(data.message || 'Login gagal')
 
         }
     }
