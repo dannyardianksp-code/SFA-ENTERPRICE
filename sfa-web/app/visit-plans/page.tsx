@@ -50,10 +50,8 @@ export default function VisitPlansPage() {
 
     const [search, setSearch] = useState('')
     const [statusFilter, setStatusFilter] = useState('ALL')
+    const [salesFilter, setSalesFilter] = useState('ALL')
 
-
-    const [editId, setEditId] =
-        useState<number | null>(null)
 
     const [uploadFile, setUploadFile] =
         useState<File | null>(null)
@@ -198,90 +196,31 @@ export default function VisitPlansPage() {
         const token =
             localStorage.getItem('token')
 
-        // ======================
-        // EDIT
-        // ======================
+        await fetch(
+            'http://localhost:1000/api/visit-plans',
+            {
 
-        if (editId) {
+                method: 'POST',
 
-            const res = await fetch(
+                headers: {
 
-                `http://localhost:1000/api/visit-plans/${editId}`,
+                    'Content-Type':
+                        'application/json',
 
-                {
+                    Authorization:
+                        `Bearer ${token}`
 
-                    method: 'PUT',
+                },
 
-                    headers: {
-
-                        'Content-Type':
-                            'application/json',
-
-                        Authorization:
-                            `Bearer ${token}`
-
-                    },
-
-                    body: JSON.stringify(form)
-
-                }
-
-            )
-
-            // Tanpa pemeriksaan ini, penolakan server tampil sebagai
-            // "berhasil" dan supervisor menyangka aplikasinya rusak,
-            // bukan bahwa tindakannya ditolak.
-            if (!res.ok) {
-
-                const err = await res.json().catch(() => ({}))
-
-                alert(
-                    err.message || 'Gagal mengubah visit plan'
-                )
-
-                return
+                body: JSON.stringify(form)
 
             }
 
-            alert(
-                'Visit plan updated'
-            )
+        )
 
-        }
-
-        // ======================
-        // CREATE
-        // ======================
-
-        else {
-
-            await fetch(
-                'http://localhost:1000/api/visit-plans',
-                {
-
-                    method: 'POST',
-
-                    headers: {
-
-                        'Content-Type':
-                            'application/json',
-
-                        Authorization:
-                            `Bearer ${token}`
-
-                    },
-
-                    body: JSON.stringify(form)
-
-                }
-
-            )
-
-            alert(
-                'Visit plan saved'
-            )
-
-        }
+        alert(
+            'Visit plan saved'
+        )
 
         // RESET
 
@@ -292,8 +231,6 @@ export default function VisitPlansPage() {
             visit_date: ''
 
         })
-
-        setEditId(null)
 
         fetchData()
 
@@ -373,26 +310,6 @@ export default function VisitPlansPage() {
 
         }
 
-
-    const handleEdit =
-        (p: any) => {
-
-            setEditId(p.id)
-
-            setForm({
-
-                user_id:
-                    p.user_id,
-
-                customer_id:
-                    p.customer_id,
-
-                visit_date:
-                    p.visit_date
-
-            })
-
-        }
 
     const handleDelete =
         async (id: number) => {
@@ -745,8 +662,6 @@ Failed : ${result.failed}`
 
                                         onChange={handleChange}
 
-                                        disabled={!!editId}
-
                                     >
 
                                         <option value="">
@@ -776,24 +691,6 @@ Failed : ${result.failed}`
                                         }
 
                                     </select>
-
-                                    {
-
-                                        editId
-
-                                        &&
-
-                                        (
-
-                                            <p className="text-xs text-slate-400 mt-1">
-
-                                                Sales tidak bisa diubah. Hapus rencana ini lalu buat yang baru.
-
-                                            </p>
-
-                                        )
-
-                                    }
 
                                 </div>
 
@@ -881,15 +778,7 @@ Failed : ${result.failed}`
 
                             >
 
-                                {
-
-                                    editId
-
-                                        ? 'Update Plan'
-
-                                        : 'Save Plan'
-
-                                }
+                                Save Plan
 
                             </button>
 
@@ -1206,323 +1095,349 @@ Failed : ${result.failed}`
 
                 </select>
 
+                <select
+
+                    value={salesFilter}
+
+                    onChange={(e) =>
+                        setSalesFilter(
+                            e.target.value
+                        )
+                    }
+
+                    className="
+      bg-white
+      border
+      rounded-2xl
+      p-4
+      shadow
+    "
+
+                >
+
+                    <option value="ALL">
+                        Semua Sales
+                    </option>
+
+                    {
+
+                        users.map((u: any) => (
+
+                            <option key={u.id} value={u.id}>
+                                {u.name}
+                            </option>
+
+                        ))
+
+                    }
+
+                </select>
+
             </div>
 
 
             {/* LIST */}
 
-            <div className="grid lg:grid-cols-2 gap-5">
+            <div className="bg-white rounded-3xl shadow-lg overflow-hidden">
 
-                {
+                <table className="w-full text-left">
 
-                    plans
+                    <thead className="bg-slate-50 border-b border-slate-200">
 
-                        .filter((p: any) => {
+                        <tr>
 
-                            const matchName =
+                            <th className="p-4 text-sm font-semibold text-slate-500">Toko</th>
+                            <th className="p-4 text-sm font-semibold text-slate-500">Sales</th>
+                            <th className="p-4 text-sm font-semibold text-slate-500">Tanggal</th>
+                            <th className="p-4 text-sm font-semibold text-slate-500">Jarak</th>
+                            <th className="p-4 text-sm font-semibold text-slate-500">Status</th>
+                            <th className="p-4 text-sm font-semibold text-slate-500">Aksi</th>
 
-                                p.Customer?.name
+                        </tr>
 
-                                    ?.toLowerCase()
+                    </thead>
 
-                                    .includes(
+                    <tbody>
 
-                                        search.toLowerCase()
+                        {
 
-                                    )
+                            plans
 
-                            const matchStatus =
+                                .filter((p: any) => {
 
-                                statusFilter === 'ALL'
+                                    const matchName =
 
-                                ||
+                                        p.Customer?.name
 
-                                p.status === statusFilter
+                                            ?.toLowerCase()
 
-                            return matchName && matchStatus
+                                            .includes(
 
-                        }).map((p: any) => {
-                            const distance =
+                                                search.toLowerCase()
 
-                                currentPosition &&
-                                    p.Customer?.latitude &&
-                                    p.Customer?.longitude
+                                            )
 
-                                    ?
+                                    const matchStatus =
 
-                                    calculateDistance(
+                                        statusFilter === 'ALL'
 
-                                        currentPosition.lat,
+                                        ||
 
-                                        currentPosition.lng,
+                                        p.status === statusFilter
 
-                                        Number(
-                                            p.Customer.latitude
-                                        ),
+                                    const matchSales =
 
-                                        Number(
-                                            p.Customer.longitude
-                                        )
+                                        salesFilter === 'ALL'
 
-                                    )
+                                        ||
 
-                                    : null
+                                        String(p.user_id) === salesFilter
 
-                            return (
+                                    return matchName && matchStatus && matchSales
 
+                                }).map((p: any) => {
+                                    const distance =
 
+                                        currentPosition &&
+                                            p.Customer?.latitude &&
+                                            p.Customer?.longitude
 
-                                <div
+                                            ?
 
-                                    key={p.id}
+                                            calculateDistance(
 
-                                    className="bg-white rounded-3xl shadow-lg p-5 hover:shadow-xl transition"
+                                                currentPosition.lat,
 
-                                >
+                                                currentPosition.lng,
 
-                                    <div className="flex justify-between items-start">
+                                                Number(
+                                                    p.Customer.latitude
+                                                ),
 
-                                        <div>
+                                                Number(
+                                                    p.Customer.longitude
+                                                )
 
-                                            <h3 className="text-xl font-bold text-slate-900">
+                                            )
 
+                                            : null
+
+                                    return (
+
+                                        <tr
+
+                                            key={p.id}
+
+                                            className="border-b border-slate-100 hover:bg-slate-50"
+
+                                        >
+
+                                            <td className="p-4 font-semibold text-slate-900">
                                                 🏪 {p.Customer?.name}
+                                            </td>
 
-                                            </h3>
-
-                                            <p className="text-slate-500">
-
+                                            <td className="p-4 text-slate-600">
                                                 👤 {p.User?.name}
+                                            </td>
 
-                                            </p>
+                                            <td className="p-4 text-slate-600">
+                                                📅 {p.visit_date}
+                                            </td>
 
-                                            {
+                                            <td className="p-4 text-slate-600">
+                                                {distance ? `📍 ${distance.toFixed(1)} KM` : '-'}
+                                            </td>
 
-                                                distance && (
+                                            <td className="p-4">
 
-                                                    <div
-                                                        className="
-                    inline-flex
-                    items-center
-                    gap-2
-                    mt-2
-                    px-3
-                    py-1
-                    bg-blue-50
-                    text-blue-700
-                    rounded-full
-                    text-sm
-                    font-medium
-                "
+                                                <span
+
+                                                    className={`px-3 py-2 rounded-full text-sm font-semibold ${getStatusClass(p.status)}`}
+
+                                                >
+
+                                                    {p.status}
+
+                                                </span>
+
+                                            </td>
+
+                                            <td className="p-4">
+
+                                                <div className="flex flex-wrap gap-2">
+
+                                                    <button
+
+                                                        onClick={() =>
+                                                            window.open(
+                                                                `https://www.google.com/maps/dir/?api=1&destination=${p.Customer.latitude},${p.Customer.longitude}`,
+                                                                '_blank'
+                                                            )
+                                                        }
+
+                                                        className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-xl text-sm"
+
                                                     >
 
-                                                        📍 {distance.toFixed(1)} KM
+                                                        🧭 Navigate
 
-                                                    </div>
+                                                    </button>
 
-                                                )
+                                                    {
 
-                                            }
+                                                        p.status === 'PENDING'
 
-                                        </div>
+                                                        &&
 
-                                        <span
+                                                        (
 
-                                            className={`px-3 py-2 rounded-full text-sm font-semibold ${getStatusClass(p.status)}`}
+                                                            <button
 
-                                        >
+                                                                onClick={() =>
 
-                                            {p.status}
+                                                                    handleCheckIn(
 
-                                        </span>
+                                                                        p.customer_id,
 
-                                    </div>
+                                                                        p.id
 
-                                    <div className="mt-4">
+                                                                    )
 
-                                        <p>
+                                                                }
 
-                                            📅 {p.visit_date}
+                                                                className="bg-green-600 text-white px-3 py-2 rounded-xl text-sm"
 
-                                        </p>
+                                                            >
 
-                                    </div>
-                                    <div className="flex gap-2 mt-3">
+                                                                Check In
 
-                                        <button
-
-                                            onClick={() =>
-                                                window.open(
-                                                    `https://www.google.com/maps/dir/?api=1&destination=${p.Customer.latitude},${p.Customer.longitude}`,
-                                                    '_blank'
-                                                )
-                                            }
-
-                                            className="
-      bg-green-600
-      hover:bg-green-700
-      text-white
-      px-3
-      py-2
-      rounded-xl
-      text-sm
-    "
-
-                                        >
-
-                                            🧭 Navigate
-
-                                        </button>
-
-                                    </div>
-
-                                    <div className="flex flex-wrap gap-3 mt-5">
-
-                                        {
-
-                                            p.status === 'PENDING'
-
-                                            &&
-
-                                            (
-
-                                                <button
-
-                                                    onClick={() =>
-
-                                                        handleCheckIn(
-
-                                                            p.customer_id,
-
-                                                            p.id
+                                                            </button>
 
                                                         )
 
                                                     }
 
-                                                    className="bg-green-600 text-white px-4 py-2 rounded-xl"
+                                                    {
 
-                                                >
+                                                        p.status === 'ON VISIT'
 
-                                                    Check In
+                                                        &&
 
-                                                </button>
+                                                        p.Visit
 
-                                            )
+                                                        &&
 
-                                        }
+                                                        (
 
-                                        {
+                                                            <button
 
-                                            p.status === 'ON VISIT'
+                                                                onClick={() =>
 
-                                            &&
+                                                                    router.push(
 
-                                            p.Visit
+                                                                        `/visit-detail/${p.Visit.id}`
 
-                                            &&
+                                                                    )
 
-                                            (
+                                                                }
 
-                                                <button
+                                                                className="bg-blue-600 text-white px-3 py-2 rounded-xl text-sm"
 
-                                                    onClick={() =>
+                                                            >
 
-                                                        router.push(
+                                                                Open Visit
 
-                                                            `/visit-detail/${p.Visit.id}`
-
-                                                        )
-
-                                                    }
-
-                                                    className="bg-blue-600 text-white px-4 py-2 rounded-xl"
-
-                                                >
-
-                                                    Open Visit
-
-                                                </button>
-
-                                            )
-
-                                        }
-
-                                        {
-
-                                            p.status === 'COMPLETED'
-
-                                            &&
-
-                                            p.Visit
-
-                                            &&
-
-                                            (
-
-                                                <button
-
-                                                    onClick={() =>
-
-                                                        router.push(
-
-                                                            `/visit-detail/${p.Visit.id}`
+                                                            </button>
 
                                                         )
 
                                                     }
 
-                                                    className="bg-slate-800 text-white px-4 py-2 rounded-xl"
+                                                    {
 
-                                                >
+                                                        p.status === 'COMPLETED'
 
-                                                    View
+                                                        &&
 
-                                                </button>
+                                                        p.Visit
 
-                                            )
+                                                        &&
 
-                                        }
+                                                        (
 
-                                        {
+                                                            <button
 
-                                            role !== 'SPG'
+                                                                onClick={() =>
 
-                                            &&
+                                                                    router.push(
 
-                                            p.status === 'PENDING'
+                                                                        `/visit-detail/${p.Visit.id}`
 
-                                            &&
+                                                                    )
 
-                                            (
+                                                                }
 
-                                                <button
+                                                                className="bg-slate-800 text-white px-3 py-2 rounded-xl text-sm"
 
-                                                    onClick={() =>
+                                                            >
 
-                                                        handleEdit(p)
+                                                                View
+
+                                                            </button>
+
+                                                        )
 
                                                     }
 
-                                                    className="border border-slate-300 px-4 py-2 rounded-xl"
+                                                    {
 
-                                                >
+                                                        role !== 'SPG'
 
-                                                    Edit
+                                                        &&
 
-                                                </button>
+                                                        p.status === 'PENDING'
 
-                                            )
+                                                        &&
 
-                                        }
+                                                        (
 
-                                    </div>
+                                                            <button
 
-                                </div>
+                                                                onClick={() =>
 
-                            )
-                        })
-                }
+                                                                    router.push(
+
+                                                                        `/visit-plans/${p.id}/edit`
+
+                                                                    )
+
+                                                                }
+
+                                                                className="border border-slate-300 px-3 py-2 rounded-xl text-sm"
+
+                                                            >
+
+                                                                Edit
+
+                                                            </button>
+
+                                                        )
+
+                                                    }
+
+                                                </div>
+
+                                            </td>
+
+                                        </tr>
+
+                                    )
+                                })
+                        }
+
+                    </tbody>
+
+                </table>
 
             </div>
 
