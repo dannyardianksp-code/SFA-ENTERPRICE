@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { MapPinned, Activity, ShoppingCart, ChevronRight } from 'lucide-react'
+import { MapPinned, Activity, ShoppingCart, Clock, ChevronRight } from 'lucide-react'
 
 const KATEGORI = [
 
@@ -27,6 +27,14 @@ const KATEGORI = [
         desc: 'Riwayat order tim',
         icon: ShoppingCart,
         href: '/orders'
+    },
+
+    {
+        key: 'attendance',
+        title: 'Report Absen',
+        desc: 'Riwayat absen masuk/pulang tim',
+        icon: Clock,
+        href: '/attendance'
     }
 
 ]
@@ -51,7 +59,7 @@ export default function ReportPage() {
 
             </div>
 
-            <div className="grid md:grid-cols-3 gap-5">
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
 
                 {
 

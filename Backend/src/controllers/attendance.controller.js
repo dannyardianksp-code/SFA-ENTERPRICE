@@ -1,5 +1,7 @@
 const fs = require('fs')
+const { Op } = require('sequelize')
 const Attendance = require('../models/attendance.model')
+const User = require('../models/user.model')
 const { localDateString } = require('../utils/date.util')
 const {
     parseCoordinate,
@@ -7,6 +9,10 @@ const {
     isValidLongitude,
 } = require('../utils/geo.util')
 const { sendError, sendServerError } = require('../utils/response.util')
+const {
+    resolveSubordinateUserIds,
+    ownerWhere,
+} = require('../utils/access.util')
 
 exports.checkIn = async (req, res) => {
 
@@ -188,6 +194,43 @@ exports.getToday = async (req, res) => {
 
     } catch (err) {
         return sendServerError(res, err, 'ATTENDANCE GET TODAY')
+    }
+
+}
+
+// ======================
+// GET ALL -- buat Report Absen (web). Subtree-wide by default, sama
+// pola dengan visits/orders. from/to opsional, "YYYY-MM-DD".
+// ======================
+
+exports.getAll = async (req, res) => {
+
+    try {
+
+        const bolehDilihat = await resolveSubordinateUserIds(req.user)
+
+        const where = ownerWhere(bolehDilihat)
+
+        const cocokTanggal = (nilai) =>
+            typeof nilai === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(nilai)
+
+        const dari = cocokTanggal(req.query.from) ? req.query.from : null
+        const sampai = cocokTanggal(req.query.to) ? req.query.to : null
+
+        if (dari && sampai) {
+            where.tanggal = { [Op.between]: [dari, sampai] }
+        }
+
+        const data = await Attendance.findAll({
+            where,
+            include: [{ model: User, attributes: ['id', 'name', 'area_id'] }],
+            order: [['tanggal', 'DESC']],
+        })
+
+        res.json(data)
+
+    } catch (err) {
+        return sendServerError(res, err, 'ATTENDANCE GET ALL')
     }
 
 }

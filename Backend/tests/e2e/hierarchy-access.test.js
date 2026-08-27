@@ -942,3 +942,80 @@ describe('GET /api/visit-activities -- ?mine=1 dan ?customer_id', () => {
     })
 
 })
+
+
+describe('GET /api/attendances -- cakupan hierarki dan filter tanggal', () => {
+
+    const attendanceIdsDibuat = []
+
+    // Tanggal jauh di masa lalu, BUKAN hari ini -- data absen hari ini
+    // dibaca dashboard mobile (banner "belum absen") dan pernah
+    // ketercemar tes serupa sebelumnya (lihat commit "fix: dashboard
+    // spg" di sesi yang sama). Insert langsung ke tanggal lampau
+    // menghindari itu sepenuhnya.
+    const tanggalLampau = '2020-01-15'
+
+    const buatAbsen = async (userId, tanggal) => {
+        const conn = await db()
+        const [hasil] = await conn.query(
+            `INSERT INTO attendances (user_id, tanggal, clock_in_time, created_at)
+             VALUES (?, ?, ?, NOW())`,
+            [userId, tanggal, `${tanggal} 08:00:00`]
+        )
+        await conn.end()
+
+        attendanceIdsDibuat.push(hasil.insertId)
+        return hasil.insertId
+    }
+
+    after(async () => {
+        if (attendanceIdsDibuat.length === 0) return
+        const conn = await db()
+        await conn.query('DELETE FROM attendances WHERE id IN (?)', [attendanceIdsDibuat])
+        await conn.end()
+    })
+
+    test('SUPERVISOR melihat absen bawahan dan dirinya sendiri', async () => {
+        const idBawahan = await buatAbsen(DANNY, tanggalLampau)
+        const idAtasan = await buatAbsen(JAKARTA, tanggalLampau)
+
+        const res = await get('/api/attendances', JAKARTA, 'SUPERVISOR')
+
+        assert.strictEqual(res.status, 200)
+        const ids = res.body.map(a => a.id)
+
+        assert.ok(ids.includes(idBawahan), 'absen bawahan harus ikut')
+        assert.ok(ids.includes(idAtasan), 'absen sendiri harus ikut')
+    })
+
+    test('SPG cuma melihat absennya sendiri, bukan rekan setingkat', async () => {
+        const idSendiri = await buatAbsen(DANNY, tanggalLampau)
+        const idRekan = await buatAbsen(TINO, tanggalLampau)
+
+        const res = await get('/api/attendances', DANNY, 'SPG')
+
+        assert.strictEqual(res.status, 200)
+        const ids = res.body.map(a => a.id)
+
+        assert.ok(ids.includes(idSendiri), 'absen sendiri harus ikut')
+        assert.ok(!ids.includes(idRekan), 'absen rekan setingkat tidak boleh ikut')
+    })
+
+    test('from/to memfilter berdasarkan tanggal', async () => {
+        const idDalamRentang = await buatAbsen(DANNY, tanggalLampau)
+        const idLuarRentang = await buatAbsen(DANNY, '2021-06-01')
+
+        const res = await get(
+            `/api/attendances?from=${tanggalLampau}&to=${tanggalLampau}`,
+            DANNY,
+            'SPG'
+        )
+
+        assert.strictEqual(res.status, 200)
+        const ids = res.body.map(a => a.id)
+
+        assert.ok(ids.includes(idDalamRentang), 'tanggal dalam rentang harus ikut')
+        assert.ok(!ids.includes(idLuarRentang), 'tanggal di luar rentang tidak boleh ikut')
+    })
+
+})
