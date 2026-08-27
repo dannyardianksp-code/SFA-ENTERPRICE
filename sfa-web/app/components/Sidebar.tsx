@@ -21,13 +21,22 @@ import {
     ChevronRight
 } from 'lucide-react'
 
-export default function Sidebar() {
+export default function Sidebar({
+
+    collapsed,
+    onToggleCollapsed
+
+}: {
+
+    collapsed: boolean
+    onToggleCollapsed: () => void
+
+}) {
 
     const pathname = usePathname()
 
     const [role, setRole] = useState('')
     const [name, setName] = useState('')
-    const [collapsed, setCollapsed] = useState(false)
     const router =
         useRouter()
 
@@ -116,9 +125,7 @@ export default function Sidebar() {
 
                     <button
 
-                        onClick={() =>
-                            setCollapsed(!collapsed)
-                        }
+                        onClick={onToggleCollapsed}
 
                         className="
           text-slate-700

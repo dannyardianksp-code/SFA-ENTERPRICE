@@ -1,5 +1,5 @@
 import './globals.css'
-import SidebarWrapper from './components/SidebarWrapper'
+import AppShell from './components/AppShell'
 import 'leaflet/dist/leaflet.css'
 
 export default function RootLayout({
@@ -19,46 +19,9 @@ export default function RootLayout({
         }}
       >
 
-        <div
-          style={{
-            display: 'flex'
-          }}
-        >
-
-          <SidebarWrapper />
-
-          <main
-
-            className="text-slate-900"
-
-            style={{
-
-              flex: 1,
-
-              marginLeft: 260,
-
-              minHeight: '100vh',
-
-              transition:
-                'all .3s ease'
-
-            }}
-
-          >
-
-            <div
-              style={{
-                padding: 24
-              }}
-            >
-
-              {children}
-
-            </div>
-
-          </main>
-
-        </div>
+        <AppShell>
+          {children}
+        </AppShell>
 
       </body>
 
