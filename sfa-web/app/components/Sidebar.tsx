@@ -11,8 +11,7 @@ import {
     CalendarDays,
     Users,
     ShoppingCart,
-    MapPinned,
-    Activity,
+    BarChart3,
     Package,
     UserCog,
     Settings,
@@ -263,22 +262,13 @@ export default function Sidebar({
                         {!collapsed && 'Orders'}
                     </Link>
 
-                    {/* Visits dan Activity dinonaktifkan -- infonya
-                    pindah ke Menu Report */}
-
-                    <div
-                        className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 opacity-50 cursor-not-allowed"
+                    <Link
+                        href="/report"
+                        className={menuClass('/report')}
                     >
-                        <MapPinned size={18} />
-                        {!collapsed && 'Visits'}
-                    </div>
-
-                    <div
-                        className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 opacity-50 cursor-not-allowed"
-                    >
-                        <Activity size={18} />
-                        {!collapsed && 'Activity'}
-                    </div>
+                        <BarChart3 size={18} />
+                        {!collapsed && 'Report'}
+                    </Link>
 
                 </div>
 
