@@ -6,8 +6,15 @@ import { useRouter } from 'next/navigation'
 export default function VisitHistoryPage() {
 
     const [visits, setVisits] = useState<any[]>([])
+    const [users, setUsers] = useState<any[]>([])
+    const [areas, setAreas] = useState<any[]>([])
     const [search, setSearch] = useState('')
     const [role, setRole] = useState('')
+
+    const [dateFrom, setDateFrom] = useState('')
+    const [dateTo, setDateTo] = useState('')
+    const [areaFilter, setAreaFilter] = useState('ALL')
+    const [salesFilter, setSalesFilter] = useState('ALL')
 
     const router = useRouter()
 
@@ -18,15 +25,31 @@ export default function VisitHistoryPage() {
 
         const token = localStorage.getItem('token')
 
-        const res = await fetch('http://localhost:1000/api/visits', {
-            headers: {
-                Authorization: `Bearer ${token}`
-            }
-        })
+        const [vRes, uRes, aRes] = await Promise.all([
 
-        const data = await res.json()
+            fetch('http://localhost:1000/api/visits', {
+                headers: { Authorization: `Bearer ${token}` }
+            }),
 
-        setVisits(Array.isArray(data) ? data : [])
+            // Area ada di tabel users, bukan di visits -- dipakai buat
+            // memetakan User.id (di setiap visit) ke Area-nya.
+            fetch('http://localhost:1000/api/users', {
+                headers: { Authorization: `Bearer ${token}` }
+            }),
+
+            fetch('http://localhost:1000/api/areas', {
+                headers: { Authorization: `Bearer ${token}` }
+            })
+
+        ])
+
+        const vData = await vRes.json()
+        const uData = await uRes.json()
+        const aData = await aRes.json()
+
+        setVisits(Array.isArray(vData) ? vData : [])
+        setUsers(Array.isArray(uData) ? uData : [])
+        setAreas(Array.isArray(aData) ? aData : [])
     }
 
     useEffect(() => {
@@ -34,13 +57,36 @@ export default function VisitHistoryPage() {
         fetchData()
     }, [])
 
+    // user_id -> area_id, dari daftar users (visit sendiri tidak
+    // membawa area).
+    const areaByUserId = new Map(
+        users.map((u: any) => [u.id, u.area_id])
+    )
+
     // ======================
     // FILTER
     // ======================
-    const filtered = visits.filter((v) =>
-        v.Customer?.name?.toLowerCase().includes(search.toLowerCase()) ||
-        v.User?.name?.toLowerCase().includes(search.toLowerCase())
-    )
+    const filtered = visits.filter((v) => {
+
+        const matchSearch =
+            v.Customer?.name?.toLowerCase().includes(search.toLowerCase()) ||
+            v.User?.name?.toLowerCase().includes(search.toLowerCase())
+
+        const checkinDate = v.checkin_time?.slice(0, 10)
+
+        const matchDateFrom = !dateFrom || (checkinDate && checkinDate >= dateFrom)
+        const matchDateTo = !dateTo || (checkinDate && checkinDate <= dateTo)
+
+        const matchSales =
+            salesFilter === 'ALL' || String(v.User?.id) === salesFilter
+
+        const matchArea =
+            areaFilter === 'ALL' ||
+            String(areaByUserId.get(v.User?.id)) === areaFilter
+
+        return matchSearch && matchDateFrom && matchDateTo && matchSales && matchArea
+
+    })
 
     // ======================
     // UI
@@ -83,6 +129,96 @@ export default function VisitHistoryPage() {
                         border: '1px solid #ddd'
                     }}
                 />
+            </div>
+
+            {/* FILTER */}
+            <div style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 10,
+                marginBottom: 15
+            }}>
+
+                <div>
+                    <label style={{ fontSize: 12, color: '#6b7280' }}>
+                        Dari Tanggal
+                    </label>
+                    <input
+                        type="date"
+                        value={dateFrom}
+                        onChange={(e) => setDateFrom(e.target.value)}
+                        style={{
+                            display: 'block',
+                            padding: 12,
+                            borderRadius: 12,
+                            border: '1px solid #ddd'
+                        }}
+                    />
+                </div>
+
+                <div>
+                    <label style={{ fontSize: 12, color: '#6b7280' }}>
+                        Sampai Tanggal
+                    </label>
+                    <input
+                        type="date"
+                        value={dateTo}
+                        onChange={(e) => setDateTo(e.target.value)}
+                        style={{
+                            display: 'block',
+                            padding: 12,
+                            borderRadius: 12,
+                            border: '1px solid #ddd'
+                        }}
+                    />
+                </div>
+
+                <div>
+                    <label style={{ fontSize: 12, color: '#6b7280' }}>
+                        Area
+                    </label>
+                    <select
+                        value={areaFilter}
+                        onChange={(e) => setAreaFilter(e.target.value)}
+                        style={{
+                            display: 'block',
+                            padding: 12,
+                            borderRadius: 12,
+                            border: '1px solid #ddd'
+                        }}
+                    >
+                        <option value="ALL">Semua Area</option>
+                        {areas.map((a: any) => (
+                            <option key={a.id} value={a.id}>
+                                {a.name}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+
+                <div>
+                    <label style={{ fontSize: 12, color: '#6b7280' }}>
+                        Nama Sales
+                    </label>
+                    <select
+                        value={salesFilter}
+                        onChange={(e) => setSalesFilter(e.target.value)}
+                        style={{
+                            display: 'block',
+                            padding: 12,
+                            borderRadius: 12,
+                            border: '1px solid #ddd'
+                        }}
+                    >
+                        <option value="ALL">Semua Sales</option>
+                        {users.map((u: any) => (
+                            <option key={u.id} value={u.id}>
+                                {u.name}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+
             </div>
 
             {/* TABLE CARD */}

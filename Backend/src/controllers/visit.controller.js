@@ -315,7 +315,11 @@ exports.getAll = async (req, res) => {
 
             include: [
 
-                { model: User, attributes: ['name'] },
+                // `id` ditambah (dulu cuma `name`) -- sfa-web/app/visits
+                // butuh id user buat menyaring berdasarkan Area sales
+                // (area ada di tabel users, bukan di visits), murni
+                // tambahan field, tidak mengubah field yang sudah ada.
+                { model: User, attributes: ['id', 'name'] },
 
                 { model: Customer, attributes: ['name'] }
 
