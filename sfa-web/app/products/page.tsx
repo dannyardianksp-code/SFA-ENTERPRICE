@@ -5,6 +5,10 @@ import {
     useState
 } from 'react'
 
+// Sama persis dengan CategoryKey di mobile
+// (mobile/src/modules/product/utils/group-by-category.ts).
+const KATEGORI = ['JUAL', 'PROMOSI', 'COMPETITOR']
+
 export default function ProductsPage() {
 
     const [products, setProducts] =
@@ -15,7 +19,8 @@ export default function ProductsPage() {
         code: '',
         name: '',
         price: '',
-        uom: ''
+        uom: '',
+        category: 'JUAL'
 
     })
 
@@ -96,7 +101,8 @@ export default function ProductsPage() {
             code: '',
             name: '',
             price: '',
-            uom: ''
+            uom: '',
+            category: 'JUAL'
         })
 
         setEditId(null)
@@ -117,7 +123,8 @@ export default function ProductsPage() {
             code: p.code,
             name: p.name,
             price: p.price,
-            uom: p.uom
+            uom: p.uom,
+            category: p.category || 'JUAL'
 
         })
 
@@ -149,6 +156,7 @@ export default function ProductsPage() {
     }
 
     const [search, setSearch] = useState('')
+    const [categoryFilter, setCategoryFilter] = useState('ALL')
 
     return (
 
@@ -271,6 +279,32 @@ export default function ProductsPage() {
 
                     </div>
 
+                    <div>
+
+                        <label className="font-medium">
+                            Category
+                        </label>
+
+                        <select
+
+                            name="category"
+
+                            value={form.category}
+
+                            onChange={handleChange}
+
+                            className="w-full mt-2 border rounded-xl p-3"
+
+                        >
+
+                            {KATEGORI.map((k) => (
+                                <option key={k} value={k}>{k}</option>
+                            ))}
+
+                        </select>
+
+                    </div>
+
                     <div className="md:col-span-2">
 
                         <button
@@ -305,7 +339,7 @@ export default function ProductsPage() {
 
             {/* SEARCH */}
 
-            <div className="bg-white rounded-3xl shadow-lg p-5">
+            <div className="bg-white rounded-3xl shadow-lg p-5 space-y-4">
 
                 <input
 
@@ -318,6 +352,33 @@ export default function ProductsPage() {
                     className="w-full border rounded-xl p-3"
 
                 />
+
+                {/* KATEGORI TABS -- sama kategori dengan Product
+                Knowledge di mobile */}
+                <div className="flex gap-2 flex-wrap">
+
+                    {['ALL', ...KATEGORI].map((k) => (
+
+                        <button
+
+                            key={k}
+
+                            onClick={() => setCategoryFilter(k)}
+
+                            className={`px-4 py-2 rounded-xl text-sm font-semibold ${categoryFilter === k
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-slate-100 text-slate-600'
+                                }`}
+
+                        >
+
+                            {k === 'ALL' ? 'Semua Kategori' : k}
+
+                        </button>
+
+                    ))}
+
+                </div>
 
             </div>
 
@@ -340,6 +401,18 @@ export default function ProductsPage() {
                                     search.toLowerCase()
 
                                 )
+
+                            &&
+
+                            (
+
+                                categoryFilter === 'ALL'
+
+                                ||
+
+                                (p.category || 'JUAL') === categoryFilter
+
+                            )
 
                         )
 
@@ -368,6 +441,12 @@ export default function ProductsPage() {
                                             {p.code}
 
                                         </p>
+
+                                        <span className="inline-block mt-2 px-3 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700">
+
+                                            {p.category || 'JUAL'}
+
+                                        </span>
 
                                     </div>
 
