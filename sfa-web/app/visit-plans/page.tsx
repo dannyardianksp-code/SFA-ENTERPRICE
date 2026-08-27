@@ -11,6 +11,15 @@ import { useRouter }
     from 'next/navigation'
 import { getDistanceFromLatLonInKm } from "../utils/distance"
 
+// "YYYY-MM-DD" hari ini di waktu lokal browser -- dipakai sebagai
+// default filter tanggal (halaman ini defaultnya tampil rencana HARI
+// INI, bukan lintas tanggal seperti sebelumnya).
+const todayStr = () => {
+    const d = new Date()
+    const bulan = String(d.getMonth() + 1).padStart(2, '0')
+    const tanggal = String(d.getDate()).padStart(2, '0')
+    return `${d.getFullYear()}-${bulan}-${tanggal}`
+}
 
 export default function VisitPlansPage() {
 
@@ -51,6 +60,7 @@ export default function VisitPlansPage() {
     const [search, setSearch] = useState('')
     const [statusFilter, setStatusFilter] = useState('ALL')
     const [salesFilter, setSalesFilter] = useState('ALL')
+    const [dateFilter, setDateFilter] = useState(todayStr())
 
 
     const [uploadFile, setUploadFile] =
@@ -236,79 +246,6 @@ export default function VisitPlansPage() {
 
     }
 
-
-
-    const handleCheckIn =
-        async (
-            customerId: number,
-            visitPlanId: number
-        ) => {
-
-            navigator.geolocation
-                .getCurrentPosition(
-
-                    async (pos) => {
-
-                        const token =
-                            localStorage.getItem(
-                                'token'
-                            )
-
-                        const res =
-                            await fetch(
-
-                                'http://localhost:1000/api/visits/checkin',
-
-                                {
-
-                                    method: 'POST',
-
-                                    headers: {
-
-                                        'Content-Type':
-                                            'application/json',
-
-                                        Authorization:
-                                            `Bearer ${token}`
-
-                                    },
-
-                                    body: JSON.stringify({
-
-                                        customer_id:
-                                            customerId,
-
-                                        visit_plan_id:
-                                            visitPlanId,
-
-                                        latitude:
-                                            pos.coords.latitude,
-
-                                        longitude:
-                                            pos.coords.longitude
-
-                                    })
-
-                                }
-
-                            )
-
-                        const data =
-                            await res.json()
-
-
-                        if (!res.ok) {
-                            alert(data.error || data.message)
-                            return
-                        }
-
-                        router.push(
-                            `/visit-detail/${data.data.id}`
-                        )
-
-                    })
-
-        }
 
 
     const handleDelete =
@@ -1133,6 +1070,28 @@ Failed : ${result.failed}`
 
                 </select>
 
+                <input
+
+                    type="date"
+
+                    value={dateFilter}
+
+                    onChange={(e) =>
+                        setDateFilter(
+                            e.target.value
+                        )
+                    }
+
+                    className="
+      bg-white
+      border
+      rounded-2xl
+      p-4
+      shadow
+    "
+
+                />
+
             </div>
 
 
@@ -1193,7 +1152,15 @@ Failed : ${result.failed}`
 
                                         String(p.user_id) === salesFilter
 
-                                    return matchName && matchStatus && matchSales
+                                    const matchDate =
+
+                                        !dateFilter
+
+                                        ||
+
+                                        p.visit_date === dateFilter
+
+                                    return matchName && matchStatus && matchSales && matchDate
 
                                 }).map((p: any) => {
                                     const distance =
@@ -1282,40 +1249,6 @@ Failed : ${result.failed}`
                                                         🧭 Navigate
 
                                                     </button>
-
-                                                    {
-
-                                                        p.status === 'PENDING'
-
-                                                        &&
-
-                                                        (
-
-                                                            <button
-
-                                                                onClick={() =>
-
-                                                                    handleCheckIn(
-
-                                                                        p.customer_id,
-
-                                                                        p.id
-
-                                                                    )
-
-                                                                }
-
-                                                                className="bg-green-600 text-white px-3 py-2 rounded-xl text-sm"
-
-                                                            >
-
-                                                                Check In
-
-                                                            </button>
-
-                                                        )
-
-                                                    }
 
                                                     {
 
