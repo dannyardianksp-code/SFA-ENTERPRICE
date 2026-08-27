@@ -199,6 +199,17 @@ router.get(
                             model: Area
                         },
 
+                        // Area cover sebenarnya (bisa lebih dari satu) --
+                        // dipakai list User Management di web supaya
+                        // kolom Area tidak cuma nampilin area_id
+                        // tunggal yang legacy.
+                        {
+                            model: Area,
+                            as: 'AssignedAreas',
+                            attributes: ['id', 'code', 'name'],
+                            through: { attributes: [] },
+                        },
+
                         {
                             model: Channel
                         },

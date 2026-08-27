@@ -227,6 +227,9 @@ export default function UsersPage() {
                                     u.email?.toLowerCase().includes(keyword) ||
                                     u.role?.toLowerCase().includes(keyword) ||
                                     u.Area?.code?.toLowerCase().includes(keyword) ||
+                                    u.AssignedAreas?.some((a: any) =>
+                                        a.code?.toLowerCase().includes(keyword)
+                                    ) ||
                                     u.Channel?.code?.toLowerCase().includes(keyword)
                                 )
                             }).map((u: any) => (
@@ -245,8 +248,21 @@ export default function UsersPage() {
                                         {u.role}
                                     </td>
 
-                                    <td className="p-4 text-slate-600">
-                                        {u.Area?.code || '-'}
+                                    <td className="p-4">
+                                        {u.AssignedAreas && u.AssignedAreas.length > 0 ? (
+                                            <div className="flex flex-wrap gap-1">
+                                                {u.AssignedAreas.map((a: any) => (
+                                                    <span
+                                                        key={a.id}
+                                                        className="px-2 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700"
+                                                    >
+                                                        {a.code}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <span className="text-slate-600">{u.Area?.code || '-'}</span>
+                                        )}
                                     </td>
 
                                     <td className="p-4 text-slate-600">
