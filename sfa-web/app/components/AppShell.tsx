@@ -1,8 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+
+import { usePathname } from 'next/navigation'
 
 import dynamic from 'next/dynamic'
+
+import { getToken } from '../utils/auth'
 
 const Sidebar = dynamic(
 
@@ -34,7 +38,26 @@ export default function AppShell({
 
 }) {
 
+    const pathname = usePathname()
+
     const [collapsed, setCollapsed] = useState(false)
+    const [loggedIn, setLoggedIn] = useState(false)
+
+    useEffect(() => {
+
+        // Dicek ulang tiap pindah halaman -- pathname berubah tepat
+        // setelah login (ke "/") dan logout (ke "/login"), jadi drawer
+        // langsung ikut, sama seperti alasan Sidebar sendiri baca ulang
+        // role/name per pathname.
+        setLoggedIn(Boolean(getToken()))
+
+    }, [pathname])
+
+    if (!loggedIn) {
+
+        return <>{children}</>
+
+    }
 
     return (
 
