@@ -1019,3 +1019,86 @@ describe('GET /api/attendances -- cakupan hierarki dan filter tanggal', () => {
     })
 
 })
+
+
+describe('POST /api/attendances/checkin -- dikunci selama ada absen pulang tertinggal', () => {
+
+    // SUBUR dipakai (bukan DANNY/TINO) -- keduanya sudah punya baris
+    // attendance sungguhan dari pemakaian nyata sesi ini, jadi tidak
+    // aman dijadikan starting state bersih buat tes ini.
+    const attendanceIdsDibuat = []
+
+    // Tanggal beda per tes -- (user_id, tanggal) UNIQUE di tabel ini,
+    // dan pembersihan cuma jalan di after() (bukan antar tes), jadi
+    // dua tes yang pakai tanggal sama akan tabrakan constraint.
+    const tanggalLampau1 = '2020-01-15'
+    const tanggalLampau2 = '2020-02-15'
+    const tanggalLampau3 = '2020-03-15'
+
+    const buatAbsenTerbuka = async (userId, tanggal) => {
+        const conn = await db()
+        const [hasil] = await conn.query(
+            `INSERT INTO attendances (user_id, tanggal, clock_in_time, created_at)
+             VALUES (?, ?, ?, NOW())`,
+            [userId, tanggal, `${tanggal} 08:00:00`]
+        )
+        await conn.end()
+
+        attendanceIdsDibuat.push(hasil.insertId)
+        return hasil.insertId
+    }
+
+    after(async () => {
+        if (attendanceIdsDibuat.length === 0) return
+        const conn = await db()
+        await conn.query('DELETE FROM attendances WHERE id IN (?)', [attendanceIdsDibuat])
+        await conn.end()
+    })
+
+    test('checkin ditolak 409 kalau ada absen pulang tanggal sebelumnya yang belum selesai', async () => {
+        await buatAbsenTerbuka(SUBUR, tanggalLampau1)
+
+        const res = await kirim('POST', '/api/attendances/checkin', SUBUR, 'SPG', {
+            latitude: '-6.2',
+            longitude: '106.8',
+        })
+
+        assert.strictEqual(res.status, 409)
+        assert.ok(
+            res.body.message.includes(tanggalLampau1),
+            'pesan error harus menyebut tanggal yang belum diselesaikan'
+        )
+    })
+
+    test('checkout menemukan absen TERLAMA yang terbuka, bukan cuma milik hari ini', async () => {
+        await buatAbsenTerbuka(SUBUR, tanggalLampau2)
+
+        // Tanpa foto (multipart) sengaja ditolak di langkah validasi foto
+        // -- pesannya "Foto wajib diisi", BUKAN "Anda belum absen masuk",
+        // itu bukti checkout sudah menemukan baris yang tanggalnya lampau.
+        const res = await kirim('POST', '/api/attendances/checkout', SUBUR, 'SPG', {
+            latitude: '-6.2',
+            longitude: '106.8',
+        })
+
+        assert.strictEqual(res.status, 400)
+        assert.strictEqual(res.body.message, 'Foto wajib diisi untuk absen pulang.')
+    })
+
+    test('GET /api/attendances/today menyertakan staleUnresolved (yang paling lama)', async () => {
+        await buatAbsenTerbuka(SUBUR, tanggalLampau3)
+
+        // Tes sebelumnya di describe block ini sudah menyisakan absen
+        // terbuka di tanggalLampau1 dan tanggalLampau2 juga (cuma
+        // dibersihkan di after(), bukan antar tes) -- staleUnresolved
+        // seharusnya konsisten dengan urutan ASC di checkIn/checkOut:
+        // yang PALING LAMA (tanggalLampau1), bukan yang baru saja
+        // dibuat tes ini.
+        const res = await get('/api/attendances/today', SUBUR, 'SPG')
+
+        assert.strictEqual(res.status, 200)
+        assert.ok(res.body.staleUnresolved, 'staleUnresolved seharusnya ada')
+        assert.strictEqual(res.body.staleUnresolved.tanggal, tanggalLampau1)
+    })
+
+})

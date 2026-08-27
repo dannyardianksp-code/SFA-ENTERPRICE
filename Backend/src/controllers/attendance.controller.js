@@ -31,6 +31,31 @@ exports.checkIn = async (req, res) => {
             return sendError(res, 400, 'Anda sudah absen masuk hari ini.')
         }
 
+        // Absen masuk hari ini DIKUNCI selama masih ada absen hari
+        // sebelumnya yang belum di-checkout -- ini pemaksaan yang bisa
+        // ditegakkan secara jujur (bandingkan dengan mencoba "memaksa"
+        // checkout tanggal yang sudah lewat: itu butuh foto+GPS live di
+        // momen yang sudah tidak ada). exports.checkOut di bawah
+        // sekarang menutup absen TERLAMA yang masih terbuka -- bukan
+        // cuma punya hari ini -- jadi ini yang jadi jalan keluarnya.
+        const belumSelesai = await Attendance.findOne({
+            where: {
+                user_id: req.user.id,
+                tanggal: { [Op.lt]: tanggal },
+                clock_out_time: null,
+            },
+            order: [['tanggal', 'ASC']],
+        })
+
+        if (belumSelesai) {
+            if (req.file) fs.unlinkSync(req.file.path)
+            return sendError(
+                res,
+                409,
+                `Anda belum absen pulang tanggal ${belumSelesai.tanggal}. Selesaikan dulu sebelum absen masuk hari ini.`
+            )
+        }
+
         if (!req.file) {
             return sendError(res, 400, 'Foto wajib diisi untuk absen masuk.')
         }
@@ -94,20 +119,20 @@ exports.checkOut = async (req, res) => {
 
         const { latitude, longitude, accuracy } = req.body
 
-        const tanggal = localDateString()
-
+        // Absen TERLAMA yang masih terbuka, BUKAN cuma milik hari ini
+        // -- ini yang membuat layar "Absen Pulang" juga jadi jalan
+        // keluar buat absen hari sebelumnya yang kelupaan (lihat
+        // penjagaan baru di checkIn di atas). Diurutkan ASC supaya
+        // yang paling lama diselesaikan lebih dulu kalau entah
+        // bagaimana ada lebih dari satu yang menumpuk.
         const attendance = await Attendance.findOne({
-            where: { user_id: req.user.id, tanggal }
+            where: { user_id: req.user.id, clock_out_time: null },
+            order: [['tanggal', 'ASC']],
         })
 
         if (!attendance) {
             if (req.file) fs.unlinkSync(req.file.path)
-            return sendError(res, 400, 'Anda belum absen masuk hari ini.')
-        }
-
-        if (attendance.clock_out_time) {
-            if (req.file) fs.unlinkSync(req.file.path)
-            return sendError(res, 400, 'Anda sudah absen pulang hari ini.')
+            return sendError(res, 400, 'Anda belum absen masuk.')
         }
 
         if (!req.file) {
@@ -186,11 +211,23 @@ exports.getToday = async (req, res) => {
 
         const tanggal = localDateString()
 
-        const attendance = await Attendance.findOne({
+        const today = await Attendance.findOne({
             where: { user_id: req.user.id, tanggal }
         })
 
-        res.json(attendance)
+        // Sama query dengan penjagaan di checkIn -- dipakai layar Absen
+        // buat langsung tahu (tanpa perlu gagal checkin dulu) kalau ada
+        // absen pulang hari sebelumnya yang belum diselesaikan.
+        const staleUnresolved = await Attendance.findOne({
+            where: {
+                user_id: req.user.id,
+                tanggal: { [Op.lt]: tanggal },
+                clock_out_time: null,
+            },
+            order: [['tanggal', 'ASC']],
+        })
+
+        res.json({ today, staleUnresolved })
 
     } catch (err) {
         return sendServerError(res, err, 'ATTENDANCE GET TODAY')
