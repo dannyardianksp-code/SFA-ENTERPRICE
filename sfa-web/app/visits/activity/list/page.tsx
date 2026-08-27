@@ -2,16 +2,34 @@
 
 import { useEffect, useState } from 'react'
 
+const pad2 = (n: number) => String(n).padStart(2, '0')
+
+// Awal dan akhir bulan berjalan, "YYYY-MM-DD" -- sama seperti default
+// di Report Visit.
+const awalBulanIni = () => {
+    const d = new Date()
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-01`
+}
+
+const akhirBulanIni = () => {
+    const d = new Date()
+    const akhir = new Date(d.getFullYear(), d.getMonth() + 1, 0)
+    return `${akhir.getFullYear()}-${pad2(akhir.getMonth() + 1)}-${pad2(akhir.getDate())}`
+}
+
 export default function ActivityListPage() {
 
     const [activities, setActivities] = useState<any[]>([])
     const [salesUsers, setSalesUsers] = useState<any[]>([])
+    const [areas, setAreas] = useState<any[]>([])
+    const [activityTypes, setActivityTypes] = useState<any[]>([])
 
-    const [startDate, setStartDate] = useState('')
-    const [endDate, setEndDate] = useState('')
-    const [sales, setSales] = useState('')
+    const [dateFrom, setDateFrom] = useState(awalBulanIni())
+    const [dateTo, setDateTo] = useState(akhirBulanIni())
+    const [areaFilter, setAreaFilter] = useState('ALL')
+    const [salesFilter, setSalesFilter] = useState('ALL')
+    const [activityFilter, setActivityFilter] = useState('ALL')
     const [product, setProduct] = useState('')
-    const [role, setRole] = useState('')
 
     const [loading, setLoading] = useState(false)
 
@@ -24,44 +42,76 @@ export default function ActivityListPage() {
 
         const token = localStorage.getItem('token')
 
-        // USERS
-        const uRes = await fetch('http://localhost:1000/api/users', {
-            headers: { Authorization: `Bearer ${token}` }
-        })
+        const [aRes, uRes, arRes, tRes] = await Promise.all([
 
+            fetch('http://localhost:1000/api/visit-activities', {
+                headers: { Authorization: `Bearer ${token}` }
+            }),
+
+            fetch('http://localhost:1000/api/users', {
+                headers: { Authorization: `Bearer ${token}` }
+            }),
+
+            fetch('http://localhost:1000/api/areas', {
+                headers: { Authorization: `Bearer ${token}` }
+            }),
+
+            fetch('http://localhost:1000/api/activities', {
+                headers: { Authorization: `Bearer ${token}` }
+            })
+
+        ])
+
+        const aData = await aRes.json()
         const uData = await uRes.json()
+        const arData = await arRes.json()
+        const tData = await tRes.json()
+
+        setActivities(Array.isArray(aData) ? aData : [])
         setSalesUsers(Array.isArray(uData) ? uData : [])
-
-        // BUILD URL
-        let url = 'http://localhost:1000/api/visit-activities'
-        const params = new URLSearchParams()
-
-        if (startDate) params.append('startDate', startDate)
-        if (endDate) params.append('endDate', endDate)
-        if (sales) params.append('sales', sales)
-        if (product) params.append('product', product)
-
-        url += `?${params.toString()}`
-
-        const res = await fetch(url, {
-            headers: { Authorization: `Bearer ${token}` }
-        })
-
-        const data = await res.json()
-
-        setActivities(Array.isArray(data) ? data : [])
+        setAreas(Array.isArray(arData) ? arData : [])
+        setActivityTypes(Array.isArray(tData) ? tData : [])
 
         setLoading(false)
     }
 
     useEffect(() => {
-
-        const userRole = localStorage.getItem('role')
-        setRole(userRole || '')
-
         fetchData()
+    }, [])
 
-    }, [startDate, endDate, sales, product])
+    // user_id -> area_id, sama pola dengan Report Visit -- area ada di
+    // tabel users, bukan di visit-activities.
+    const areaByUserId = new Map(
+        salesUsers.map((u: any) => [u.id, u.area_id])
+    )
+
+    // ======================
+    // FILTER (semua di client, sama pola dengan Report Visit)
+    // ======================
+    const filtered = activities.filter((a: any) => {
+
+        const tanggal = a.created_at?.slice(0, 10)
+
+        const matchDateFrom = !dateFrom || (tanggal && tanggal >= dateFrom)
+        const matchDateTo = !dateTo || (tanggal && tanggal <= dateTo)
+
+        const matchSales =
+            salesFilter === 'ALL' || String(a.Visit?.User?.id) === salesFilter
+
+        const matchArea =
+            areaFilter === 'ALL' ||
+            String(areaByUserId.get(a.Visit?.User?.id)) === areaFilter
+
+        const matchActivity =
+            activityFilter === 'ALL' || String(a.activity_id) === activityFilter
+
+        const matchProduct =
+            !product ||
+            a.product_name?.toLowerCase().includes(product.toLowerCase())
+
+        return matchDateFrom && matchDateTo && matchSales && matchArea && matchActivity && matchProduct
+
+    })
 
     // ======================
     // UI HELPERS
@@ -123,25 +173,71 @@ export default function ActivityListPage() {
                 boxShadow: '0 5px 15px rgba(0,0,0,0.05)'
             }}>
 
-                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
-                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                <div>
+                    <label style={{ fontSize: 12, color: '#6b7280', display: 'block' }}>
+                        Dari Tanggal
+                    </label>
+                    <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+                </div>
 
-                {role !== 'SPG' && (
-                    <select value={sales} onChange={e => setSales(e.target.value)}>
-                        <option value="">All Sales</option>
+                <div>
+                    <label style={{ fontSize: 12, color: '#6b7280', display: 'block' }}>
+                        Sampai Tanggal
+                    </label>
+                    <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+                </div>
+
+                <div>
+                    <label style={{ fontSize: 12, color: '#6b7280', display: 'block' }}>
+                        Area
+                    </label>
+                    <select value={areaFilter} onChange={e => setAreaFilter(e.target.value)}>
+                        <option value="ALL">Semua Area</option>
+                        {areas.map((a: any) => (
+                            <option key={a.id} value={a.id}>{a.name}</option>
+                        ))}
+                    </select>
+                </div>
+
+                <div>
+                    <label style={{ fontSize: 12, color: '#6b7280', display: 'block' }}>
+                        Nama Sales
+                    </label>
+                    <select value={salesFilter} onChange={e => setSalesFilter(e.target.value)}>
+                        <option value="ALL">Semua Sales</option>
                         {salesUsers.map((u: any) => (
                             <option key={u.id} value={u.id}>{u.name}</option>
                         ))}
                     </select>
-                )}
+                </div>
 
-                <input
-                    placeholder="Search product..."
-                    value={product}
-                    onChange={e => setProduct(e.target.value)}
-                />
+                <div>
+                    <label style={{ fontSize: 12, color: '#6b7280', display: 'block' }}>
+                        Kegiatan / Activity
+                    </label>
+                    <select value={activityFilter} onChange={e => setActivityFilter(e.target.value)}>
+                        <option value="ALL">Semua Kegiatan</option>
+                        {activityTypes.map((t: any) => (
+                            <option key={t.id} value={t.id}>{t.name}</option>
+                        ))}
+                    </select>
+                </div>
 
-                <button onClick={fetchData}>
+                <div>
+                    <label style={{ fontSize: 12, color: '#6b7280', display: 'block' }}>
+                        Produk
+                    </label>
+                    <input
+                        placeholder="Search product..."
+                        value={product}
+                        onChange={e => setProduct(e.target.value)}
+                    />
+                </div>
+
+                <button
+                    onClick={fetchData}
+                    style={{ alignSelf: 'flex-end' }}
+                >
                     🔄 Refresh
                 </button>
 
@@ -209,7 +305,7 @@ export default function ActivityListPage() {
 
                         <tbody>
 
-                            {activities.length === 0 && (
+                            {filtered.length === 0 && (
                                 <tr>
                                     <td colSpan={12} style={{
                                         padding: 20,
@@ -221,7 +317,7 @@ export default function ActivityListPage() {
                                 </tr>
                             )}
 
-                            {activities.map((a: any) => (
+                            {filtered.map((a: any) => (
                                 <tr
                                     key={a.id}
                                     style={{
