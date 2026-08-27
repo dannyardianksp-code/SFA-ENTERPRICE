@@ -22,6 +22,12 @@ const VisitActivity =
 const Customer =
     require('../models/customer.model')
 
+const User =
+    require('../models/user.model')
+
+const { resolveSubordinateUserIds } =
+    require('../utils/access.util')
+
 
 
 
@@ -313,6 +319,69 @@ router.get(
 
                     ).toFixed(2)
 
+            // TEAM (anak buah) -- hanya buat SUPERVISOR dan MANAGER.
+            // SPG tidak punya bawahan (resolveSubordinateUserIds
+            // mengembalikan cuma dirinya sendiri), jadi timnya kosong
+            // dan section ini otomatis tidak tampil di web tanpa perlu
+            // pengecekan role terpisah di frontend.
+            const TEAM_VIEW_ROLES = ['SUPERVISOR', 'MANAGER']
+
+            let team = []
+
+            if (TEAM_VIEW_ROLES.includes(req.user.role)) {
+
+                const subtreeIds =
+                    await resolveSubordinateUserIds(req.user)
+
+                const timIds =
+                    subtreeIds.filter(id => id !== userId)
+
+                const timUsers = await User.findAll({
+                    where: { id: timIds },
+                    attributes: ['id', 'name'],
+                })
+
+                team = await Promise.all(
+                    timUsers.map(async (u) => {
+
+                        const targetVisitAnggota =
+                            await VisitPlan.count({
+                                where: {
+                                    user_id: u.id,
+                                    visit_date: today,
+                                },
+                            })
+
+                        const visitedAnggota =
+                            await VisitPlan.count({
+                                where: {
+                                    user_id: u.id,
+                                    visit_date: today,
+                                    status: 'COMPLETED',
+                                },
+                            })
+
+                        const progressAnggota =
+                            targetVisitAnggota === 0
+                                ? 0
+                                : Number(
+                                    (visitedAnggota / targetVisitAnggota) * 100
+                                ).toFixed(2)
+
+                        return {
+                            id: u.id,
+                            name: u.name,
+                            targetVisit: targetVisitAnggota,
+                            visited: visitedAnggota,
+                            remaining: targetVisitAnggota - visitedAnggota,
+                            progress: progressAnggota,
+                        }
+
+                    })
+                )
+
+            }
+
             res.json({
 
                 today: {
@@ -347,7 +416,9 @@ router.get(
 
                 visitedStores,
 
-                pendingStores
+                pendingStores,
+
+                team
 
 
             })

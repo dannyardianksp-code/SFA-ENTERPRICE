@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import TeamPerformanceChart from './components/TeamPerformanceChart'
 // import DashboardMap from './components/DashboardMap'
 export default function Dashboard() {
 
@@ -668,6 +669,8 @@ export default function Dashboard() {
         </div>
 
       </div>
+
+      <TeamPerformanceChart team={dashboard.team} />
 
       {/* STORE */}
 
