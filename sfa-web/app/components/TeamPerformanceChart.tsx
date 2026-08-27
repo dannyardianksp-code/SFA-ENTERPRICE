@@ -64,7 +64,7 @@ export default function TeamPerformanceChart({
 
                 data: team.map(a => a.targetVisit),
 
-                backgroundColor: '#cbd5e1',
+                backgroundColor: '#fbbf24',
 
                 borderRadius: 6,
 
@@ -80,7 +80,7 @@ export default function TeamPerformanceChart({
 
                 data: team.map(a => a.visited),
 
-                backgroundColor: '#2563eb',
+                backgroundColor: '#22c55e',
 
                 borderRadius: 6,
 
