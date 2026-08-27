@@ -543,6 +543,31 @@ Failed : ${result.failed}`
     }
 
 
+    // Dipakai bareng oleh card ringkasan (Pending/On Visit/Completed)
+    // DAN tabel di bawahnya -- sebelumnya card menghitung dari `plans`
+    // mentah (semua tanggal) sementara tabel sudah menyaring lewat
+    // search/status/sales/tanggal, jadi angkanya tidak nyambung dengan
+    // baris yang benar-benar tampil.
+    const filteredPlans = plans.filter((p: any) => {
+
+        const matchName =
+            p.Customer?.name
+                ?.toLowerCase()
+                .includes(search.toLowerCase())
+
+        const matchStatus =
+            statusFilter === 'ALL' || p.status === statusFilter
+
+        const matchSales =
+            salesFilter === 'ALL' || String(p.user_id) === salesFilter
+
+        const matchDate =
+            !dateFilter || p.visit_date === dateFilter
+
+        return matchName && matchStatus && matchSales && matchDate
+
+    })
+
     return (
 
         <div className="space-y-6">
@@ -901,7 +926,7 @@ Failed : ${result.failed}`
 
                         {
 
-                            plans.filter(
+                            filteredPlans.filter(
 
                                 (p: any) =>
 
@@ -927,7 +952,7 @@ Failed : ${result.failed}`
 
                         {
 
-                            plans.filter(
+                            filteredPlans.filter(
 
                                 (p: any) =>
 
@@ -953,7 +978,7 @@ Failed : ${result.failed}`
 
                         {
 
-                            plans.filter(
+                            filteredPlans.filter(
 
                                 (p: any) =>
 
@@ -1120,49 +1145,9 @@ Failed : ${result.failed}`
 
                         {
 
-                            plans
+                            filteredPlans
 
-                                .filter((p: any) => {
-
-                                    const matchName =
-
-                                        p.Customer?.name
-
-                                            ?.toLowerCase()
-
-                                            .includes(
-
-                                                search.toLowerCase()
-
-                                            )
-
-                                    const matchStatus =
-
-                                        statusFilter === 'ALL'
-
-                                        ||
-
-                                        p.status === statusFilter
-
-                                    const matchSales =
-
-                                        salesFilter === 'ALL'
-
-                                        ||
-
-                                        String(p.user_id) === salesFilter
-
-                                    const matchDate =
-
-                                        !dateFilter
-
-                                        ||
-
-                                        p.visit_date === dateFilter
-
-                                    return matchName && matchStatus && matchSales && matchDate
-
-                                }).map((p: any) => {
+                                .map((p: any) => {
                                     const distance =
 
                                         currentPosition &&
