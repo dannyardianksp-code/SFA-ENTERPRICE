@@ -263,21 +263,22 @@ export default function Sidebar({
                         {!collapsed && 'Orders'}
                     </Link>
 
-                    <Link
-                        href="/visits"
-                        className={menuClass('/visits')}
+                    {/* Visits dan Activity dinonaktifkan -- infonya
+                    pindah ke Menu Report */}
+
+                    <div
+                        className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 opacity-50 cursor-not-allowed"
                     >
                         <MapPinned size={18} />
                         {!collapsed && 'Visits'}
-                    </Link>
+                    </div>
 
-                    <Link
-                        href="/visits/activity/list"
-                        className={menuClass('/visits/activity/list')}
+                    <div
+                        className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 opacity-50 cursor-not-allowed"
                     >
                         <Activity size={18} />
                         {!collapsed && 'Activity'}
-                    </Link>
+                    </div>
 
                 </div>
 
