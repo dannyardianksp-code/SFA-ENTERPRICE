@@ -51,7 +51,12 @@ export default function Sidebar() {
         )
 
 
-    }, [])
+        // Sidebar dirender sekali di root layout, jadi tidak pernah
+        // remount saat pindah halaman -- logout/login memakai
+        // router.push (navigasi client-side), bukan reload penuh.
+        // Tanpa `pathname` di dependency, role/name yang dibaca di sini
+        // nyangkut dari user sebelumnya sampai tab di-refresh manual.
+    }, [pathname])
 
     const hasAccess = (
         roles: string[]
