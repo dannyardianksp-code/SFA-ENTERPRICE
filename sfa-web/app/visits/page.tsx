@@ -3,6 +3,22 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
+const pad2 = (n: number) => String(n).padStart(2, '0')
+
+// Awal dan akhir bulan berjalan, "YYYY-MM-DD" -- default tampilan
+// halaman ini (dulu tanpa batas tanggal sama sekali, nampilin seluruh
+// riwayat).
+const awalBulanIni = () => {
+    const d = new Date()
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-01`
+}
+
+const akhirBulanIni = () => {
+    const d = new Date()
+    const akhir = new Date(d.getFullYear(), d.getMonth() + 1, 0)
+    return `${akhir.getFullYear()}-${pad2(akhir.getMonth() + 1)}-${pad2(akhir.getDate())}`
+}
+
 export default function VisitHistoryPage() {
 
     const [visits, setVisits] = useState<any[]>([])
@@ -11,8 +27,8 @@ export default function VisitHistoryPage() {
     const [search, setSearch] = useState('')
     const [role, setRole] = useState('')
 
-    const [dateFrom, setDateFrom] = useState('')
-    const [dateTo, setDateTo] = useState('')
+    const [dateFrom, setDateFrom] = useState(awalBulanIni())
+    const [dateTo, setDateTo] = useState(akhirBulanIni())
     const [areaFilter, setAreaFilter] = useState('ALL')
     const [salesFilter, setSalesFilter] = useState('ALL')
 
