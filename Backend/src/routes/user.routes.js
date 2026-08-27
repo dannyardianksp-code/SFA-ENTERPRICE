@@ -13,6 +13,9 @@ const Area =
 const Channel =
     require('../models/channel.model')
 
+const UserArea =
+    require('../models/userArea.model')
+
 const auth =
     require('../middleware/auth.middleware')
 
@@ -283,6 +286,8 @@ router.post(
 
                 area_id,
 
+                area_ids,
+
                 channel_id,
 
                 supervisor_id
@@ -300,6 +305,20 @@ router.post(
                     'Role tidak dikenal.'
                 )
             }
+
+            // area_ids (multi) adalah sumber kebenaran kalau dikirim --
+            // dipakai buat visibilitas customer & gerbang check-in
+            // (lihat AssignedAreas di customer.controller.js dan
+            // visit.controller.js). area_id tunggal cuma field lama buat
+            // tampilan/filter ringkas (mis. Report di web); diturunkan
+            // dari elemen pertama area_ids kalau area_ids dikirim, biar
+            // dua-duanya tetap konsisten.
+            const daftarAreaId =
+                Array.isArray(area_ids)
+                    ? area_ids
+                        .map((id) => Number(id))
+                        .filter((id) => Number.isInteger(id) && id > 0)
+                    : []
 
             // HASH PASSWORD
             const hashedPassword =
@@ -327,7 +346,9 @@ router.post(
                     role,
 
                     area_id:
-                        area_id || null,
+                        daftarAreaId.length > 0
+                            ? daftarAreaId[0]
+                            : (area_id || null),
 
                     channel_id:
                         channel_id || null,
@@ -336,6 +357,19 @@ router.post(
                         supervisor_id || null
 
                 })
+
+            if (daftarAreaId.length > 0) {
+
+                await UserArea.bulkCreate(
+
+                    daftarAreaId.map((areaId) => ({
+                        user_id: user.id,
+                        area_id: areaId,
+                    }))
+
+                )
+
+            }
 
             // Password TIDAK BOLEH ikut terkirim: instance dari create()
             // memuat hash bcrypt-nya, dan toJSON() menyertakan seluruh

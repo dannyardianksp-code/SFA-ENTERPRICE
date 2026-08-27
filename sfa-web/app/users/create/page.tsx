@@ -40,13 +40,28 @@ export default function CreateUserPage() {
 
             role: 'SPG',
 
-            area_id: '',
-
             channel_id: '',
 
             supervisor_id: ''
 
         })
+
+    // Terpisah dari `form` -- multi-select checkbox, bukan satu value
+    // teks seperti field lain yang lewat handleChange.
+    const [areaIds, setAreaIds] =
+        useState<number[]>([])
+
+    const toggleArea = (id: number) => {
+
+        setAreaIds((sekarang) =>
+
+            sekarang.includes(id)
+                ? sekarang.filter((a) => a !== id)
+                : [...sekarang, id]
+
+        )
+
+    }
 
     // ======================
     // FETCH MASTER DATA
@@ -341,6 +356,8 @@ export default function CreateUserPage() {
 
                     ...form,
 
+                    area_ids: areaIds,
+
                     supervisor_id:
 
                         form.supervisor_id || null
@@ -491,40 +508,43 @@ export default function CreateUserPage() {
                         🧠 Role & Organization
                     </h2>
 
-                    <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                        <label className="text-sm text-slate-500">Role</label>
+                        <select
+                            name="role"
+                            value={form.role}
+                            onChange={handleChange}
+                            className="w-full mt-2 border rounded-xl p-3"
+                        >
+                            <option value="ADMINISTRATOR">ADMINISTRATOR</option>
+                            <option value="MANAGER">MANAGER</option>
+                            <option value="SUPERVISOR">SUPERVISOR</option>
+                            <option value="SPG">SPG</option>
+                        </select>
+                    </div>
 
-                        <div>
-                            <label className="text-sm text-slate-500">Role</label>
-                            <select
-                                name="role"
-                                value={form.role}
-                                onChange={handleChange}
-                                className="w-full mt-2 border rounded-xl p-3"
-                            >
-                                <option value="ADMINISTRATOR">ADMINISTRATOR</option>
-                                <option value="MANAGER">MANAGER</option>
-                                <option value="SUPERVISOR">SUPERVISOR</option>
-                                <option value="SPG">SPG</option>
-                            </select>
+                    <div>
+                        <label className="text-sm text-slate-500">
+                            Area {areaIds.length > 0 && `(${areaIds.length} dipilih)`}
+                        </label>
+
+                        <div className="mt-2 border rounded-xl p-3 grid sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto">
+
+                            {areas.map((a: any) => (
+                                <label
+                                    key={a.id}
+                                    className="flex items-center gap-2 text-sm text-slate-700"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={areaIds.includes(a.id)}
+                                        onChange={() => toggleArea(a.id)}
+                                    />
+                                    {a.name}
+                                </label>
+                            ))}
+
                         </div>
-
-                        <div>
-                            <label className="text-sm text-slate-500">Area</label>
-                            <select
-                                name="area_id"
-                                value={form.area_id}
-                                onChange={handleChange}
-                                className="w-full mt-2 border rounded-xl p-3"
-                            >
-                                <option value="">Select Area</option>
-                                {areas.map((a: any) => (
-                                    <option key={a.id} value={a.id}>
-                                        {a.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
                     </div>
 
                     <div>
