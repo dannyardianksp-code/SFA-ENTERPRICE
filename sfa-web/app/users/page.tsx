@@ -194,108 +194,121 @@ export default function UsersPage() {
 
             </div>
 
-            {/* GRID */}
-            <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-5">
+            {/* LIST */}
+            <div className="bg-white rounded-3xl shadow-lg overflow-hidden">
 
-                {users
-                    .filter((u: any) => {
+                <table className="w-full text-left">
 
-                        const keyword = search.toLowerCase()
+                    <thead className="bg-slate-50 border-b border-slate-200">
 
-                        return (
-                            u.name?.toLowerCase().includes(keyword) ||
-                            u.email?.toLowerCase().includes(keyword) ||
-                            u.role?.toLowerCase().includes(keyword) ||
-                            u.Area?.code?.toLowerCase().includes(keyword) ||
-                            u.Channel?.code?.toLowerCase().includes(keyword)
-                        )
-                    }).map((u: any, i: number) => (
+                        <tr>
 
-                        <div
-                            key={u.id}
-                            className="bg-white rounded-3xl shadow-lg p-5 hover:shadow-xl transition"
-                        >
+                            <th className="p-4 text-sm font-semibold text-slate-500">Name / Email</th>
+                            <th className="p-4 text-sm font-semibold text-slate-500">Role</th>
+                            <th className="p-4 text-sm font-semibold text-slate-500">Area</th>
+                            <th className="p-4 text-sm font-semibold text-slate-500">Channel</th>
+                            <th className="p-4 text-sm font-semibold text-slate-500">Supervisor</th>
+                            <th className="p-4 text-sm font-semibold text-slate-500">Status</th>
+                            <th className="p-4 text-sm font-semibold text-slate-500">Aksi</th>
 
-                            {/* TOP INFO */}
-                            <div className="flex justify-between items-start">
+                        </tr>
 
-                                <div>
-                                    <h2 className="text-xl font-bold text-slate-900">
-                                        {u.name}
-                                    </h2>
+                    </thead>
 
-                                    <p className="text-slate-500 text-sm">
-                                        {u.email}
-                                    </p>
-                                </div>
+                    <tbody>
 
-                                {/* STATUS BADGE */}
-                                <span
-                                    className={`px-3 py-1 rounded-full text-xs font-semibold ${u.status === 'ACTIVE'
-                                        ? 'bg-green-100 text-green-700'
-                                        : 'bg-red-100 text-red-700'
-                                        }`}
+                        {users
+                            .filter((u: any) => {
+
+                                const keyword = search.toLowerCase()
+
+                                return (
+                                    u.name?.toLowerCase().includes(keyword) ||
+                                    u.email?.toLowerCase().includes(keyword) ||
+                                    u.role?.toLowerCase().includes(keyword) ||
+                                    u.Area?.code?.toLowerCase().includes(keyword) ||
+                                    u.Channel?.code?.toLowerCase().includes(keyword)
+                                )
+                            }).map((u: any) => (
+
+                                <tr
+                                    key={u.id}
+                                    className="border-b border-slate-100 hover:bg-slate-50"
                                 >
-                                    {u.status}
-                                </span>
 
-                            </div>
+                                    <td className="p-4">
+                                        <div className="font-semibold text-slate-900">{u.name}</div>
+                                        <div className="text-slate-500 text-sm">{u.email}</div>
+                                    </td>
 
-                            {/* META INFO */}
-                            <div className="mt-4 space-y-2 text-sm text-slate-600">
+                                    <td className="p-4 text-slate-600">
+                                        {u.role}
+                                    </td>
 
-                                <p>
-                                    🎭 Role: <b>{u.role}</b>
-                                </p>
+                                    <td className="p-4 text-slate-600">
+                                        {u.Area?.code || '-'}
+                                    </td>
 
-                                <p>
-                                    📍 Area: <b>{u.Area?.code || '-'}</b>
-                                </p>
+                                    <td className="p-4 text-slate-600">
+                                        {u.Channel?.code || '-'}
+                                    </td>
 
-                                <p>
-                                    🏢 Channel: <b>{u.Channel?.code || '-'}</b>
-                                </p>
+                                    <td className="p-4 text-slate-600">
+                                        {u.Supervisor?.name || '-'}
+                                    </td>
 
-                                <p>
-                                    👨‍💼 Supervisor: <b>{u.Supervisor?.name || '-'}</b>
-                                </p>
+                                    <td className="p-4">
+                                        <span
+                                            className={`px-3 py-1 rounded-full text-xs font-semibold ${u.status === 'ACTIVE'
+                                                ? 'bg-green-100 text-green-700'
+                                                : 'bg-red-100 text-red-700'
+                                                }`}
+                                        >
+                                            {u.status}
+                                        </span>
+                                    </td>
 
-                            </div>
+                                    <td className="p-4">
 
-                            {/* ACTIONS */}
-                            <div className="flex gap-2 mt-5">
+                                        <div className="flex flex-wrap gap-2">
 
-                                <button
-                                    onClick={() => handleStatus(u.id)}
-                                    className={`flex-1 py-2 rounded-xl font-semibold text-sm ${u.status === 'ACTIVE'
-                                        ? 'bg-amber-500 text-white'
-                                        : 'bg-green-600 text-white'
-                                        }`}
-                                >
-                                    {u.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
-                                </button>
+                                            <button
+                                                onClick={() => handleStatus(u.id)}
+                                                className={`py-2 px-3 rounded-xl font-semibold text-sm ${u.status === 'ACTIVE'
+                                                    ? 'bg-amber-500 text-white'
+                                                    : 'bg-green-600 text-white'
+                                                    }`}
+                                            >
+                                                {u.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+                                            </button>
 
-                                <button
-                                    onClick={() =>
-                                        router.push(`/users/edit/${u.id}`)
-                                    }
-                                    className="flex-1 bg-blue-600 text-white py-2 rounded-xl font-semibold text-sm"
-                                >
-                                    Edit
-                                </button>
+                                            <button
+                                                onClick={() =>
+                                                    router.push(`/users/edit/${u.id}`)
+                                                }
+                                                className="bg-blue-600 text-white py-2 px-3 rounded-xl font-semibold text-sm"
+                                            >
+                                                Edit
+                                            </button>
 
-                            </div>
+                                            <button
+                                                onClick={() => handleResetPassword(u.id)}
+                                                className="border border-slate-300 py-2 px-3 rounded-xl text-sm hover:bg-slate-100"
+                                            >
+                                                Reset Password
+                                            </button>
 
-                            <button
-                                onClick={() => handleResetPassword(u.id)}
-                                className="w-full mt-2 border border-slate-300 py-2 rounded-xl text-sm hover:bg-slate-100"
-                            >
-                                Reset Password
-                            </button>
+                                        </div>
 
-                        </div>
+                                    </td>
 
-                    ))}
+                                </tr>
+
+                            ))}
+
+                    </tbody>
+
+                </table>
 
             </div>
 
