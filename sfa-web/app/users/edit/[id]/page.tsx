@@ -40,7 +40,7 @@ export default function EditUserPage() {
             email: '',
             role: '',
 
-            area_ids: [] as string[],
+            area_ids: [] as number[],
 
             channel_id: '',
 
@@ -93,10 +93,10 @@ export default function EditUserPage() {
 
                 area_ids:
 
-                    data.Areas
+                    data.AssignedAreas
 
-                        ? data.Areas.map(
-                            (a: any) => String(a.id)
+                        ? data.AssignedAreas.map(
+                            (a: any) => a.id
                         )
 
                         : []
@@ -278,31 +278,20 @@ export default function EditUserPage() {
     }
 
 
-    const handleAreaChange =
-        (e: any) => {
+    const toggleArea = (id: number) => {
 
-            const selected =
+        setForm((sekarang) => ({
 
-                Array.from(
+            ...sekarang,
 
-                    e.target.selectedOptions
+            area_ids:
+                sekarang.area_ids.includes(id)
+                    ? sekarang.area_ids.filter((a) => a !== id)
+                    : [...sekarang.area_ids, id]
 
-                ).map(
+        }))
 
-                    (option: any) => option.value
-
-                )
-
-            setForm({
-
-                ...form,
-
-                area_ids:
-                    selected
-
-            })
-
-        }
+    }
 
 
 
@@ -460,20 +449,27 @@ export default function EditUserPage() {
 
                     {/* AREA MULTI */}
                     <div>
-                        <label className="text-sm text-slate-500">Area</label>
-                        <select
-                            multiple
-                            name="area_ids"
-                            value={form.area_ids}
-                            onChange={handleAreaChange}
-                            className="w-full mt-2 border rounded-xl p-3 min-h-[120px]"
-                        >
+                        <label className="text-sm text-slate-500">
+                            Area {form.area_ids.length > 0 && `(${form.area_ids.length} dipilih)`}
+                        </label>
+
+                        <div className="mt-2 border rounded-xl p-3 grid sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto">
+
                             {areas.map((a: any) => (
-                                <option key={a.id} value={a.id}>
+                                <label
+                                    key={a.id}
+                                    className="flex items-center gap-2 text-sm text-slate-700"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={form.area_ids.includes(a.id)}
+                                        onChange={() => toggleArea(a.id)}
+                                    />
                                     {a.name}
-                                </option>
+                                </label>
                             ))}
-                        </select>
+
+                        </div>
                     </div>
 
                 </div>

@@ -632,7 +632,20 @@ router.get(
                                 'password'
                             ]
 
-                        }
+                        },
+
+                        // Layar Edit User (web) butuh ini buat
+                        // pre-select checkbox Area multi-nya -- tanpa
+                        // include ini area_ids selalu mulai kosong,
+                        // seolah-olah user tidak punya area sama sekali.
+                        include: [
+                            {
+                                model: Area,
+                                as: 'AssignedAreas',
+                                attributes: ['id', 'code', 'name'],
+                                through: { attributes: [] },
+                            },
+                        ],
 
                     }
 
@@ -719,6 +732,8 @@ router.put(
 
                 area_id,
 
+                area_ids,
+
                 channel_id,
 
                 supervisor_id
@@ -734,6 +749,21 @@ router.put(
                     'Role tidak dikenal.'
                 )
             }
+
+            // area_ids TIDAK melalui nullableUpdate/perubahan seperti
+            // field lain -- ini bukan kolom users, tapi tabel terpisah
+            // (user_areas) yang disinkron penuh (hapus semua baris lama,
+            // tulis ulang yang baru) di dalam transaksi yang sama di
+            // bawah. undefined berarti "field ini tidak dikirim, jangan
+            // sentuh area sama sekali" -- form lain yang PUT tanpa
+            // area_ids (kalau ada) tidak boleh diam-diam mengosongkan
+            // area user.
+            const daftarAreaIdBaru =
+                Array.isArray(area_ids)
+                    ? area_ids
+                        .map((areaId) => Number(areaId))
+                        .filter((areaId) => Number.isInteger(areaId) && areaId > 0)
+                    : null
 
             // Membandingkan NILAI, bukan keberadaan field: form user di
             // web mengirim kembali seluruh objeknya, sehingga admin yang
@@ -876,6 +906,18 @@ router.put(
                     }
                 }
 
+                // area_ids (multi) menang atas area_id tunggal kalau
+                // dua-duanya dikirim -- konsisten dengan POST /
+                // (create), area_id legacy diturunkan dari elemen
+                // pertama supaya filter Area yang sudah ada (Report)
+                // tetap benar.
+                if (daftarAreaIdBaru !== null) {
+                    perubahan.area_id =
+                        daftarAreaIdBaru.length > 0
+                            ? daftarAreaIdBaru[0]
+                            : null
+                }
+
                 await User.update(
 
                     perubahan,
@@ -894,6 +936,29 @@ router.put(
                     }
 
                 )
+
+                // Sinkron penuh -- hapus assignment lama, tulis ulang
+                // yang baru. Hanya kalau area_ids benar-benar dikirim;
+                // request tanpa field ini (mis. sekadar ganti nama)
+                // tidak boleh diam-diam mengosongkan area user.
+                if (daftarAreaIdBaru !== null) {
+
+                    await UserArea.destroy({
+                        where: { user_id: targetId },
+                        transaction: t,
+                    })
+
+                    if (daftarAreaIdBaru.length > 0) {
+                        await UserArea.bulkCreate(
+                            daftarAreaIdBaru.map((areaId) => ({
+                                user_id: targetId,
+                                area_id: areaId,
+                            })),
+                            { transaction: t }
+                        )
+                    }
+
+                }
 
                 return null
 
