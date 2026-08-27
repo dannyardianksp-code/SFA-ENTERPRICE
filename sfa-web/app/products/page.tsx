@@ -384,123 +384,130 @@ export default function ProductsPage() {
 
             {/* LIST */}
 
-            <div className="grid lg:grid-cols-2 gap-5">
+            <div className="bg-white rounded-3xl shadow-lg overflow-hidden">
 
-                {
+                <table className="w-full text-left">
 
-                    products
+                    <thead className="bg-slate-50 border-b border-slate-200">
 
-                        .filter((p: any) =>
+                        <tr>
 
-                            p.name
+                            <th className="p-4 text-sm font-semibold text-slate-500">Code</th>
+                            <th className="p-4 text-sm font-semibold text-slate-500">Name</th>
+                            <th className="p-4 text-sm font-semibold text-slate-500">Category</th>
+                            <th className="p-4 text-sm font-semibold text-slate-500">Price</th>
+                            <th className="p-4 text-sm font-semibold text-slate-500">UOM</th>
+                            <th className="p-4 text-sm font-semibold text-slate-500">Aksi</th>
 
-                                .toLowerCase()
+                        </tr>
 
-                                .includes(
+                    </thead>
 
-                                    search.toLowerCase()
+                    <tbody>
+
+                        {
+
+                            products
+
+                                .filter((p: any) =>
+
+                                    p.name
+
+                                        .toLowerCase()
+
+                                        .includes(
+
+                                            search.toLowerCase()
+
+                                        )
+
+                                    &&
+
+                                    (
+
+                                        categoryFilter === 'ALL'
+
+                                        ||
+
+                                        (p.category || 'JUAL') === categoryFilter
+
+                                    )
 
                                 )
 
-                            &&
+                                .map((p: any) => (
 
-                            (
+                                    <tr
 
-                                categoryFilter === 'ALL'
+                                        key={p.id}
 
-                                ||
+                                        className="border-b border-slate-100 hover:bg-slate-50"
 
-                                (p.category || 'JUAL') === categoryFilter
+                                    >
 
-                            )
-
-                        )
-
-                        .map((p: any) => (
-
-                            <div
-
-                                key={p.id}
-
-                                className="bg-white rounded-3xl shadow-lg p-6 hover:shadow-xl transition"
-
-                            >
-
-                                <div className="flex justify-between">
-
-                                    <div>
-
-                                        <h3 className="text-2xl font-bold text-slate-900">
-
-                                            {p.name}
-
-                                        </h3>
-
-                                        <p className="text-slate-500">
-
+                                        <td className="p-4 text-slate-600">
                                             {p.code}
+                                        </td>
 
-                                        </p>
+                                        <td className="p-4 font-semibold text-slate-900">
+                                            {p.name}
+                                        </td>
 
-                                        <span className="inline-block mt-2 px-3 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700">
+                                        <td className="p-4">
+                                            <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700">
+                                                {p.category || 'JUAL'}
+                                            </span>
+                                        </td>
 
-                                            {p.category || 'JUAL'}
-
-                                        </span>
-
-                                    </div>
-
-                                    <div className="text-right">
-
-                                        <div className="text-blue-600 font-bold text-xl">
-
+                                        <td className="p-4 text-blue-600 font-bold">
                                             Rp {Number(p.price).toLocaleString('id-ID')}
+                                        </td>
 
-                                        </div>
-
-                                        <div className="text-slate-500">
-
+                                        <td className="p-4 text-slate-600">
                                             {p.uom}
+                                        </td>
 
-                                        </div>
+                                        <td className="p-4">
 
-                                    </div>
+                                            <div className="flex gap-2">
 
-                                </div>
+                                                <button
 
-                                <div className="flex gap-3 mt-6">
+                                                    onClick={() => handleEdit(p)}
 
-                                    <button
+                                                    className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-2 rounded-xl text-sm"
 
-                                        onClick={() => handleEdit(p)}
+                                                >
 
-                                        className="bg-yellow-500 hover:bg-yellow-600 text-white px-5 py-2 rounded-xl"
+                                                    ✏️ Edit
 
-                                    >
+                                                </button>
 
-                                        ✏️ Edit
+                                                <button
 
-                                    </button>
+                                                    onClick={() => handleDelete(p.id)}
 
-                                    <button
+                                                    className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-xl text-sm"
 
-                                        onClick={() => handleDelete(p.id)}
+                                                >
 
-                                        className="bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded-xl"
+                                                    🗑 Delete
 
-                                    >
+                                                </button>
 
-                                        🗑 Delete
+                                            </div>
 
-                                    </button>
+                                        </td>
 
-                                </div>
+                                    </tr>
 
-                            </div>
+                                ))
 
-                        ))
+                        }
 
-                }
+                    </tbody>
+
+                </table>
 
             </div>
 
