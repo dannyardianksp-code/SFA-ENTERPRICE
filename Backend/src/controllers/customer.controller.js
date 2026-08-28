@@ -833,7 +833,7 @@ async (req, res) => {
                 : {};
 
 
-        const [areas, channels, customerGroups] =
+        const [areas, channels, classes, customerGroups] =
             await Promise.all([
 
                 Area.findAll({
@@ -844,6 +844,13 @@ async (req, res) => {
 
                 Channel.findAll({
                     where: channelWhere,
+                    attributes: ['id', 'code', 'name'],
+                    order: [['name', 'ASC']]
+                }),
+
+                // Class BUKAN dibatasi hak akses area/channel -- semua
+                // role melihat daftar lengkap, sama seperti CustomerGroup.
+                Class.findAll({
                     attributes: ['id', 'code', 'name'],
                     order: [['name', 'ASC']]
                 }),
@@ -881,6 +888,7 @@ async (req, res) => {
             areas,
             channels,
             customerGroups: validCustomerGroups,
+            classes,
         });
 
 
