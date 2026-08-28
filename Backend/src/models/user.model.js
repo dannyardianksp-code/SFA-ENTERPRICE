@@ -17,6 +17,8 @@ const User = db.define('User', {
             'SPG',
             'SUPERVISOR',
             'MANAGER',
+            'REGIONAL MANAGER',
+            'GENERAL MANAGER',
             'ADMINISTRATOR'
         ),
         defaultValue: 'SPG'

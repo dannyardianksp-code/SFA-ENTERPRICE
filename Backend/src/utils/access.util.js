@@ -71,7 +71,7 @@ const UNRESTRICTED_ROLES = ['ADMINISTRATOR']
 
 
 /** Role yang boleh mengubah dan menghapus jadwal kunjungan. */
-const PLAN_WRITER_ROLES = ['SUPERVISOR', 'MANAGER', 'ADMINISTRATOR']
+const PLAN_WRITER_ROLES = ['SUPERVISOR', 'MANAGER', 'REGIONAL MANAGER', 'GENERAL MANAGER', 'ADMINISTRATOR']
 
 
 /** Role yang boleh membuat, mengubah, dan menonaktifkan akun user. */
@@ -87,6 +87,8 @@ const USER_ROLES = [
     'SPG',
     'SUPERVISOR',
     'MANAGER',
+    'REGIONAL MANAGER',
+    'GENERAL MANAGER',
     'ADMINISTRATOR',
 ]
 

@@ -41,6 +41,16 @@ export default function LoginPage() {
                 data.user.role ===
                 'MANAGER'
 
+                ||
+
+                data.user.role ===
+                'REGIONAL MANAGER'
+
+                ||
+
+                data.user.role ===
+                'GENERAL MANAGER'
+
             ) {
 
                 router.push(

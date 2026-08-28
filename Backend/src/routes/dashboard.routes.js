@@ -324,7 +324,7 @@ router.get(
             // mengembalikan cuma dirinya sendiri), jadi timnya kosong
             // dan section ini otomatis tidak tampil di web tanpa perlu
             // pengecekan role terpisah di frontend.
-            const TEAM_VIEW_ROLES = ['SUPERVISOR', 'MANAGER']
+            const TEAM_VIEW_ROLES = ['SUPERVISOR', 'MANAGER', 'REGIONAL MANAGER', 'GENERAL MANAGER']
 
             let team = []
 

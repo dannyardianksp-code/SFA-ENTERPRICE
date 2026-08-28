@@ -10,6 +10,16 @@ import {
     useRouter
 } from 'next/navigation'
 
+// Role di atas key ini yang mengawasi -- dipakai untuk filter kandidat
+// atasan dan untuk menampilkan/menyembunyikan kartu Hierarchy Assignment.
+// GENERAL MANAGER tidak punya entry (puncak rantai, tidak butuh atasan).
+const ROLE_ABOVE: Record<string, string> = {
+    SPG: 'SUPERVISOR',
+    SUPERVISOR: 'MANAGER',
+    MANAGER: 'REGIONAL MANAGER',
+    'REGIONAL MANAGER': 'GENERAL MANAGER',
+}
+
 export default function EditUserPage() {
 
     const params =
@@ -25,10 +35,7 @@ export default function EditUserPage() {
     const [channels, setChannels] =
         useState<any[]>([])
 
-    const [supervisors, setSupervisors] =
-        useState<any[]>([])
-
-    const [managers, setManagers] =
+    const [allUsers, setAllUsers] =
         useState<any[]>([])
 
 
@@ -207,49 +214,15 @@ export default function EditUserPage() {
             const spvData =
                 await spvRes.json()
 
-            setSupervisors(
+            setAllUsers(
 
                 Array.isArray(spvData)
 
-                    ?
+                    ? spvData
 
-                    spvData.filter(
-
-                        (u: any) =>
-
-                            u.role ===
-                            'SUPERVISOR'
-
-                    )
-
-                    :
-
-                    []
+                    : []
 
             )
-
-            setManagers(
-
-                Array.isArray(spvData)
-
-                    ?
-
-                    spvData.filter(
-
-                        (u: any) =>
-
-                            u.role ===
-                            'MANAGER'
-
-                    )
-
-                    :
-
-                    []
-
-            )
-
-
 
         }
 
@@ -356,6 +329,20 @@ export default function EditUserPage() {
             router.push('/users')
 
         }
+
+    const roleAbove =
+        ROLE_ABOVE[form.role]
+
+    const hierarchyCandidates =
+
+        roleAbove
+
+            ? allUsers.filter(
+                (u: any) => u.role === roleAbove
+            )
+
+            : []
+
     return (
         <div className="p-6 max-w-3xl mx-auto space-y-6">
 
@@ -420,6 +407,8 @@ export default function EditUserPage() {
                             className="w-full mt-2 border rounded-xl p-3"
                         >
                             <option value="ADMINISTRATOR">ADMINISTRATOR</option>
+                            <option value="GENERAL MANAGER">GENERAL MANAGER</option>
+                            <option value="REGIONAL MANAGER">REGIONAL MANAGER</option>
                             <option value="MANAGER">MANAGER</option>
                             <option value="SUPERVISOR">SUPERVISOR</option>
                             <option value="SPG">SPG</option>
@@ -475,56 +464,32 @@ export default function EditUserPage() {
                 </div>
 
                 {/* HIERARCHY */}
-                {(form.role === 'SPG' || form.role === 'SUPERVISOR') && (
+                {roleAbove && (
                     <div className="bg-white rounded-3xl p-6 shadow-lg space-y-4">
 
                         <h2 className="font-bold text-slate-900">
                             👥 Hierarchy Assignment
                         </h2>
 
-                        {form.role === 'SPG' && (
-                            <div>
-                                <label className="text-sm text-slate-500">
-                                    Supervisor
-                                </label>
+                        <div>
+                            <label className="text-sm text-slate-500">
+                                {roleAbove}
+                            </label>
 
-                                <select
-                                    name="supervisor_id"
-                                    value={form.supervisor_id}
-                                    onChange={handleChange}
-                                    className="w-full mt-2 border rounded-xl p-3"
-                                >
-                                    <option value="">Select Supervisor</option>
-                                    {supervisors.map((s: any) => (
-                                        <option key={s.id} value={s.id}>
-                                            {s.name}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        )}
-
-                        {form.role === 'SUPERVISOR' && (
-                            <div>
-                                <label className="text-sm text-slate-500">
-                                    Manager
-                                </label>
-
-                                <select
-                                    name="supervisor_id"
-                                    value={form.supervisor_id}
-                                    onChange={handleChange}
-                                    className="w-full mt-2 border rounded-xl p-3"
-                                >
-                                    <option value="">Select Manager</option>
-                                    {managers.map((m: any) => (
-                                        <option key={m.id} value={m.id}>
-                                            {m.name}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        )}
+                            <select
+                                name="supervisor_id"
+                                value={form.supervisor_id}
+                                onChange={handleChange}
+                                className="w-full mt-2 border rounded-xl p-3"
+                            >
+                                <option value="">Select {roleAbove}</option>
+                                {hierarchyCandidates.map((u: any) => (
+                                    <option key={u.id} value={u.id}>
+                                        {u.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
 
                     </div>
                 )}

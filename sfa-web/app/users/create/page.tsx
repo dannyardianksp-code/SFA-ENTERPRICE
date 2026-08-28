@@ -9,6 +9,16 @@ import {
     useRouter
 } from 'next/navigation'
 
+// Role di atas key ini yang mengawasi -- dipakai untuk filter kandidat
+// atasan dan untuk menampilkan/menyembunyikan kartu Hierarchy Assignment.
+// GENERAL MANAGER tidak punya entry (puncak rantai, tidak butuh atasan).
+const ROLE_ABOVE: Record<string, string> = {
+    SPG: 'SUPERVISOR',
+    SUPERVISOR: 'MANAGER',
+    MANAGER: 'REGIONAL MANAGER',
+    'REGIONAL MANAGER': 'GENERAL MANAGER',
+}
+
 export default function CreateUserPage() {
 
     const router =
@@ -240,53 +250,30 @@ export default function CreateUserPage() {
 
                                 []
 
-                    let filteredUsers: any[] = []
-
                     // ======================
-                    // SPG -> SUPERVISOR
+                    // ROLE ABOVE (peta di atas komponen)
                     // ======================
 
-                    if (
+                    const roleAbove =
+                        ROLE_ABOVE[form.role]
 
-                        form.role === 'SPG'
+                    const filteredUsers =
 
-                    ) {
+                        roleAbove
 
-                        filteredUsers =
+                            ?
 
                             users.filter(
 
                                 (u: any) =>
 
-                                    u.role ===
-                                    'SUPERVISOR'
+                                    u.role === roleAbove
 
                             )
 
-                    }
+                            :
 
-                    // ======================
-                    // SUPERVISOR -> MANAGER
-                    // ======================
-
-                    if (
-
-                        form.role === 'SUPERVISOR'
-
-                    ) {
-
-                        filteredUsers =
-
-                            users.filter(
-
-                                (u: any) =>
-
-                                    u.role ===
-                                    'MANAGER'
-
-                            )
-
-                    }
+                            []
 
                     setSupervisors(
                         filteredUsers
@@ -517,6 +504,8 @@ export default function CreateUserPage() {
                             className="w-full mt-2 border rounded-xl p-3"
                         >
                             <option value="ADMINISTRATOR">ADMINISTRATOR</option>
+                            <option value="GENERAL MANAGER">GENERAL MANAGER</option>
+                            <option value="REGIONAL MANAGER">REGIONAL MANAGER</option>
                             <option value="MANAGER">MANAGER</option>
                             <option value="SUPERVISOR">SUPERVISOR</option>
                             <option value="SPG">SPG</option>
@@ -567,7 +556,7 @@ export default function CreateUserPage() {
                 </div>
 
                 {/* HIERARCHY */}
-                {(form.role === 'SPG' || form.role === 'SUPERVISOR') && (
+                {ROLE_ABOVE[form.role] && (
                     <div className="bg-white rounded-3xl p-6 shadow-lg space-y-4">
 
                         <h2 className="font-bold text-slate-900">
@@ -576,7 +565,7 @@ export default function CreateUserPage() {
 
                         <div>
                             <label className="text-sm text-slate-500">
-                                {form.role === 'SPG' ? 'Supervisor' : 'Manager'}
+                                {ROLE_ABOVE[form.role]}
                             </label>
 
                             <select
@@ -586,7 +575,7 @@ export default function CreateUserPage() {
                                 className="w-full mt-2 border rounded-xl p-3"
                             >
                                 <option value="">
-                                    Select {form.role === 'SPG' ? 'Supervisor' : 'Manager'}
+                                    Select {ROLE_ABOVE[form.role]}
                                 </option>
 
                                 {supervisors.map((s: any) => (

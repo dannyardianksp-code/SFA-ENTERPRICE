@@ -29,10 +29,10 @@ describe('model User', () => {
 
     // ENUM di model sempat tertinggal di ADMIN/SPV, yang tidak pernah
     // ada di kolomnya.
-    test('ENUM role memuat empat nilai yang benar-benar ada di database', () => {
+    test('ENUM role memuat enam nilai yang benar-benar ada di database', () => {
         assert.deepStrictEqual(
             [...User.rawAttributes.role.type.values].sort(),
-            ['ADMINISTRATOR', 'MANAGER', 'SPG', 'SUPERVISOR']
+            ['ADMINISTRATOR', 'GENERAL MANAGER', 'MANAGER', 'REGIONAL MANAGER', 'SPG', 'SUPERVISOR']
         )
     })
 

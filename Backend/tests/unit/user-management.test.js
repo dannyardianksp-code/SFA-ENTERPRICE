@@ -199,7 +199,7 @@ describe('konstanta role', () => {
     test('USER_ROLES sama dengan ENUM database', () => {
         assert.deepStrictEqual(
             [...USER_ROLES].sort(),
-            ['ADMINISTRATOR', 'MANAGER', 'SPG', 'SUPERVISOR']
+            ['ADMINISTRATOR', 'GENERAL MANAGER', 'MANAGER', 'REGIONAL MANAGER', 'SPG', 'SUPERVISOR']
         )
     })
 
