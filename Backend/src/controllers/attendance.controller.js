@@ -248,6 +248,15 @@ exports.getAll = async (req, res) => {
 
         const where = ownerWhere(bolehDilihat)
 
+        // ?mine=1 -- opt-in eksplisit dipakai layar Report Absen di
+        // mobile (riwayat PRIBADI, bukan dasbor tim). Pola sama dengan
+        // ?mine=1 di visits/orders/visit-plans. Default (tanpa param)
+        // TIDAK berubah -- Report Absen di web memanggil endpoint ini
+        // tanpa mine sama sekali dan mengharapkan subtree penuh.
+        if (req.query.mine === '1') {
+            where.user_id = req.user.id
+        }
+
         const cocokTanggal = (nilai) =>
             typeof nilai === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(nilai)
 

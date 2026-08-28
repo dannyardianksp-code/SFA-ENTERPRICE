@@ -1018,6 +1018,19 @@ describe('GET /api/attendances -- cakupan hierarki dan filter tanggal', () => {
         assert.ok(!ids.includes(idLuarRentang), 'tanggal di luar rentang tidak boleh ikut')
     })
 
+    test('?mine=1: SUPERVISOR cuma melihat absennya sendiri, bukan bawahan', async () => {
+        const idBawahan = await buatAbsen(DANNY, tanggalLampau)
+        const idAtasan = await buatAbsen(JAKARTA, tanggalLampau)
+
+        const res = await get('/api/attendances?mine=1', JAKARTA, 'SUPERVISOR')
+
+        assert.strictEqual(res.status, 200)
+        const ids = res.body.map(a => a.id)
+
+        assert.ok(!ids.includes(idBawahan), 'absen bawahan tidak boleh ikut dengan ?mine=1')
+        assert.ok(ids.includes(idAtasan), 'absen sendiri harus tetap ikut')
+    })
+
 })
 
 
