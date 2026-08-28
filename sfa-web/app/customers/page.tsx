@@ -517,6 +517,7 @@ export default function CustomersPage() {
                                         </button>
 
                                         <button
+                                            onClick={() => router.push(`/customers/edit/${c.id}`)}
                                             className="bg-blue-600 text-white px-3 py-2 rounded-xl text-sm"
                                         >
                                             ✏ Edit
