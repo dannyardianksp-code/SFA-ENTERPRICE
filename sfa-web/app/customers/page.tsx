@@ -465,6 +465,7 @@ export default function CustomersPage() {
                             <th className="p-4 text-sm font-semibold text-slate-500">Code</th>
                             <th className="p-4 text-sm font-semibold text-slate-500">Toko</th>
                             <th className="p-4 text-sm font-semibold text-slate-500">Group</th>
+                            <th className="p-4 text-sm font-semibold text-slate-500">Channel</th>
                             <th className="p-4 text-sm font-semibold text-slate-500">Class</th>
                             <th className="p-4 text-sm font-semibold text-slate-500">Area</th>
                             <th className="p-4 text-sm font-semibold text-slate-500">Aksi</th>
@@ -492,6 +493,10 @@ export default function CustomersPage() {
 
                                 <td className="p-4 text-slate-600">
                                     {c.CustomerGroup?.code || '-'}
+                                </td>
+
+                                <td className="p-4 text-slate-600">
+                                    {c.Channel?.code || '-'}
                                 </td>
 
                                 <td className="p-4 text-slate-600">
