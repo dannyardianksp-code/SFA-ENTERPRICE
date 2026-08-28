@@ -73,6 +73,30 @@ describe('validateCreatePayload — payload valid', () => {
 
 })
 
+describe('validateCreatePayload — class_id (opsional)', () => {
+
+    test('tidak dikirim, tidak ditolak', () => {
+        assert.deepStrictEqual(errorsFor({ class_id: undefined }), [])
+    })
+
+    test('nilainya null kalau tidak dikirim', () => {
+        const { values } = validateCreatePayload({ ...valid, class_id: undefined })
+        assert.strictEqual(values.classId, null)
+    })
+
+    test('dikirim, ikut ke-parse', () => {
+        const { values } = validateCreatePayload({ ...valid, class_id: 3 })
+        assert.strictEqual(values.classId, 3)
+    })
+
+    test('bukan angka positif ditolak jadi null (bukan error) -- validasi keberadaan Class dilakukan controller, bukan di sini', () => {
+        const { values, errors } = validateCreatePayload({ ...valid, class_id: 'abc' })
+        assert.strictEqual(values.classId, null)
+        assert.deepStrictEqual(errors, [])
+    })
+
+})
+
 describe('validateCreatePayload — field wajib', () => {
 
     for (const field of [

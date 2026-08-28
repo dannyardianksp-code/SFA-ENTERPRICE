@@ -45,6 +45,9 @@ const User =
 const CustomerGroup =
     require('../models/customerGroup.model')
 
+const Class =
+    require('../models/class.model')
+
 /**
  * Relasi yang selalu disertakan pada respons satu customer.
  *
@@ -60,6 +63,7 @@ const CUSTOMER_RELATIONS = [
     { model: Area, attributes: ['id', 'code', 'name'] },
     { model: Channel, attributes: ['id', 'code', 'name'] },
     { model: CustomerGroup, attributes: ['id', 'code', 'name'] },
+    { model: Class, attributes: ['id', 'code', 'name'] },
     { model: User, as: 'UpdatedBy', attributes: ['id', 'name'] },
 ]
 
@@ -160,6 +164,16 @@ exports.getAll =
 
                         {
                             model: Channel
+                        },
+
+                        {
+                            model: CustomerGroup,
+                            attributes: ['id', 'code', 'name']
+                        },
+
+                        {
+                            model: Class,
+                            attributes: ['id', 'code', 'name']
                         }
 
                     ]
@@ -248,15 +262,21 @@ async (req, res) => {
         // Referensi harus ada — tidak ada foreign key constraint di DB,
         // jadi id yang salah akan tersimpan dan menghasilkan customer
         // yatim yang tidak muncul di daftar siapa pun.
-        const [group, area, channel] = await Promise.all([
+        const [group, area, channel, kelas] = await Promise.all([
             CustomerGroup.findByPk(values.customerGroupId),
             Area.findByPk(values.areaId),
             Channel.findByPk(values.channelId),
+            // classId opsional -- findByPk(null) sengaja dibiarkan
+            // mengembalikan null, bukan dilewati, supaya baris di bawah
+            // cuma perlu satu pemeriksaan ("dikirim tapi tidak
+            // ditemukan"), bukan dua jalur terpisah.
+            values.classId ? Class.findByPk(values.classId) : Promise.resolve(null),
         ])
 
         if (!group) return sendError(res, 400, 'Customer group tidak ditemukan.')
         if (!area) return sendError(res, 400, 'Area tidak ditemukan.')
         if (!channel) return sendError(res, 400, 'Channel tidak ditemukan.')
+        if (values.classId && !kelas) return sendError(res, 400, 'Class tidak ditemukan.')
 
         if (!group.code) {
             return sendError(
@@ -319,6 +339,7 @@ async (req, res) => {
                     customer_group_id: values.customerGroupId,
                     area_id: values.areaId,
                     channel_id: values.channelId,
+                    class_id: values.classId,
                     // kolom `channel` (string legacy) sengaja dibiarkan NULL
                 })
 
@@ -461,11 +482,20 @@ exports.update = async (req, res) => {
             return sendError(res, 400, errors[0])
         }
 
+        if (values.classId) {
+            const kelas = await Class.findByPk(values.classId)
+
+            if (!kelas) {
+                return sendError(res, 400, 'Class tidak ditemukan.')
+            }
+        }
+
         await customer.update({
             name: values.name,
             address: values.address,
             owner_name: values.ownerName,
             phone: values.phone,
+            class_id: values.classId,
             updated_at: new Date(),
             updated_by: req.user.id,
         })
@@ -955,6 +985,10 @@ const validateCreatePayload = (body = {}) => {
     const areaId = parsePositiveInt(body.area_id)
     const channelId = parsePositiveInt(body.channel_id)
 
+    // classId OPSIONAL -- beda dari group/area/channel, tidak dipakai
+    // formatCustomerCode, jadi tidak wajib dipilih saat create.
+    const classId = parsePositiveInt(body.class_id)
+
     if (customerGroupId === null) errors.push('Customer group wajib dipilih.')
     if (areaId === null) errors.push('Area wajib dipilih.')
     if (channelId === null) errors.push('Channel wajib dipilih.')
@@ -970,6 +1004,7 @@ const validateCreatePayload = (body = {}) => {
             customerGroupId,
             areaId,
             channelId,
+            classId,
             latitude: lokasi.values.latitude,
             longitude: lokasi.values.longitude,
             locationAccuracy: lokasi.values.locationAccuracy,
@@ -1094,6 +1129,11 @@ const validateUpdatePayload = (body = {}, current = {}) => {
                 typeof body.phone === 'string'
                     ? body.phone.trim() || null
                     : null,
+            // classId BUKAN di LOCKED_FIELDS -- tidak dipakai
+            // formatCustomerCode, jadi boleh dikoreksi lewat update.
+            // Tidak dikirim -> null, sama seperti address/ownerName/phone
+            // di atas (PUT mengganti seluruhnya).
+            classId: parsePositiveInt(body.class_id),
         },
     }
 

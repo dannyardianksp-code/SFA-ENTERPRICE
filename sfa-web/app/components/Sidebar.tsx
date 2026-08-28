@@ -13,6 +13,7 @@ import {
     ShoppingCart,
     BarChart3,
     MapPin,
+    Tag,
     Package,
     UserCog,
     Settings,
@@ -319,6 +320,14 @@ export default function Sidebar({
                             >
                                 <MapPin size={18} />
                                 {!collapsed && 'Areas'}
+                            </Link>
+
+                            <Link
+                                href="/classes"
+                                className={menuClass('/classes')}
+                            >
+                                <Tag size={18} />
+                                {!collapsed && 'Classes'}
                             </Link>
 
                         </div>

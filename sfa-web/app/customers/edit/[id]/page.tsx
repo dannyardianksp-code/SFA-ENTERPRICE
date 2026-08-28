@@ -13,12 +13,14 @@ export default function EditCustomerPage() {
     const [saving, setSaving] = useState(false)
 
     const [customer, setCustomer] = useState<any>(null)
+    const [classes, setClasses] = useState<any[]>([])
 
     const [form, setForm] = useState({
         name: '',
         address: '',
         owner_name: '',
-        phone: ''
+        phone: '',
+        class_id: ''
     })
 
     useEffect(() => {
@@ -27,17 +29,28 @@ export default function EditCustomerPage() {
 
             const token = localStorage.getItem('token')
 
-            const res = await fetch(`http://localhost:1000/api/customers/${params.id}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            })
+            const [custRes, classRes] = await Promise.all([
 
-            if (!res.ok) {
+                fetch(`http://localhost:1000/api/customers/${params.id}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                }),
+
+                fetch('http://localhost:1000/api/classes', {
+                    headers: { Authorization: `Bearer ${token}` }
+                })
+
+            ])
+
+            const classData = await classRes.json()
+            setClasses(Array.isArray(classData) ? classData : [])
+
+            if (!custRes.ok) {
                 setNotFound(true)
                 setLoading(false)
                 return
             }
 
-            const data = await res.json()
+            const data = await custRes.json()
 
             setCustomer(data)
 
@@ -45,7 +58,8 @@ export default function EditCustomerPage() {
                 name: data.name || '',
                 address: data.address || '',
                 owner_name: data.owner_name || '',
-                phone: data.phone || ''
+                phone: data.phone || '',
+                class_id: data.Class?.id ? String(data.Class.id) : ''
             })
 
             setLoading(false)
@@ -218,6 +232,23 @@ export default function EditCustomerPage() {
                             onChange={handleChange}
                             className="w-full border rounded-2xl px-4 py-3 mt-2"
                         />
+                    </div>
+
+                    <div className="mt-5">
+                        <label className="font-medium">Class</label>
+                        <select
+                            name="class_id"
+                            value={form.class_id}
+                            onChange={handleChange}
+                            className="w-full border rounded-2xl px-4 py-3 mt-2"
+                        >
+                            <option value="">Select Class</option>
+                            {classes.map((c: any) => (
+                                <option key={c.id} value={c.id}>
+                                    {c.name}
+                                </option>
+                            ))}
+                        </select>
                     </div>
 
                     <div className="mt-5">

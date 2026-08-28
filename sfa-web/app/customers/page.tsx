@@ -462,10 +462,11 @@ export default function CustomersPage() {
 
                         <tr>
 
-                            <th className="p-4 text-sm font-semibold text-slate-500">Toko</th>
                             <th className="p-4 text-sm font-semibold text-slate-500">Code</th>
+                            <th className="p-4 text-sm font-semibold text-slate-500">Toko</th>
+                            <th className="p-4 text-sm font-semibold text-slate-500">Group</th>
+                            <th className="p-4 text-sm font-semibold text-slate-500">Class</th>
                             <th className="p-4 text-sm font-semibold text-slate-500">Area</th>
-                            <th className="p-4 text-sm font-semibold text-slate-500">Distance</th>
                             <th className="p-4 text-sm font-semibold text-slate-500">Aksi</th>
 
                         </tr>
@@ -481,20 +482,24 @@ export default function CustomersPage() {
                                 className="border-b border-slate-100 hover:bg-slate-50"
                             >
 
+                                <td className="p-4 text-slate-600">
+                                    {c.code}
+                                </td>
+
                                 <td className="p-4 font-semibold text-slate-900">
                                     🏪 {c.name}
                                 </td>
 
                                 <td className="p-4 text-slate-600">
-                                    {c.code}
+                                    {c.CustomerGroup?.code || '-'}
+                                </td>
+
+                                <td className="p-4 text-slate-600">
+                                    {c.Class?.name || '-'}
                                 </td>
 
                                 <td className="p-4 text-slate-600">
                                     {c.Area?.code || '-'}
-                                </td>
-
-                                <td className="p-4 text-slate-600">
-                                    {c.distance ? `${c.distance.toFixed(2)} km` : '-'}
                                 </td>
 
                                 <td className="p-4">

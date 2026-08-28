@@ -11,6 +11,7 @@ const Channel = require('./channel.model')
 const VisitActivity = require('./visitActivity.model')
 const Activity = require('./activity.model')
 const UserArea = require('./userArea.model')
+const Class = require('./class.model')
 
 
 
@@ -134,6 +135,22 @@ Channel.hasMany(Customer, {
 Customer.belongsTo(Channel, {
 
     foreignKey: 'channel_id'
+
+})
+
+// CUSTOMER → CLASS (PASAR/GROSIR/ROMBONG/MODERN MARKET) -- terpisah
+// dari Channel (General/Modern Trade) dan CustomerGroup (banner/chain).
+// TIDAK dipakai formatCustomerCode, jadi boleh diubah lewat update
+// (tidak masuk LOCKED_FIELDS di customer.controller.js).
+Class.hasMany(Customer, {
+
+    foreignKey: 'class_id'
+
+})
+
+Customer.belongsTo(Class, {
+
+    foreignKey: 'class_id'
 
 })
 

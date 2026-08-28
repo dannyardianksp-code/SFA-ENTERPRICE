@@ -18,6 +18,8 @@ export default function CreateCustomerPage() {
 
     const [channels, setChannels] = useState<any[]>([])
 
+    const [classes, setClasses] = useState<any[]>([])
+
     const [groups, setGroups] =
         useState<any[]>([])
 
@@ -31,7 +33,8 @@ export default function CreateCustomerPage() {
         latitude: '',
         longitude: '',
         area_id: '',
-        channel_id: ''
+        channel_id: '',
+        class_id: ''
 
     })
 
@@ -112,6 +115,24 @@ export default function CreateCustomerPage() {
             setCustomerGroups(
                 Array.isArray(groupData)
                     ? groupData
+                    : []
+            )
+
+            // CLASS
+            const classRes = await fetch(
+                'http://localhost:1000/api/classes',
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    }
+                }
+            )
+
+            const classData = await classRes.json()
+
+            setClasses(
+                Array.isArray(classData)
+                    ? classData
                     : []
             )
 
@@ -357,7 +378,7 @@ export default function CreateCustomerPage() {
 
                     </h2>
 
-                    <div className="grid md:grid-cols-3 gap-5">
+                    <div className="grid md:grid-cols-4 gap-5">
 
                         <div>
 
@@ -536,6 +557,47 @@ export default function CreateCustomerPage() {
 
                                     )
 
+                                }
+
+                            </select>
+
+                        </div>
+
+                        <div>
+
+                            <label>
+                                Class
+                            </label>
+
+                            <select
+
+                                name="class_id"
+
+                                value={form.class_id}
+
+                                onChange={handleChange}
+
+                                className="
+              w-full
+              border
+              rounded-2xl
+              px-4
+              py-3
+              mt-2
+            "
+
+                            >
+
+                                <option value="">
+                                    Select Class
+                                </option>
+
+                                {
+                                    classes.map((c: any) => (
+                                        <option key={c.id} value={c.id}>
+                                            {c.name}
+                                        </option>
+                                    ))
                                 }
 
                             </select>

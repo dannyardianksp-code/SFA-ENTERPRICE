@@ -121,6 +121,28 @@ describe('validateUpdatePayload — field teks', () => {
 })
 
 
+describe('validateUpdatePayload — class_id (bisa diubah, BUKAN field terkunci)', () => {
+
+    test('tidak dikirim: jadi null, tidak error', () => {
+        const { errors, values } = validateUpdatePayload({ name: 'TOKO' }, tersimpan)
+
+        assert.deepStrictEqual(errors, [])
+        assert.strictEqual(values.classId, null)
+    })
+
+    test('dikirim beda dari sebelumnya: tetap lolos (bukan LOCKED_FIELDS)', () => {
+        const { errors, values } = validateUpdatePayload(
+            { name: 'TOKO', class_id: 3 },
+            { ...tersimpan, class_id: 1 }
+        )
+
+        assert.deepStrictEqual(errors, [])
+        assert.strictEqual(values.classId, 3)
+    })
+
+})
+
+
 describe('validateUpdatePayload — field terkunci', () => {
 
     test('tidak dikirim sama sekali: lolos', () => {
