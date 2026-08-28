@@ -1184,3 +1184,60 @@ describe('PUT /api/areas/:id -- radius check-in per area', () => {
     })
 
 })
+
+
+describe('POST /api/areas -- tambah area baru', () => {
+
+    const areaIdsDibuat = []
+
+    after(async () => {
+        if (areaIdsDibuat.length === 0) return
+        const conn = await db()
+        await conn.query('DELETE FROM areas WHERE id IN (?)', [areaIdsDibuat])
+        await conn.end()
+    })
+
+    test('non-administrator ditolak 403', async () => {
+        const res = await kirim(
+            'POST',
+            '/api/areas',
+            DANNY,
+            'SPG',
+            { code: 'TESTAREA', name: 'Test Area' }
+        )
+
+        assert.strictEqual(res.status, 403)
+    })
+
+    test('code atau name kosong ditolak 400', async () => {
+        const res = await kirim(
+            'POST',
+            '/api/areas',
+            ADMIN,
+            'ADMINISTRATOR',
+            { code: '', name: 'Test Area' }
+        )
+
+        assert.strictEqual(res.status, 400)
+    })
+
+    test('administrator bisa tambah area baru, dengan atau tanpa radius', async () => {
+        const res = await kirim(
+            'POST',
+            '/api/areas',
+            ADMIN,
+            'ADMINISTRATOR',
+            { code: 'TESTAREA', name: 'Test Area E2E', checkin_radius_meters: 300 }
+        )
+
+        assert.strictEqual(res.status, 200)
+        assert.strictEqual(res.body.code, 'TESTAREA')
+        assert.strictEqual(res.body.checkin_radius_meters, 300)
+
+        areaIdsDibuat.push(res.body.id)
+
+        const cek = await get('/api/areas', ADMIN, 'ADMINISTRATOR')
+        assert.ok(cek.body.some((a) => a.id === res.body.id))
+    })
+
+})
