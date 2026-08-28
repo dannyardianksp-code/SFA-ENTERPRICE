@@ -270,6 +270,19 @@ export default function CustomersPage() {
     // UI
     // ==================================================
 
+    const PAGE_SIZE = 10
+    const [page, setPage] = useState(1)
+
+    const filteredCustomers = customers.filter((c) =>
+        c.name.toLowerCase().includes(search.toLowerCase())
+    )
+
+    const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / PAGE_SIZE))
+    const halamanAman = Math.min(page, totalPages)
+    const customersHalamanIni = filteredCustomers.slice(
+        (halamanAman - 1) * PAGE_SIZE,
+        halamanAman * PAGE_SIZE
+    )
 
     return (
 
@@ -441,181 +454,115 @@ export default function CustomersPage() {
 
             {/* CUSTOMER LIST */}
 
-            <div
+            <div className="bg-white rounded-3xl shadow-lg overflow-hidden">
 
-                className="
+                <table className="w-full text-left">
 
-      grid
+                    <thead className="bg-slate-50 border-b border-slate-200">
 
-      md:grid-cols-2
+                        <tr>
 
-      xl:grid-cols-3
+                            <th className="p-4 text-sm font-semibold text-slate-500">Toko</th>
+                            <th className="p-4 text-sm font-semibold text-slate-500">Code</th>
+                            <th className="p-4 text-sm font-semibold text-slate-500">Area</th>
+                            <th className="p-4 text-sm font-semibold text-slate-500">Distance</th>
+                            <th className="p-4 text-sm font-semibold text-slate-500">Aksi</th>
 
-      gap-5
+                        </tr>
 
-    "
+                    </thead>
 
-            >
+                    <tbody>
 
-                {
+                        {customersHalamanIni.map((c: any) => (
 
-                    customers
-
-                        .filter(c =>
-
-                            c.name
-
-                                .toLowerCase()
-
-                                .includes(
-
-                                    search.toLowerCase()
-
-                                )
-
-                        )
-
-                        .map((c: any) => (
-
-                            <div
-
+                            <tr
                                 key={c.id}
-
-                                className="
-
-            bg-white
-
-            rounded-3xl
-
-            p-6
-
-            shadow-lg
-
-            hover:shadow-2xl
-
-            hover:-translate-y-1
-
-            transition-all
-
-          "
-
+                                className="border-b border-slate-100 hover:bg-slate-50"
                             >
 
-                                <h2 className="text-xl font-bold">
-
+                                <td className="p-4 font-semibold text-slate-900">
                                     🏪 {c.name}
+                                </td>
 
-                                </h2>
+                                <td className="p-4 text-slate-600">
+                                    {c.code}
+                                </td>
 
-                                <div className="mt-4 space-y-2">
+                                <td className="p-4 text-slate-600">
+                                    {c.Area?.code || '-'}
+                                </td>
 
-                                    <p>
+                                <td className="p-4 text-slate-600">
+                                    {c.distance ? `${c.distance.toFixed(2)} km` : '-'}
+                                </td>
 
-                                        <strong>
+                                <td className="p-4">
 
-                                            Code :
+                                    <div className="flex gap-2">
 
-                                        </strong>
+                                        <button
 
-                                        {c.code}
+                                            onClick={() =>
+                                                window.open(
+                                                    `https://www.google.com/maps/dir/?api=1&destination=${c.latitude},${c.longitude}`,
+                                                    '_blank'
+                                                )
+                                            }
 
-                                    </p>
+                                            className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-xl text-sm"
 
-                                    <p>
+                                        >
+                                            🧭 Navigate
+                                        </button>
 
-                                        <strong>
+                                        <button
+                                            className="bg-blue-600 text-white px-3 py-2 rounded-xl text-sm"
+                                        >
+                                            ✏ Edit
+                                        </button>
 
-                                            Area :
+                                    </div>
 
-                                        </strong>
+                                </td>
 
-                                        {c.Area?.code || '-'}
+                            </tr>
 
-                                    </p>
+                        ))}
 
-                                    <p>
+                    </tbody>
 
-                                        <strong>
+                </table>
 
-                                            Distance :
+                {totalPages > 1 && (
+                    <div className="flex items-center justify-between p-4 border-t border-slate-200">
 
-                                        </strong>
+                        <span className="text-sm text-slate-500">
+                            Halaman {halamanAman} dari {totalPages} ({filteredCustomers.length} customer)
+                        </span>
 
-                                        {
+                        <div className="flex gap-2">
 
-                                            c.distance
+                            <button
+                                onClick={() => setPage(halamanAman - 1)}
+                                disabled={halamanAman <= 1}
+                                className="border border-slate-300 disabled:opacity-40 px-4 py-2 rounded-xl text-sm"
+                            >
+                                ‹ Sebelumnya
+                            </button>
 
-                                                ?
+                            <button
+                                onClick={() => setPage(halamanAman + 1)}
+                                disabled={halamanAman >= totalPages}
+                                className="border border-slate-300 disabled:opacity-40 px-4 py-2 rounded-xl text-sm"
+                            >
+                                Berikutnya ›
+                            </button>
 
-                                                `${c.distance.toFixed(2)} km`
+                        </div>
 
-                                                :
-
-                                                '-'
-
-                                        }
-
-                                    </p>
-
-                                </div>
-
-                                <div className="flex gap-2 mt-5">
-
-
-                                    <button
-
-                                        onClick={() =>
-                                            window.open(
-                                                `https://www.google.com/maps/dir/?api=1&destination=${c.latitude},${c.longitude}`,
-                                                '_blank'
-                                            )
-                                        }
-
-                                        className="
-      bg-green-600
-      hover:bg-green-700
-      text-white
-      px-3
-      py-2
-      rounded-xl
-      text-sm
-    "
-
-                                    >
-
-                                        🧭 Navigate
-
-                                    </button>
-
-                                    <button
-
-                                        className="
-
-                bg-blue-600
-
-                text-white
-
-                px-4
-
-                py-2
-
-                rounded-xl
-
-              "
-
-                                    >
-
-                                        ✏ Edit
-
-                                    </button>
-
-                                </div>
-
-                            </div>
-
-                        ))
-
-                }
+                    </div>
+                )}
 
             </div>
 
