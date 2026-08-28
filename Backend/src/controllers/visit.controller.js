@@ -43,11 +43,36 @@ const findUserWithAreas = (id) =>
             {
                 model: Area,
                 as: 'AssignedAreas',
-                attributes: ['id'],
+                // checkin_radius_meters ditambah buat resolveCheckinRadius
+                // di bawah -- attributes lain (id) tetap dipertahankan,
+                // masih dipakai assertAreaChannelAccess.
+                attributes: ['id', 'checkin_radius_meters'],
                 through: { attributes: [] },
             },
         ],
     })
+
+const DEFAULT_CHECKIN_RADIUS_METERS = 50
+
+/**
+ * Radius PALING LONGGAR di antara semua area yang di-assign ke user,
+ * atau default global kalau tidak ada satu pun area yang override.
+ * Longgar dipilih (bukan ketat): tujuan override ini mengakomodasi
+ * GPS yang jelek di area tertentu, jadi kalau user ke-assign ke area
+ * longgar DAN area ketat sekaligus, memilih yang ketat akan
+ * menggagalkan justru kasus yang seharusnya diakomodasi.
+ */
+const resolveCheckinRadius = (userDenganArea) => {
+
+    const daftarRadius = (userDenganArea?.AssignedAreas || [])
+        .map((a) => a.checkin_radius_meters)
+        .filter((r) => typeof r === 'number' && r > 0)
+
+    if (daftarRadius.length === 0) return DEFAULT_CHECKIN_RADIUS_METERS
+
+    return Math.max(...daftarRadius)
+
+}
 
 
 
@@ -163,25 +188,25 @@ exports.checkIn = async (req, res) => {
             }
         )
 
-        if (distance > 50) {
+        // Satu aturan, sama dengan endpoint lain: multi-area lewat
+        // user_areas, bukan perbandingan area_id tunggal. req.user
+        // dari auth.middleware tidak memuat AssignedAreas, jadi user
+        // dimuat ulang di sini -- dipakai baik buat radius check-in di
+        // bawah maupun gerbang area/channel setelahnya.
+        const userDenganArea = await findUserWithAreas(req.user.id)
+
+        const radiusBerlaku = resolveCheckinRadius(userDenganArea)
+
+        if (distance > radiusBerlaku) {
             return res.status(400).json({
                 message: `Terlalu jauh dari toko (${distance} meter)`,
                 distance,
             })
         }
 
-        // Satu aturan, sama dengan endpoint lain: multi-area lewat
-        // user_areas, bukan perbandingan area_id tunggal. req.user
-        // dari auth.middleware tidak memuat AssignedAreas, jadi user
-        // dimuat ulang di sini -- tanpa ini assertAreaChannelAccess
-        // diam-diam jatuh ke fallback area_id tunggal untuk SETIAP
-        // request, tidak pernah benar-benar memeriksa user_areas.
-        //
         // Gerbang area diperiksa SEBELUM cek kunjungan terbuka di
         // bawah, mengikuti urutan spec -- bukan sebaliknya seperti
         // sebelumnya.
-        const userDenganArea = await findUserWithAreas(req.user.id)
-
         const gerbangArea = assertAreaChannelAccess(
             userDenganArea,
             customer.area_id,

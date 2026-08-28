@@ -1102,3 +1102,85 @@ describe('POST /api/attendances/checkin -- dikunci selama ada absen pulang terti
     })
 
 })
+
+
+describe('PUT /api/areas/:id -- radius check-in per area', () => {
+
+    // Area 43 (PALU) dipilih karena tidak dipakai user hierarki mana
+    // pun di tes lain di berkas ini -- aman diubah-ubah dan
+    // dikembalikan ke null di after().
+    const AREA_ID = 43
+
+    after(async () => {
+        const conn = await db()
+        await conn.query(
+            'UPDATE areas SET checkin_radius_meters = NULL WHERE id = ?',
+            [AREA_ID]
+        )
+        await conn.end()
+    })
+
+    test('non-administrator ditolak 403', async () => {
+        const res = await kirim(
+            'PUT',
+            `/api/areas/${AREA_ID}`,
+            DANNY,
+            'SPG',
+            { checkin_radius_meters: 500 }
+        )
+
+        assert.strictEqual(res.status, 403)
+    })
+
+    test('administrator bisa set radius, dan tersimpan', async () => {
+        const res = await kirim(
+            'PUT',
+            `/api/areas/${AREA_ID}`,
+            ADMIN,
+            'ADMINISTRATOR',
+            { checkin_radius_meters: 200 }
+        )
+
+        assert.strictEqual(res.status, 200)
+        assert.strictEqual(res.body.checkin_radius_meters, 200)
+
+        const cek = await get('/api/areas', ADMIN, 'ADMINISTRATOR')
+        const area = cek.body.find((a) => a.id === AREA_ID)
+
+        assert.strictEqual(area.checkin_radius_meters, 200)
+    })
+
+    test('radius 0 atau negatif ditolak 400', async () => {
+        const res = await kirim(
+            'PUT',
+            `/api/areas/${AREA_ID}`,
+            ADMIN,
+            'ADMINISTRATOR',
+            { checkin_radius_meters: 0 }
+        )
+
+        assert.strictEqual(res.status, 400)
+    })
+
+    test('null mengembalikan ke default (dikosongkan)', async () => {
+        await kirim(
+            'PUT',
+            `/api/areas/${AREA_ID}`,
+            ADMIN,
+            'ADMINISTRATOR',
+            { checkin_radius_meters: 500 }
+        )
+
+        const res = await kirim(
+            'PUT',
+            `/api/areas/${AREA_ID}`,
+            ADMIN,
+            'ADMINISTRATOR',
+            { checkin_radius_meters: null }
+        )
+
+        assert.strictEqual(res.status, 200)
+        assert.strictEqual(res.body.checkin_radius_meters, null)
+    })
+
+})

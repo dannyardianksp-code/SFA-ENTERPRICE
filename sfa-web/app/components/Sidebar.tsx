@@ -12,6 +12,7 @@ import {
     Users,
     ShoppingCart,
     BarChart3,
+    MapPin,
     Package,
     UserCog,
     Settings,
@@ -111,11 +112,11 @@ export default function Sidebar({
                         <div>
 
                             <h1 className="text-white font-bold text-xl">
-                                SFA PRO
+                                SRA PRO
                             </h1>
 
                             <p className="ext-slate-600 text-xs">
-                                Sales Force Automation
+                                Sales Route Automation
                             </p>
 
                         </div>
@@ -310,6 +311,14 @@ export default function Sidebar({
                             >
                                 <Settings size={18} />
                                 {!collapsed && 'Activity Master'}
+                            </Link>
+
+                            <Link
+                                href="/areas"
+                                className={menuClass('/areas')}
+                            >
+                                <MapPin size={18} />
+                                {!collapsed && 'Areas'}
                             </Link>
 
                         </div>
