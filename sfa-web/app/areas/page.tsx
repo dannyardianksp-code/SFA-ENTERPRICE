@@ -47,6 +47,24 @@ export default function AreasPage() {
 
     const isAdmin = role === 'ADMINISTRATOR'
 
+    const PAGE_SIZE = 10
+    const [page, setPage] = useState(1)
+
+    const filteredAreas = areas.filter((a: any) => {
+        const keyword = search.toLowerCase()
+        return (
+            a.name?.toLowerCase().includes(keyword) ||
+            a.code?.toLowerCase().includes(keyword)
+        )
+    })
+
+    const totalPages = Math.max(1, Math.ceil(filteredAreas.length / PAGE_SIZE))
+    const halamanAman = Math.min(page, totalPages)
+    const areasHalamanIni = filteredAreas.slice(
+        (halamanAman - 1) * PAGE_SIZE,
+        halamanAman * PAGE_SIZE
+    )
+
     const handleSave = async (id: number) => {
 
         const token = localStorage.getItem('token')
@@ -228,14 +246,7 @@ export default function AreasPage() {
 
                     <tbody>
 
-                        {areas
-                            .filter((a: any) => {
-                                const keyword = search.toLowerCase()
-                                return (
-                                    a.name?.toLowerCase().includes(keyword) ||
-                                    a.code?.toLowerCase().includes(keyword)
-                                )
-                            })
+                        {areasHalamanIni
                             .map((a: any) => (
 
                                 <tr
@@ -285,6 +296,36 @@ export default function AreasPage() {
                     </tbody>
 
                 </table>
+
+                {totalPages > 1 && (
+                    <div className="flex items-center justify-between p-4 border-t border-slate-200">
+
+                        <span className="text-sm text-slate-500">
+                            Halaman {halamanAman} dari {totalPages} ({filteredAreas.length} area)
+                        </span>
+
+                        <div className="flex gap-2">
+
+                            <button
+                                onClick={() => setPage(halamanAman - 1)}
+                                disabled={halamanAman <= 1}
+                                className="border border-slate-300 disabled:opacity-40 px-4 py-2 rounded-xl text-sm"
+                            >
+                                ‹ Sebelumnya
+                            </button>
+
+                            <button
+                                onClick={() => setPage(halamanAman + 1)}
+                                disabled={halamanAman >= totalPages}
+                                className="border border-slate-300 disabled:opacity-40 px-4 py-2 rounded-xl text-sm"
+                            >
+                                Berikutnya ›
+                            </button>
+
+                        </div>
+
+                    </div>
+                )}
 
             </div>
 

@@ -157,6 +157,32 @@ export default function UsersPage() {
 
         }
 
+    const PAGE_SIZE = 10
+    const [page, setPage] = useState(1)
+
+    const filteredUsers = users.filter((u: any) => {
+
+        const keyword = search.toLowerCase()
+
+        return (
+            u.name?.toLowerCase().includes(keyword) ||
+            u.email?.toLowerCase().includes(keyword) ||
+            u.role?.toLowerCase().includes(keyword) ||
+            u.Area?.code?.toLowerCase().includes(keyword) ||
+            u.AssignedAreas?.some((a: any) =>
+                a.code?.toLowerCase().includes(keyword)
+            ) ||
+            u.Channel?.code?.toLowerCase().includes(keyword)
+        )
+    })
+
+    const totalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE))
+    const halamanAman = Math.min(page, totalPages)
+    const usersHalamanIni = filteredUsers.slice(
+        (halamanAman - 1) * PAGE_SIZE,
+        halamanAman * PAGE_SIZE
+    )
+
     return (
         <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
 
@@ -217,22 +243,8 @@ export default function UsersPage() {
 
                     <tbody>
 
-                        {users
-                            .filter((u: any) => {
-
-                                const keyword = search.toLowerCase()
-
-                                return (
-                                    u.name?.toLowerCase().includes(keyword) ||
-                                    u.email?.toLowerCase().includes(keyword) ||
-                                    u.role?.toLowerCase().includes(keyword) ||
-                                    u.Area?.code?.toLowerCase().includes(keyword) ||
-                                    u.AssignedAreas?.some((a: any) =>
-                                        a.code?.toLowerCase().includes(keyword)
-                                    ) ||
-                                    u.Channel?.code?.toLowerCase().includes(keyword)
-                                )
-                            }).map((u: any) => (
+                        {usersHalamanIni
+                            .map((u: any) => (
 
                                 <tr
                                     key={u.id}
@@ -325,6 +337,36 @@ export default function UsersPage() {
                     </tbody>
 
                 </table>
+
+                {totalPages > 1 && (
+                    <div className="flex items-center justify-between p-4 border-t border-slate-200">
+
+                        <span className="text-sm text-slate-500">
+                            Halaman {halamanAman} dari {totalPages} ({filteredUsers.length} user)
+                        </span>
+
+                        <div className="flex gap-2">
+
+                            <button
+                                onClick={() => setPage(halamanAman - 1)}
+                                disabled={halamanAman <= 1}
+                                className="border border-slate-300 disabled:opacity-40 px-4 py-2 rounded-xl text-sm"
+                            >
+                                ‹ Sebelumnya
+                            </button>
+
+                            <button
+                                onClick={() => setPage(halamanAman + 1)}
+                                disabled={halamanAman >= totalPages}
+                                className="border border-slate-300 disabled:opacity-40 px-4 py-2 rounded-xl text-sm"
+                            >
+                                Berikutnya ›
+                            </button>
+
+                        </div>
+
+                    </div>
+                )}
 
             </div>
 
