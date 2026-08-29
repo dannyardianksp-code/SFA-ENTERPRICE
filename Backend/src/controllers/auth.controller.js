@@ -17,7 +17,7 @@ const INVALID_CREDENTIALS_MESSAGE =
 // LOGIN
 exports.login = async (req, res) => {
     try {
-        const { email, password } = req.body
+        const { email, password, platform } = req.body
 
         if (!email || !password) {
             return sendError(
@@ -82,6 +82,20 @@ exports.login = async (req, res) => {
                 res,
                 403,
                 'Akun Anda tidak aktif. Silakan hubungi administrator.'
+            )
+        }
+
+        // SPG cuma boleh lewat aplikasi mobile. `platform` dikirim
+        // eksplisit oleh sfa-web saja -- mobile tidak mengirimnya, jadi
+        // tidak perlu update apa pun di sisi mobile.
+        if (
+            user.role === 'SPG' &&
+            platform === 'web'
+        ) {
+            return sendError(
+                res,
+                403,
+                'Akun SPG hanya bisa login lewat aplikasi mobile.'
             )
         }
 
