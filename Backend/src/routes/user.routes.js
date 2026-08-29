@@ -301,9 +301,9 @@ router.post(
 
                 channel_id,
 
-                supervisor_id
+                supervisor_id,
 
-
+                can_access_web
 
             } = req.body
 
@@ -365,7 +365,16 @@ router.post(
                         channel_id || null,
 
                     supervisor_id:
-                        supervisor_id || null
+                        supervisor_id || null,
+
+                    // Tidak dikirim klien -> default berdasar role, SPG
+                    // tetap terkunci dari web kecuali admin membukanya
+                    // eksplisit. Dikirim eksplisit (termasuk false) ->
+                    // pilihan admin menang.
+                    can_access_web:
+                        can_access_web !== undefined
+                            ? can_access_web
+                            : role !== 'SPG'
 
                 })
 
@@ -747,9 +756,9 @@ router.put(
 
                 channel_id,
 
-                supervisor_id
+                supervisor_id,
 
-
+                can_access_web
 
             } = req.body
 
@@ -850,6 +859,18 @@ router.put(
                     )
                 }
 
+                // Sama alasannya dengan email di atas: mematikan akses
+                // web akun sendiri mengunci diri sendiri keluar dari
+                // sfa-web pada login berikutnya, tanpa jalan buka
+                // sendiri lagi lewat UI.
+                if (can_access_web === false) {
+                    return sendError(
+                        res,
+                        400,
+                        'Anda tidak bisa mematikan akses web akun Anda sendiri.'
+                    )
+                }
+
             }
 
             // Baca-lalu-tulis harus berada dalam SATU transaksi dengan
@@ -911,6 +932,7 @@ router.put(
                     'area_id',
                     'channel_id',
                     'supervisor_id',
+                    'can_access_web',
                 ]) {
                     if (req.body[field] !== undefined) {
                         perubahan[field] = nullableUpdate(req.body[field])

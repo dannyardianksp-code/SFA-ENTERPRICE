@@ -85,17 +85,18 @@ exports.login = async (req, res) => {
             )
         }
 
-        // SPG cuma boleh lewat aplikasi mobile. `platform` dikirim
-        // eksplisit oleh sfa-web saja -- mobile tidak mengirimnya, jadi
-        // tidak perlu update apa pun di sisi mobile.
+        // Dikontrol admin per-user lewat form user (can_access_web),
+        // bukan hardcode per role. `platform` dikirim eksplisit oleh
+        // sfa-web saja -- mobile tidak mengirimnya, jadi tidak pernah
+        // kena blok ini.
         if (
-            user.role === 'SPG' &&
+            !user.can_access_web &&
             platform === 'web'
         ) {
             return sendError(
                 res,
                 403,
-                'Akun SPG hanya bisa login lewat aplikasi mobile.'
+                'Akun ini tidak diizinkan mengakses web. Gunakan aplikasi mobile, atau hubungi administrator.'
             )
         }
 

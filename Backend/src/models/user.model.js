@@ -23,6 +23,12 @@ const User = db.define('User', {
         ),
         defaultValue: 'SPG'
     },
+    // Kontrol admin per-user: boleh/tidaknya login lewat sfa-web.
+    // Dicek di auth.controller.js saat platform login === 'web'.
+    can_access_web: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: true
+    },
     area_id: DataTypes.INTEGER,
     channel_id: DataTypes.INTEGER,
     supervisor_id: DataTypes.INTEGER,

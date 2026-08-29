@@ -51,7 +51,9 @@ export default function EditUserPage() {
 
             channel_id: '',
 
-            supervisor_id: ''
+            supervisor_id: '',
+
+            can_access_web: true
 
         })
 
@@ -114,7 +116,10 @@ export default function EditUserPage() {
                     data.channel_id || '',
 
                 supervisor_id:
-                    data.supervisor_id || ''
+                    data.supervisor_id || '',
+
+                can_access_web:
+                    !!data.can_access_web
 
             })
 
@@ -245,6 +250,22 @@ export default function EditUserPage() {
 
             [e.target.name]:
                 e.target.value
+
+        })
+
+    }
+
+
+    const handleCanAccessWebChange = (
+        e: any
+    ) => {
+
+        setForm({
+
+            ...form,
+
+            can_access_web:
+                e.target.checked
 
         })
 
@@ -434,6 +455,17 @@ export default function EditUserPage() {
                             </select>
                         </div>
 
+                    </div>
+
+                    <div>
+                        <label className="flex items-center gap-2 text-sm text-slate-700">
+                            <input
+                                type="checkbox"
+                                checked={form.can_access_web}
+                                onChange={handleCanAccessWebChange}
+                            />
+                            Boleh akses sfa-web (di luar aplikasi mobile)
+                        </label>
                     </div>
 
                     {/* AREA MULTI */}

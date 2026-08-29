@@ -52,7 +52,11 @@ export default function CreateUserPage() {
 
             channel_id: '',
 
-            supervisor_id: ''
+            supervisor_id: '',
+
+            // Default ikut role awal (SPG terkunci dari web) -- admin
+            // tetap bisa override lewat checkbox sebelum submit.
+            can_access_web: false
 
         })
 
@@ -305,7 +309,28 @@ export default function CreateUserPage() {
                 ...form,
 
                 [e.target.name]:
-                    e.target.value
+                    e.target.value,
+
+                // Ganti role -> ganti default can_access_web (SPG
+                // terkunci, role lain terbuka). Admin masih bisa
+                // override lewat checkbox sesudahnya.
+                ...(e.target.name === 'role' && {
+                    can_access_web: e.target.value !== 'SPG'
+                })
+
+            })
+
+        }
+
+    const handleCanAccessWebChange =
+        (e: any) => {
+
+            setForm({
+
+                ...form,
+
+                can_access_web:
+                    e.target.checked
 
             })
 
@@ -551,6 +576,17 @@ export default function CreateUserPage() {
                                 </option>
                             ))}
                         </select>
+                    </div>
+
+                    <div>
+                        <label className="flex items-center gap-2 text-sm text-slate-700">
+                            <input
+                                type="checkbox"
+                                checked={form.can_access_web}
+                                onChange={handleCanAccessWebChange}
+                            />
+                            Boleh akses sfa-web (di luar aplikasi mobile)
+                        </label>
                     </div>
 
                 </div>
