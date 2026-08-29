@@ -9,11 +9,10 @@ export default function AreasPage() {
     const [areas, setAreas] = useState<any[]>([])
     const [search, setSearch] = useState('')
     const [role, setRole] = useState('')
-    const [drafts, setDrafts] = useState<Record<number, string>>({})
-    const [savingId, setSavingId] = useState<number | null>(null)
 
     const [form, setForm] = useState({ code: '', name: '', checkin_radius_meters: '' })
-    const [creating, setCreating] = useState(false)
+    const [editId, setEditId] = useState<number | null>(null)
+    const [saving, setSaving] = useState(false)
 
     const fetchAreas = async () => {
 
@@ -25,18 +24,7 @@ export default function AreasPage() {
 
         const data = await res.json()
 
-        const list = Array.isArray(data) ? data : []
-
-        setAreas(list)
-
-        setDrafts(
-            Object.fromEntries(
-                list.map((a: any) => [
-                    a.id,
-                    a.checkin_radius_meters != null ? String(a.checkin_radius_meters) : ''
-                ])
-            )
-        )
+        setAreas(Array.isArray(data) ? data : [])
 
     }
 
@@ -65,52 +53,38 @@ export default function AreasPage() {
         halamanAman * PAGE_SIZE
     )
 
-    const handleSave = async (id: number) => {
-
-        const token = localStorage.getItem('token')
-        const nilai = drafts[id]
-
-        setSavingId(id)
-
-        const res = await fetch(`http://localhost:1000/api/areas/${id}`, {
-
-            method: 'PUT',
-
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`
-            },
-
-            body: JSON.stringify({
-                checkin_radius_meters: nilai === '' ? null : nilai
-            })
-
+    const handleEdit = (a: any) => {
+        setEditId(a.id)
+        setForm({
+            code: a.code || '',
+            name: a.name || '',
+            checkin_radius_meters:
+                a.checkin_radius_meters != null ? String(a.checkin_radius_meters) : ''
         })
-
-        const data = await res.json()
-
-        setSavingId(null)
-
-        if (!res.ok) {
-            alert(data.message || 'Gagal menyimpan radius')
-            return
-        }
-
-        fetchAreas()
-
     }
 
-    const handleCreate = async (e: any) => {
+    const handleCancelEdit = () => {
+        setEditId(null)
+        setForm({ code: '', name: '', checkin_radius_meters: '' })
+    }
+
+    const handleSubmit = async (e: any) => {
 
         e.preventDefault()
 
         const token = localStorage.getItem('token')
 
-        setCreating(true)
+        const url = editId
+            ? `http://localhost:1000/api/areas/${editId}`
+            : `http://localhost:1000/api/areas`
 
-        const res = await fetch('http://localhost:1000/api/areas', {
+        const method = editId ? 'PUT' : 'POST'
 
-            method: 'POST',
+        setSaving(true)
+
+        const res = await fetch(url, {
+
+            method,
 
             headers: {
                 'Content-Type': 'application/json',
@@ -127,14 +101,17 @@ export default function AreasPage() {
 
         const data = await res.json()
 
-        setCreating(false)
+        setSaving(false)
 
         if (!res.ok) {
-            alert(data.message || 'Gagal menambah area')
+            alert(data.message || 'Gagal menyimpan area')
             return
         }
 
+        alert(editId ? 'Area berhasil diupdate' : 'Area berhasil ditambahkan')
+
         setForm({ code: '', name: '', checkin_radius_meters: '' })
+        setEditId(null)
 
         fetchAreas()
 
@@ -153,15 +130,15 @@ export default function AreasPage() {
                 </p>
             </div>
 
-            {/* TAMBAH AREA */}
+            {/* FORM */}
             {isAdmin && (
                 <div className="bg-white rounded-3xl p-6 shadow-lg space-y-4">
 
                     <h2 className="font-bold text-slate-900">
-                        ➕ Tambah Area Baru
+                        {editId ? '✏️ Edit Area' : '➕ Tambah Area Baru'}
                     </h2>
 
-                    <form onSubmit={handleCreate} className="grid md:grid-cols-4 gap-4 items-end">
+                    <form onSubmit={handleSubmit} className="grid md:grid-cols-4 gap-4 items-end">
 
                         <div>
                             <label className="text-sm text-slate-500">Code</label>
@@ -199,13 +176,27 @@ export default function AreasPage() {
                             />
                         </div>
 
-                        <button
-                            type="submit"
-                            disabled={creating}
-                            className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white py-3 rounded-xl font-semibold"
-                        >
-                            {creating ? 'Menyimpan...' : 'Tambah Area'}
-                        </button>
+                        <div className="flex gap-3">
+
+                            <button
+                                type="submit"
+                                disabled={saving}
+                                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white py-3 rounded-xl font-semibold"
+                            >
+                                {saving ? 'Menyimpan...' : editId ? 'Update' : 'Tambah Area'}
+                            </button>
+
+                            {editId && (
+                                <button
+                                    type="button"
+                                    onClick={handleCancelEdit}
+                                    className="border border-slate-300 px-4 py-3 rounded-xl font-semibold hover:bg-slate-100"
+                                >
+                                    Batal
+                                </button>
+                            )}
+
+                        </div>
 
                     </form>
 
@@ -258,33 +249,17 @@ export default function AreasPage() {
 
                                     <td className="p-4 font-semibold text-slate-900">{a.name}</td>
 
-                                    <td className="p-4">
-                                        {isAdmin ? (
-                                            <input
-                                                type="number"
-                                                min={1}
-                                                placeholder={String(DEFAULT_RADIUS)}
-                                                value={drafts[a.id] ?? ''}
-                                                onChange={(e) =>
-                                                    setDrafts({ ...drafts, [a.id]: e.target.value })
-                                                }
-                                                className="w-28 border rounded-xl p-2"
-                                            />
-                                        ) : (
-                                            <span className="text-slate-600">
-                                                {a.checkin_radius_meters ?? `${DEFAULT_RADIUS} (default)`}
-                                            </span>
-                                        )}
+                                    <td className="p-4 text-slate-600">
+                                        {a.checkin_radius_meters ?? `${DEFAULT_RADIUS} (default)`}
                                     </td>
 
                                     {isAdmin && (
                                         <td className="p-4">
                                             <button
-                                                onClick={() => handleSave(a.id)}
-                                                disabled={savingId === a.id}
-                                                className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white px-4 py-2 rounded-xl text-sm"
+                                                onClick={() => handleEdit(a)}
+                                                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-semibold"
                                             >
-                                                {savingId === a.id ? 'Menyimpan...' : 'Simpan'}
+                                                Edit
                                             </button>
                                         </td>
                                     )}

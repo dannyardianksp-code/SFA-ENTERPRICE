@@ -7,11 +7,10 @@ export default function ClassesPage() {
     const [classes, setClasses] = useState<any[]>([])
     const [search, setSearch] = useState('')
     const [role, setRole] = useState('')
-    const [drafts, setDrafts] = useState<Record<number, { code: string; name: string }>>({})
-    const [savingId, setSavingId] = useState<number | null>(null)
 
     const [form, setForm] = useState({ code: '', name: '' })
-    const [creating, setCreating] = useState(false)
+    const [editId, setEditId] = useState<number | null>(null)
+    const [saving, setSaving] = useState(false)
 
     const fetchClasses = async () => {
 
@@ -23,15 +22,7 @@ export default function ClassesPage() {
 
         const data = await res.json()
 
-        const list = Array.isArray(data) ? data : []
-
-        setClasses(list)
-
-        setDrafts(
-            Object.fromEntries(
-                list.map((c: any) => [c.id, { code: c.code || '', name: c.name || '' }])
-            )
-        )
+        setClasses(Array.isArray(data) ? data : [])
 
     }
 
@@ -60,50 +51,33 @@ export default function ClassesPage() {
         halamanAman * PAGE_SIZE
     )
 
-    const handleSave = async (id: number) => {
-
-        const token = localStorage.getItem('token')
-        const draft = drafts[id]
-
-        setSavingId(id)
-
-        const res = await fetch(`http://localhost:1000/api/classes/${id}`, {
-
-            method: 'PUT',
-
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`
-            },
-
-            body: JSON.stringify({ code: draft.code, name: draft.name })
-
-        })
-
-        const data = await res.json()
-
-        setSavingId(null)
-
-        if (!res.ok) {
-            alert(data.message || 'Gagal menyimpan class')
-            return
-        }
-
-        fetchClasses()
-
+    const handleEdit = (c: any) => {
+        setEditId(c.id)
+        setForm({ code: c.code || '', name: c.name || '' })
     }
 
-    const handleCreate = async (e: any) => {
+    const handleCancelEdit = () => {
+        setEditId(null)
+        setForm({ code: '', name: '' })
+    }
+
+    const handleSubmit = async (e: any) => {
 
         e.preventDefault()
 
         const token = localStorage.getItem('token')
 
-        setCreating(true)
+        const url = editId
+            ? `http://localhost:1000/api/classes/${editId}`
+            : `http://localhost:1000/api/classes`
 
-        const res = await fetch('http://localhost:1000/api/classes', {
+        const method = editId ? 'PUT' : 'POST'
 
-            method: 'POST',
+        setSaving(true)
+
+        const res = await fetch(url, {
+
+            method,
 
             headers: {
                 'Content-Type': 'application/json',
@@ -116,14 +90,17 @@ export default function ClassesPage() {
 
         const data = await res.json()
 
-        setCreating(false)
+        setSaving(false)
 
         if (!res.ok) {
-            alert(data.message || 'Gagal menambah class')
+            alert(data.message || 'Gagal menyimpan class')
             return
         }
 
+        alert(editId ? 'Class berhasil diupdate' : 'Class berhasil ditambahkan')
+
         setForm({ code: '', name: '' })
+        setEditId(null)
 
         fetchClasses()
 
@@ -142,15 +119,15 @@ export default function ClassesPage() {
                 </p>
             </div>
 
-            {/* TAMBAH CLASS */}
+            {/* FORM */}
             {isAdmin && (
                 <div className="bg-white rounded-3xl p-6 shadow-lg space-y-4">
 
                     <h2 className="font-bold text-slate-900">
-                        ➕ Tambah Class Baru
+                        {editId ? '✏️ Edit Class' : '➕ Tambah Class Baru'}
                     </h2>
 
-                    <form onSubmit={handleCreate} className="grid md:grid-cols-3 gap-4 items-end">
+                    <form onSubmit={handleSubmit} className="grid md:grid-cols-3 gap-4 items-end">
 
                         <div>
                             <label className="text-sm text-slate-500">Code</label>
@@ -172,13 +149,27 @@ export default function ClassesPage() {
                             />
                         </div>
 
-                        <button
-                            type="submit"
-                            disabled={creating}
-                            className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white py-3 rounded-xl font-semibold"
-                        >
-                            {creating ? 'Menyimpan...' : 'Tambah Class'}
-                        </button>
+                        <div className="flex gap-3">
+
+                            <button
+                                type="submit"
+                                disabled={saving}
+                                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white py-3 rounded-xl font-semibold"
+                            >
+                                {saving ? 'Menyimpan...' : editId ? 'Update' : 'Tambah Class'}
+                            </button>
+
+                            {editId && (
+                                <button
+                                    type="button"
+                                    onClick={handleCancelEdit}
+                                    className="border border-slate-300 px-4 py-3 rounded-xl font-semibold hover:bg-slate-100"
+                                >
+                                    Batal
+                                </button>
+                            )}
+
+                        </div>
 
                     </form>
 
@@ -225,48 +216,17 @@ export default function ClassesPage() {
                                 className="border-b border-slate-100 hover:bg-slate-50"
                             >
 
-                                <td className="p-4">
-                                    {isAdmin ? (
-                                        <input
-                                            value={drafts[c.id]?.code ?? ''}
-                                            onChange={(e) =>
-                                                setDrafts({
-                                                    ...drafts,
-                                                    [c.id]: { ...drafts[c.id], code: e.target.value }
-                                                })
-                                            }
-                                            className="w-28 border rounded-xl p-2"
-                                        />
-                                    ) : (
-                                        <span className="text-slate-600">{c.code}</span>
-                                    )}
-                                </td>
+                                <td className="p-4 text-slate-600">{c.code}</td>
 
-                                <td className="p-4">
-                                    {isAdmin ? (
-                                        <input
-                                            value={drafts[c.id]?.name ?? ''}
-                                            onChange={(e) =>
-                                                setDrafts({
-                                                    ...drafts,
-                                                    [c.id]: { ...drafts[c.id], name: e.target.value }
-                                                })
-                                            }
-                                            className="w-full border rounded-xl p-2"
-                                        />
-                                    ) : (
-                                        <span className="font-semibold text-slate-900">{c.name}</span>
-                                    )}
-                                </td>
+                                <td className="p-4 font-semibold text-slate-900">{c.name}</td>
 
                                 {isAdmin && (
                                     <td className="p-4">
                                         <button
-                                            onClick={() => handleSave(c.id)}
-                                            disabled={savingId === c.id}
-                                            className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white px-4 py-2 rounded-xl text-sm"
+                                            onClick={() => handleEdit(c)}
+                                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-semibold"
                                         >
-                                            {savingId === c.id ? 'Menyimpan...' : 'Simpan'}
+                                            Edit
                                         </button>
                                     </td>
                                 )}
