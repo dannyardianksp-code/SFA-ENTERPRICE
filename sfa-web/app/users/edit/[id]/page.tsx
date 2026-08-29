@@ -458,13 +458,18 @@ export default function EditUserPage() {
                     </div>
 
                     <div>
-                        <label className="flex items-center gap-2 text-sm text-slate-700">
-                            <input
-                                type="checkbox"
-                                checked={form.can_access_web}
-                                onChange={handleCanAccessWebChange}
-                            />
-                            Boleh akses sfa-web (di luar aplikasi mobile)
+                        <label className="flex items-center gap-3 cursor-pointer w-fit">
+                            <span className="relative inline-block w-11 h-6 shrink-0">
+                                <input
+                                    type="checkbox"
+                                    checked={form.can_access_web}
+                                    onChange={handleCanAccessWebChange}
+                                    className="peer sr-only"
+                                />
+                                <span className="absolute inset-0 rounded-full bg-slate-300 peer-checked:bg-blue-600 transition-colors" />
+                                <span className="absolute left-1 top-1 w-4 h-4 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5" />
+                            </span>
+                            <span className="text-sm text-slate-700">Web Access</span>
                         </label>
                     </div>
 

@@ -235,6 +235,7 @@ export default function UsersPage() {
                             <th className="p-4 text-sm font-semibold text-slate-500">Channel</th>
                             <th className="p-4 text-sm font-semibold text-slate-500">Supervisor</th>
                             <th className="p-4 text-sm font-semibold text-slate-500">Status</th>
+                            <th className="p-4 text-sm font-semibold text-slate-500">Web Access</th>
                             <th className="p-4 text-sm font-semibold text-slate-500">Aksi</th>
 
                         </tr>
@@ -293,6 +294,17 @@ export default function UsersPage() {
                                                 }`}
                                         >
                                             {u.status}
+                                        </span>
+                                    </td>
+
+                                    <td className="p-4">
+                                        <span
+                                            className={`px-3 py-1 rounded-full text-xs font-semibold ${u.can_access_web
+                                                ? 'bg-green-100 text-green-700'
+                                                : 'bg-slate-100 text-slate-500'
+                                                }`}
+                                        >
+                                            {u.can_access_web ? 'Aktif' : 'Nonaktif'}
                                         </span>
                                     </td>
 
