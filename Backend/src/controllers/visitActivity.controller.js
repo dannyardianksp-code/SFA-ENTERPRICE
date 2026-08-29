@@ -80,6 +80,37 @@ exports.create = async (req, res) => {
             return sendError(res, 400, 'Id tipe activity tidak valid.')
         }
 
+        const activityDipilih = await Activity.findByPk(activityId)
+
+        if (!activityDipilih) {
+            if (req.file) fs.unlinkSync(req.file.path)
+            return sendError(res, 400, 'Tipe activity tidak ditemukan.')
+        }
+
+        // Activity yang channel_id-nya diisi hanya boleh dipakai di
+        // customer dengan channel yang sama -- NULL berarti berlaku di
+        // semua channel. Ini cek server-side, bukan cuma sembunyikan
+        // pilihan di UI: mencegah panggilan API langsung memilih
+        // activity channel lain lewat dropdown yang seharusnya sudah
+        // difilter.
+        if (activityDipilih.channel_id !== null) {
+
+            const customer = await Customer.findByPk(visit.customer_id)
+
+            if (
+                !customer ||
+                customer.channel_id !== activityDipilih.channel_id
+            ) {
+                if (req.file) fs.unlinkSync(req.file.path)
+                return sendError(
+                    res,
+                    400,
+                    'Tipe activity ini tidak berlaku untuk channel customer ini.'
+                )
+            }
+
+        }
+
         const pesanValidasi = validateActivityFields(
             activityId,
             req.body,

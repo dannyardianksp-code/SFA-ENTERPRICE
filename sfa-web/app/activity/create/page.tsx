@@ -5,11 +5,13 @@ import { useEffect, useState } from 'react'
 export default function MasterActivitiesPage() {
 
     const [activities, setActivities] = useState<any[]>([])
+    const [channels, setChannels] = useState<any[]>([])
     const [search, setSearch] = useState('')
 
     const [form, setForm] = useState({
         code: '',
-        name: ''
+        name: '',
+        channel_id: ''
     })
 
     const [editId, setEditId] = useState<number | null>(null)
@@ -31,8 +33,30 @@ export default function MasterActivitiesPage() {
         setActivities(Array.isArray(data) ? data : [])
     }
 
+    const fetchChannels = async () => {
+
+        const token = localStorage.getItem('token')
+
+        const res = await fetch('http://localhost:1000/api/channels', {
+            headers: {
+                Authorization: `Bearer ${token}`
+            }
+        })
+
+        const data = await res.json()
+
+        setChannels(
+            Array.isArray(data.data)
+                ? data.data
+                : Array.isArray(data)
+                    ? data
+                    : []
+        )
+    }
+
     useEffect(() => {
         fetchData()
+        fetchChannels()
     }, [])
 
     const handleChange = (e: any) => {
@@ -62,10 +86,13 @@ export default function MasterActivitiesPage() {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${token}`
             },
-            body: JSON.stringify(form)
+            body: JSON.stringify({
+                ...form,
+                channel_id: form.channel_id || null
+            })
         })
 
-        setForm({ code: '', name: '' })
+        setForm({ code: '', name: '', channel_id: '' })
         setEditId(null)
         fetchData()
     }
@@ -74,24 +101,23 @@ export default function MasterActivitiesPage() {
         setEditId(a.id)
         setForm({
             code: a.code,
-            name: a.name
+            name: a.name,
+            channel_id: a.channel_id ? String(a.channel_id) : ''
         })
     }
 
-    const handleDelete = async (id: number) => {
-        const ok = confirm('Delete activity?')
-        if (!ok) return
+    const handleCancelEdit = () => {
+        setEditId(null)
+        setForm({ code: '', name: '', channel_id: '' })
+    }
 
-        const token = localStorage.getItem('token')
+    const channelName = (channelId: number | null) => {
 
-        await fetch(`http://localhost:1000/api/activities/${id}`, {
-            method: 'DELETE',
-            headers: {
-                Authorization: `Bearer ${token}`
-            }
-        })
+        if (!channelId) return 'Semua Channel'
 
-        fetchData()
+        const c = channels.find((ch: any) => ch.id === channelId)
+
+        return c ? c.name : 'Semua Channel'
     }
 
     const filtered = activities.filter((a) =>
@@ -99,213 +125,204 @@ export default function MasterActivitiesPage() {
         a.code?.toLowerCase().includes(search.toLowerCase())
     )
 
-    return (
+    const PAGE_SIZE = 10
+    const [page, setPage] = useState(1)
 
-        <div style={{
-            padding: 25,
-            background: '#f4f6fb',
-            minHeight: '100vh',
-            fontFamily: 'sans-serif'
-        }}>
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+    const halamanAman = Math.min(page, totalPages)
+    const activitiesHalamanIni = filtered.slice(
+        (halamanAman - 1) * PAGE_SIZE,
+        halamanAman * PAGE_SIZE
+    )
+
+    return (
+        <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
 
             {/* HEADER */}
-            <div style={{
-                background: 'linear-gradient(135deg,#4f46e5,#06b6d4)',
-                color: 'white',
-                padding: 25,
-                borderRadius: 20,
-                marginBottom: 20
-            }}>
-                <h1 style={{ margin: 0 }}>📌 Activity Dashboard</h1>
-                <p style={{ margin: 0, opacity: 0.8 }}>
+            <div className="bg-white rounded-3xl p-6 shadow-lg">
+                <h1 className="text-3xl font-bold text-slate-900">
+                    📌 Activity Master
+                </h1>
+                <p className="text-slate-500 mt-1">
                     Manage master activity for visit system
                 </p>
             </div>
 
-            {/* STATS */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3,1fr)',
-                gap: 15,
-                marginBottom: 20
-            }}>
+            {/* FORM */}
+            <div className="bg-white rounded-3xl p-6 shadow-lg space-y-4">
 
-                <div style={cardStyle}>
-                    <h3>Total</h3>
-                    <h1>{activities.length}</h1>
-                </div>
-
-                <div style={cardStyle}>
-                    <h3>Filtered</h3>
-                    <h1>{filtered.length}</h1>
-                </div>
-
-                <div style={cardStyle}>
-                    <h3>Mode</h3>
-                    <h1>{editId ? 'EDIT' : 'CREATE'}</h1>
-                </div>
-
-            </div>
-
-            {/* SEARCH */}
-            <input
-                placeholder="🔍 Search activity..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                style={searchStyle}
-            />
-
-            {/* FORM CARD */}
-            <div style={formCard}>
-
-                <h2 style={{ marginBottom: 15 }}>
-                    {editId ? '✏ Edit Activity' : '➕ Create Activity'}
+                <h2 className="font-bold text-slate-900">
+                    {editId ? '✏️ Edit Activity' : '➕ Create Activity'}
                 </h2>
 
-                <form onSubmit={handleSubmit} style={{
-                    display: 'flex',
-                    gap: 10
-                }}>
+                <form onSubmit={handleSubmit} className="grid md:grid-cols-3 gap-4">
 
-                    <input
-                        name="code"
-                        placeholder="Code"
-                        value={form.code}
-                        onChange={handleChange}
-                        style={inputStyle}
-                    />
+                    <div>
+                        <label className="text-sm text-slate-500">Code</label>
+                        <input
+                            name="code"
+                            placeholder="Code"
+                            value={form.code}
+                            onChange={handleChange}
+                            className="w-full mt-2 border rounded-xl p-3"
+                        />
+                    </div>
 
-                    <input
-                        name="name"
-                        placeholder="Activity Name"
-                        value={form.name}
-                        onChange={handleChange}
-                        style={inputStyle}
-                    />
+                    <div>
+                        <label className="text-sm text-slate-500">Activity Name</label>
+                        <input
+                            name="name"
+                            placeholder="Activity Name"
+                            value={form.name}
+                            onChange={handleChange}
+                            className="w-full mt-2 border rounded-xl p-3"
+                        />
+                    </div>
 
-                    <button style={btnPrimary}>
-                        {editId ? 'Update' : 'Save'}
-                    </button>
+                    <div>
+                        <label className="text-sm text-slate-500">Channel</label>
+                        <select
+                            name="channel_id"
+                            value={form.channel_id}
+                            onChange={handleChange}
+                            className="w-full mt-2 border rounded-xl p-3"
+                        >
+                            <option value="">Semua Channel</option>
+                            {channels.map((c: any) => (
+                                <option key={c.id} value={c.id}>
+                                    {c.name}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="md:col-span-3 flex gap-3">
+
+                        <button
+                            type="submit"
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-2xl font-semibold shadow"
+                        >
+                            {editId ? 'Update' : 'Save'}
+                        </button>
+
+                        {editId && (
+                            <button
+                                type="button"
+                                onClick={handleCancelEdit}
+                                className="border border-slate-300 px-5 py-3 rounded-2xl font-semibold hover:bg-slate-100"
+                            >
+                                Batal
+                            </button>
+                        )}
+
+                    </div>
 
                 </form>
 
             </div>
 
+            {/* SEARCH */}
+            <div className="bg-white rounded-3xl p-4 shadow flex gap-3 items-center">
+
+                <input
+                    type="text"
+                    placeholder="🔍 Search code, name..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="flex-1 border rounded-2xl p-3"
+                />
+
+            </div>
+
             {/* LIST */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill,minmax(250px,1fr))',
-                gap: 15
-            }}>
+            <div className="bg-white rounded-3xl shadow-lg overflow-hidden">
 
-                {
-                    filtered.map((a) => (
+                <table className="w-full text-left">
 
-                        <div key={a.id} style={cardItem}>
+                    <thead className="bg-slate-50 border-b border-slate-200">
 
-                            <div>
-                                <h3 style={{ margin: 0 }}>{a.name}</h3>
-                                <p style={{ margin: 0, opacity: 0.6 }}>
-                                    {a.code}
-                                </p>
-                            </div>
+                        <tr>
+                            <th className="p-4 text-sm font-semibold text-slate-500">Code</th>
+                            <th className="p-4 text-sm font-semibold text-slate-500">Activity Name</th>
+                            <th className="p-4 text-sm font-semibold text-slate-500">Channel</th>
+                            <th className="p-4 text-sm font-semibold text-slate-500">Aksi</th>
+                        </tr>
 
-                            <div style={{
-                                display: 'flex',
-                                gap: 10,
-                                marginTop: 15
-                            }}>
+                    </thead>
 
-                                <button
-                                    onClick={() => handleEdit(a)}
-                                    style={btnEdit}
-                                >
-                                    Edit
-                                </button>
+                    <tbody>
 
-                                {/* <button
-                                    onClick={() => handleDelete(a.id)}
-                                    style={btnDelete}
-                                >
-                                    Delete
-                                </button> */}
+                        {activitiesHalamanIni.map((a: any) => (
 
-                            </div>
+                            <tr
+                                key={a.id}
+                                className="border-b border-slate-100 hover:bg-slate-50"
+                            >
+
+                                <td className="p-4 text-slate-600">{a.code}</td>
+
+                                <td className="p-4 font-semibold text-slate-900">{a.name}</td>
+
+                                <td className="p-4">
+                                    <span
+                                        className={`px-3 py-1 rounded-full text-xs font-semibold ${a.channel_id
+                                            ? 'bg-blue-50 text-blue-700'
+                                            : 'bg-slate-100 text-slate-500'
+                                            }`}
+                                    >
+                                        {channelName(a.channel_id)}
+                                    </span>
+                                </td>
+
+                                <td className="p-4">
+                                    <button
+                                        onClick={() => handleEdit(a)}
+                                        className="bg-blue-600 text-white py-2 px-3 rounded-xl font-semibold text-sm"
+                                    >
+                                        Edit
+                                    </button>
+                                </td>
+
+                            </tr>
+
+                        ))}
+
+                    </tbody>
+
+                </table>
+
+                {totalPages > 1 && (
+                    <div className="flex items-center justify-between p-4 border-t border-slate-200">
+
+                        <span className="text-sm text-slate-500">
+                            Halaman {halamanAman} dari {totalPages} ({filtered.length} activity)
+                        </span>
+
+                        <div className="flex gap-2">
+
+                            <button
+                                onClick={() => setPage(halamanAman - 1)}
+                                disabled={halamanAman <= 1}
+                                className="border border-slate-300 disabled:opacity-40 px-4 py-2 rounded-xl text-sm"
+                            >
+                                ‹ Sebelumnya
+                            </button>
+
+                            <button
+                                onClick={() => setPage(halamanAman + 1)}
+                                disabled={halamanAman >= totalPages}
+                                className="border border-slate-300 disabled:opacity-40 px-4 py-2 rounded-xl text-sm"
+                            >
+                                Berikutnya ›
+                            </button>
 
                         </div>
 
-                    ))
-                }
+                    </div>
+                )}
 
             </div>
 
         </div>
     )
-}
-
-// ======================
-// STYLES
-// ======================
-
-const cardStyle = {
-    background: 'white',
-    padding: 15,
-    borderRadius: 15,
-    boxShadow: '0 5px 15px rgba(0,0,0,0.05)'
-}
-
-const formCard = {
-    background: 'white',
-    padding: 20,
-    borderRadius: 20,
-    marginBottom: 20,
-    boxShadow: '0 10px 25px rgba(0,0,0,0.08)'
-}
-
-const cardItem = {
-    background: 'white',
-    padding: 15,
-    borderRadius: 15,
-    transition: '0.2s',
-    boxShadow: '0 5px 15px rgba(0,0,0,0.05)'
-}
-
-const inputStyle = {
-    padding: 12,
-    borderRadius: 10,
-    border: '1px solid #ddd',
-    flex: 1
-}
-
-const searchStyle = {
-    width: '100%',
-    padding: 14,
-    borderRadius: 12,
-    border: '1px solid #ddd',
-    marginBottom: 15
-}
-
-const btnPrimary = {
-    background: '#4f46e5',
-    color: 'white',
-    border: 'none',
-    padding: '12px 18px',
-    borderRadius: 10,
-    cursor: 'pointer'
-}
-
-const btnEdit = {
-    background: '#10b981',
-    color: 'white',
-    border: 'none',
-    padding: '8px 12px',
-    borderRadius: 8
-}
-
-const btnDelete = {
-    background: '#ef4444',
-    color: 'white',
-    border: 'none',
-    padding: '8px 12px',
-    borderRadius: 8
 }

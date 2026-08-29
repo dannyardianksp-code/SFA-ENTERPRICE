@@ -138,6 +138,18 @@ Customer.belongsTo(Channel, {
 
 })
 
+Channel.hasMany(Activity, {
+
+    foreignKey: 'channel_id'
+
+})
+
+Activity.belongsTo(Channel, {
+
+    foreignKey: 'channel_id'
+
+})
+
 // CUSTOMER → CLASS (PASAR/GROSIR/ROMBONG/MODERN MARKET) -- terpisah
 // dari Channel (General/Modern Trade) dan CustomerGroup (banner/chain).
 // TIDAK dipakai formatCustomerCode, jadi boleh diubah lewat update

@@ -11,7 +11,11 @@ const Activity = db.define('Activity', {
     name: {
         type: DataTypes.STRING,
         allowNull: false
-    }
+    },
+
+    // NULL = berlaku di semua channel. Diisi hanya kalau activity ini
+    // khusus 1 channel tertentu.
+    channel_id: DataTypes.INTEGER
 
 }, {
 

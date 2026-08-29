@@ -1,23 +1,48 @@
 const router = require('express').Router()
 
+const { Op } = require('sequelize')
+
 const Activity =
     require('../models/activity.model')
 
 const auth =
     require('../middleware/auth.middleware')
 
+const { sendError, sendServerError } =
+    require('../utils/response.util')
 
-// GET
+const { RESTRICTED_ROLES, USER_MANAGER_ROLES } =
+    require('../utils/access.util')
+
+
+// GET -- role dibatasi (SPG/SUPERVISOR) hanya melihat activity
+// universal (channel_id NULL) atau yang cocok dengan channel_id
+// miliknya sendiri. Role lain (termasuk ADMINISTRATOR yang mengelola
+// Activity Master) melihat semuanya -- fail-closed: user tanpa
+// channel_id yang restricted mendapat sentinel -1 supaya tetap hanya
+// melihat activity universal, bukan semuanya.
 router.get(
     '/',
     auth,
     async (req, res) => {
 
+        const channelWhere =
+            RESTRICTED_ROLES.includes(req.user.role)
+                ? {
+                    [Op.or]: [
+                        { channel_id: null },
+                        { channel_id: req.user.channel_id ?? -1 },
+                    ],
+                }
+                : {}
+
         const data =
             await Activity.findAll({
 
+                where: channelWhere,
+
                 order: [
-                    ['ID', 'ASC']
+                    ['id', 'ASC']
                 ]
 
             })
@@ -28,21 +53,81 @@ router.get(
 )
 
 
-// CREATE
+// CREATE -- ADMINISTRATOR saja (Activity Master, sama seperti Class/Area).
 router.post(
     '/',
     auth,
     async (req, res) => {
 
-        const data =
-            await Activity.create({
+        try {
 
-                code: req.body.code,
-                name: req.body.name
+            if (!req.user || !USER_MANAGER_ROLES.includes(req.user.role)) {
+                return sendError(
+                    res,
+                    403,
+                    'Hanya administrator yang boleh mengelola activity.'
+                )
+            }
 
-            })
+            const { code, name, channel_id } = req.body
 
-        res.json(data)
+            const data =
+                await Activity.create({
+
+                    code,
+                    name,
+                    channel_id: channel_id || null,
+
+                })
+
+            res.json(data)
+
+        } catch (err) {
+            return sendServerError(res, err, 'CREATE ACTIVITY')
+        }
+
+    }
+)
+
+
+// UPDATE -- ADMINISTRATOR saja. Belum ada sebelumnya; form Edit di web
+// sudah lama memanggil endpoint ini tanpa hasil (404 diam-diam).
+router.put(
+    '/:id',
+    auth,
+    async (req, res) => {
+
+        try {
+
+            if (!req.user || !USER_MANAGER_ROLES.includes(req.user.role)) {
+                return sendError(
+                    res,
+                    403,
+                    'Hanya administrator yang boleh mengelola activity.'
+                )
+            }
+
+            const activity = await Activity.findByPk(req.params.id)
+
+            if (!activity) {
+                return sendError(res, 404, 'Activity tidak ditemukan.')
+            }
+
+            const { code, name, channel_id } = req.body
+
+            const perubahan = {}
+
+            if (code !== undefined) perubahan.code = code
+            if (name !== undefined) perubahan.name = name
+            if (channel_id !== undefined) perubahan.channel_id = channel_id || null
+
+            await activity.update(perubahan)
+
+            res.json(activity)
+
+        } catch (err) {
+            return sendServerError(res, err, 'UPDATE ACTIVITY')
+        }
 
     }
 )
