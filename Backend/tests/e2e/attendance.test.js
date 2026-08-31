@@ -29,6 +29,12 @@ const USER_ID_SEMENTARA = [999, 998, 997, 996, 995, 994, 993, 992, 991, 990, 989
 const tokenUntuk = (id) =>
     jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '15m' })
 
+// Lokasi sekarang wajib di checkin/checkout (lihat attendance.controller.js)
+// -- dipakai di semua test yang TIDAK sedang menguji validasi lokasi itu
+// sendiri, supaya tidak gagal karena alasan yang tidak relevan dengan
+// yang sedang diuji.
+const LOKASI_VALID = { latitude: '-6.2', longitude: '106.8', accuracy: '15' }
+
 /** Kirim multipart/form-data lewat fetch bawaan Node. */
 const kirimDenganFoto = async (userId, fields, sertakanFoto, endpoint) => {
     const form = new FormData()
@@ -263,7 +269,7 @@ describe('POST /api/attendances/checkin', () => {
         )
     })
 
-    test('tanpa lokasi sama sekali tetap diterima (lokasi opsional, bukan gerbang)', async () => {
+    test('tanpa lokasi sama sekali ditolak 400 (lokasi wajib, bukan opsional)', async () => {
         const c = await mysql.createConnection({
             host: process.env.DB_HOST, user: process.env.DB_USER,
             password: process.env.DB_PASS, database: process.env.DB_NAME,
@@ -278,8 +284,8 @@ describe('POST /api/attendances/checkin', () => {
             '/api/attendances/checkin'
         )
 
-        assert.strictEqual(status, 200)
-        attendanceIdsDibuat.push(data.id)
+        assert.strictEqual(status, 400)
+        assert.match(data.message, /lokasi wajib/i)
     })
 
     test('dua request checkin nyaris bersamaan: tepat satu sukses, satu lagi 400 bersih (bukan 500)', async () => {
@@ -291,8 +297,8 @@ describe('POST /api/attendances/checkin', () => {
         await c.end()
 
         const [hasil1, hasil2] = await Promise.all([
-            kirimDenganFoto(996, { latitude: '-6.2', longitude: '106.8' }, true, '/api/attendances/checkin'),
-            kirimDenganFoto(996, { latitude: '-6.2', longitude: '106.8' }, true, '/api/attendances/checkin'),
+            kirimDenganFoto(996, LOKASI_VALID, true, '/api/attendances/checkin'),
+            kirimDenganFoto(996, LOKASI_VALID, true, '/api/attendances/checkin'),
         ])
 
         const sukses = [hasil1, hasil2].filter(h => h.status === 200)
@@ -341,13 +347,13 @@ describe('POST /api/attendances/checkout', () => {
         await bersihkanHariIni(994)
 
         const masuk = await kirimDenganFoto(
-            994, { latitude: '-6.2', longitude: '106.8' }, true, '/api/attendances/checkin'
+            994, LOKASI_VALID, true, '/api/attendances/checkin'
         )
         assert.strictEqual(masuk.status, 200)
         attendanceIdsDibuat.push(masuk.data.id)
 
         const pulang = await kirimDenganFoto(
-            994, { latitude: '-6.2', longitude: '106.8' }, true, '/api/attendances/checkout'
+            994, LOKASI_VALID, true, '/api/attendances/checkout'
         )
 
         assert.strictEqual(pulang.status, 200)
@@ -359,22 +365,28 @@ describe('POST /api/attendances/checkout', () => {
     test('absen pulang dobel ditolak 400', async () => {
         await bersihkanHariIni(993)
 
-        const masuk = await kirimDenganFoto(993, {}, true, '/api/attendances/checkin')
+        const masuk = await kirimDenganFoto(993, LOKASI_VALID, true, '/api/attendances/checkin')
         assert.strictEqual(masuk.status, 200)
         attendanceIdsDibuat.push(masuk.data.id)
 
-        const pulangPertama = await kirimDenganFoto(993, {}, true, '/api/attendances/checkout')
+        const pulangPertama = await kirimDenganFoto(993, LOKASI_VALID, true, '/api/attendances/checkout')
         assert.strictEqual(pulangPertama.status, 200)
 
-        const pulangKedua = await kirimDenganFoto(993, {}, true, '/api/attendances/checkout')
+        // checkOut mencari attendance TERBUKA (clock_out_time null) milik
+        // user ini -- begitu absen pertama sudah ditutup, tidak ada lagi
+        // baris terbuka untuk dicari sama sekali, jadi pesannya "belum
+        // absen masuk" (bukan "sudah absen pulang"). Pesannya kurang pas
+        // untuk skenario ini, tapi tetap 400 -- tidak dalam scope
+        // perubahan lokasi ini untuk membedakan pesannya lebih jauh.
+        const pulangKedua = await kirimDenganFoto(993, LOKASI_VALID, true, '/api/attendances/checkout')
         assert.strictEqual(pulangKedua.status, 400)
-        assert.match(pulangKedua.data.message, /sudah absen pulang/i)
+        assert.match(pulangKedua.data.message, /belum absen masuk/i)
     })
 
     test('absen pulang tanpa foto ditolak 400', async () => {
         await bersihkanHariIni(992)
 
-        const masuk = await kirimDenganFoto(992, {}, true, '/api/attendances/checkin')
+        const masuk = await kirimDenganFoto(992, LOKASI_VALID, true, '/api/attendances/checkin')
         assert.strictEqual(masuk.status, 200)
         attendanceIdsDibuat.push(masuk.data.id)
 
@@ -386,8 +398,8 @@ describe('POST /api/attendances/checkout', () => {
         await bersihkanHariIni(991)
         await bersihkanHariIni(990)
 
-        const a = await kirimDenganFoto(991, {}, true, '/api/attendances/checkin')
-        const b = await kirimDenganFoto(990, {}, true, '/api/attendances/checkin')
+        const a = await kirimDenganFoto(991, LOKASI_VALID, true, '/api/attendances/checkin')
+        const b = await kirimDenganFoto(990, LOKASI_VALID, true, '/api/attendances/checkin')
 
         assert.strictEqual(a.status, 200)
         assert.strictEqual(b.status, 200)
@@ -395,7 +407,7 @@ describe('POST /api/attendances/checkout', () => {
 
         attendanceIdsDibuat.push(a.data.id, b.data.id)
 
-        const pulangA = await kirimDenganFoto(991, {}, true, '/api/attendances/checkout')
+        const pulangA = await kirimDenganFoto(991, LOKASI_VALID, true, '/api/attendances/checkout')
         assert.strictEqual(pulangA.status, 200)
         assert.strictEqual(pulangA.data.id, a.data.id)
 
@@ -410,7 +422,7 @@ describe('POST /api/attendances/checkout', () => {
     test('dua request checkout nyaris bersamaan: tepat satu sukses, satu lagi 400 bersih, nol berkas yatim', async () => {
         await bersihkanHariIni(986)
 
-        const masuk = await kirimDenganFoto(986, {}, true, '/api/attendances/checkin')
+        const masuk = await kirimDenganFoto(986, LOKASI_VALID, true, '/api/attendances/checkin')
         assert.strictEqual(masuk.status, 200)
         attendanceIdsDibuat.push(masuk.data.id)
 
@@ -418,8 +430,8 @@ describe('POST /api/attendances/checkout', () => {
         const sebelum = fs.readdirSync(dirUpload)
 
         const [hasil1, hasil2] = await Promise.all([
-            kirimDenganFoto(986, {}, true, '/api/attendances/checkout'),
-            kirimDenganFoto(986, {}, true, '/api/attendances/checkout'),
+            kirimDenganFoto(986, LOKASI_VALID, true, '/api/attendances/checkout'),
+            kirimDenganFoto(986, LOKASI_VALID, true, '/api/attendances/checkout'),
         ])
 
         const sukses = [hasil1, hasil2].filter(h => h.status === 200)
@@ -459,45 +471,51 @@ describe('GET /api/attendances/today', () => {
         return { status: res.status, body }
     }
 
+    // getToday balikin { today, staleUnresolved } (lihat
+    // attendance.controller.js), bukan `today` mentah -- test ini
+    // sebelumnya masih mengasumsikan bentuk lama dan sudah lama gagal
+    // diam-diam (endpoint-nya diubah bentuk di commit b92b5e7 tanpa ikut
+    // memperbarui test ini). Ditemukan & dibenarkan sekalian di sini.
     test('null sebelum absen masuk', async () => {
         await bersihkanHariIni(989)
 
         const { status, body } = await get(989)
 
         assert.strictEqual(status, 200)
-        assert.strictEqual(body, null)
+        assert.strictEqual(body.today, null)
+        assert.strictEqual(body.staleUnresolved, null)
     })
 
     test('baris lengkap setelah absen masuk', async () => {
         await bersihkanHariIni(988)
 
-        const masuk = await kirimDenganFoto(988, {}, true, '/api/attendances/checkin')
+        const masuk = await kirimDenganFoto(988, LOKASI_VALID, true, '/api/attendances/checkin')
         assert.strictEqual(masuk.status, 200)
         attendanceIdsDibuat.push(masuk.data.id)
 
         const { status, body } = await get(988)
 
         assert.strictEqual(status, 200)
-        assert.strictEqual(body.id, masuk.data.id)
-        assert.ok(body.clock_in_time)
-        assert.strictEqual(body.clock_out_time, null)
+        assert.strictEqual(body.today.id, masuk.data.id)
+        assert.ok(body.today.clock_in_time)
+        assert.strictEqual(body.today.clock_out_time, null)
     })
 
     test('setelah checkin dan checkout, GET /today menunjukkan keduanya terisi', async () => {
         await bersihkanHariIni(985)
 
-        const masuk = await kirimDenganFoto(985, {}, true, '/api/attendances/checkin')
+        const masuk = await kirimDenganFoto(985, LOKASI_VALID, true, '/api/attendances/checkin')
         assert.strictEqual(masuk.status, 200)
         attendanceIdsDibuat.push(masuk.data.id)
 
-        const pulang = await kirimDenganFoto(985, {}, true, '/api/attendances/checkout')
+        const pulang = await kirimDenganFoto(985, LOKASI_VALID, true, '/api/attendances/checkout')
         assert.strictEqual(pulang.status, 200)
 
         const { status, body } = await get(985)
 
         assert.strictEqual(status, 200)
-        assert.ok(body.clock_in_time, 'clock_in_time seharusnya terisi')
-        assert.ok(body.clock_out_time, 'clock_out_time seharusnya terisi')
+        assert.ok(body.today.clock_in_time, 'clock_in_time seharusnya terisi')
+        assert.ok(body.today.clock_out_time, 'clock_out_time seharusnya terisi')
     })
 
 })

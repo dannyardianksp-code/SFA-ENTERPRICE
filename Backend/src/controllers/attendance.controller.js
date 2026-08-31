@@ -60,12 +60,20 @@ exports.checkIn = async (req, res) => {
             return sendError(res, 400, 'Foto wajib diisi untuk absen masuk.')
         }
 
-        const accuracyNum = accuracy === undefined ? null : Number(accuracy)
+        // Lokasi WAJIB, sama seperti check-in kunjungan customer --
+        // dicatat sebagai bukti, bukan syarat radius (tidak ada gerbang
+        // jarak di attendance), tapi kehadiran & validitasnya sendiri
+        // tidak boleh diloloskan begitu saja. Sebelumnya ketiganya cuma
+        // divalidasi KALAU dikirim, sehingga request tanpa lokasi sama
+        // sekali tetap diterima.
+        if (latitude === undefined || longitude === undefined || accuracy === undefined) {
+            fs.unlinkSync(req.file.path)
+            return sendError(res, 400, 'Lokasi wajib diisi untuk absen masuk.')
+        }
 
-        if (
-            accuracyNum !== null &&
-            (!Number.isFinite(accuracyNum) || accuracyNum <= 0)
-        ) {
+        const accuracyNum = Number(accuracy)
+
+        if (!Number.isFinite(accuracyNum) || accuracyNum <= 0) {
             fs.unlinkSync(req.file.path)
             return sendError(res, 400, 'Akurasi lokasi tidak valid.')
         }
@@ -73,10 +81,7 @@ exports.checkIn = async (req, res) => {
         const lat = parseCoordinate(latitude)
         const lng = parseCoordinate(longitude)
 
-        if (
-            (latitude !== undefined && !isValidLatitude(lat)) ||
-            (longitude !== undefined && !isValidLongitude(lng))
-        ) {
+        if (!isValidLatitude(lat) || !isValidLongitude(lng)) {
             fs.unlinkSync(req.file.path)
             return sendError(res, 400, 'Koordinat tidak valid.')
         }
@@ -139,12 +144,15 @@ exports.checkOut = async (req, res) => {
             return sendError(res, 400, 'Foto wajib diisi untuk absen pulang.')
         }
 
-        const accuracyNum = accuracy === undefined ? null : Number(accuracy)
+        // Sama alasannya dengan checkIn -- lokasi wajib, bukan opsional.
+        if (latitude === undefined || longitude === undefined || accuracy === undefined) {
+            fs.unlinkSync(req.file.path)
+            return sendError(res, 400, 'Lokasi wajib diisi untuk absen pulang.')
+        }
 
-        if (
-            accuracyNum !== null &&
-            (!Number.isFinite(accuracyNum) || accuracyNum <= 0)
-        ) {
+        const accuracyNum = Number(accuracy)
+
+        if (!Number.isFinite(accuracyNum) || accuracyNum <= 0) {
             fs.unlinkSync(req.file.path)
             return sendError(res, 400, 'Akurasi lokasi tidak valid.')
         }
@@ -152,10 +160,7 @@ exports.checkOut = async (req, res) => {
         const lat = parseCoordinate(latitude)
         const lng = parseCoordinate(longitude)
 
-        if (
-            (latitude !== undefined && !isValidLatitude(lat)) ||
-            (longitude !== undefined && !isValidLongitude(lng))
-        ) {
+        if (!isValidLatitude(lat) || !isValidLongitude(lng)) {
             fs.unlinkSync(req.file.path)
             return sendError(res, 400, 'Koordinat tidak valid.')
         }
