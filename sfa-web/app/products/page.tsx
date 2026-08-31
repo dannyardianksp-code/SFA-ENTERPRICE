@@ -197,6 +197,21 @@ export default function ProductsPage() {
     const [search, setSearch] = useState('')
     const [categoryFilter, setCategoryFilter] = useState('ALL')
 
+    const filteredProducts = products.filter((p: any) =>
+        p.name.toLowerCase().includes(search.toLowerCase()) &&
+        (categoryFilter === 'ALL' || (p.category || 'JUAL') === categoryFilter)
+    )
+
+    const PAGE_SIZE = 10
+    const [page, setPage] = useState(1)
+
+    const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE))
+    const halamanAman = Math.min(page, totalPages)
+    const productsHalamanIni = filteredProducts.slice(
+        (halamanAman - 1) * PAGE_SIZE,
+        halamanAman * PAGE_SIZE
+    )
+
     return (
 
         <div className="space-y-6">
@@ -418,7 +433,7 @@ export default function ProductsPage() {
 
                     value={search}
 
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => { setSearch(e.target.value); setPage(1) }}
 
                     className="w-full border rounded-xl p-3"
 
@@ -434,7 +449,7 @@ export default function ProductsPage() {
 
                             key={k}
 
-                            onClick={() => setCategoryFilter(k)}
+                            onClick={() => { setCategoryFilter(k); setPage(1) }}
 
                             className={`px-4 py-2 rounded-xl text-sm font-semibold ${categoryFilter === k
                                 ? 'bg-blue-600 text-white'
@@ -479,33 +494,7 @@ export default function ProductsPage() {
 
                         {
 
-                            products
-
-                                .filter((p: any) =>
-
-                                    p.name
-
-                                        .toLowerCase()
-
-                                        .includes(
-
-                                            search.toLowerCase()
-
-                                        )
-
-                                    &&
-
-                                    (
-
-                                        categoryFilter === 'ALL'
-
-                                        ||
-
-                                        (p.category || 'JUAL') === categoryFilter
-
-                                    )
-
-                                )
+                            productsHalamanIni
 
                                 .map((p: any) => (
 
@@ -594,6 +583,36 @@ export default function ProductsPage() {
                     </tbody>
 
                 </table>
+
+                {totalPages > 1 && (
+                    <div className="flex items-center justify-between p-4 border-t border-slate-200">
+
+                        <span className="text-sm text-slate-500">
+                            Halaman {halamanAman} dari {totalPages} ({filteredProducts.length} product)
+                        </span>
+
+                        <div className="flex gap-2">
+
+                            <button
+                                onClick={() => setPage(halamanAman - 1)}
+                                disabled={halamanAman <= 1}
+                                className="border border-slate-300 disabled:opacity-40 px-4 py-2 rounded-xl text-sm"
+                            >
+                                ‹ Sebelumnya
+                            </button>
+
+                            <button
+                                onClick={() => setPage(halamanAman + 1)}
+                                disabled={halamanAman >= totalPages}
+                                className="border border-slate-300 disabled:opacity-40 px-4 py-2 rounded-xl text-sm"
+                            >
+                                Berikutnya ›
+                            </button>
+
+                        </div>
+
+                    </div>
+                )}
 
             </div>
 
