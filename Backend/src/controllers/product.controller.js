@@ -60,6 +60,7 @@ exports.create = async (req, res) => {
                 uom: req.body.uom,
                 is_active: req.body.is_active,
                 category: req.body.category,
+                item_group: req.body.item_group,
                 // Foto ter-upload menang atas photo_url string (form
                 // lama/legacy) -- sama pola dengan visitActivity/
                 // attendance: req.file duluan, baru fallback ke body.
@@ -103,6 +104,7 @@ exports.update = async (req, res) => {
                 uom: req.body.uom,
                 is_active: req.body.is_active,
                 category: req.body.category,
+                item_group: req.body.item_group,
                 // Tidak upload foto baru -> photo_url tetap dari body
                 // (undefined kalau field ini memang tidak dikirim, dan
                 // Sequelize membuang key undefined -- kolom lama tidak

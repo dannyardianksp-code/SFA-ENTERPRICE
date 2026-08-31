@@ -20,6 +20,11 @@ const Product = db.define('Product', {
     // lama yang belum diisi tidak perlu migrasi data terpisah.
     category: DataTypes.STRING,
 
+    // Klasifikasi tambahan, terpisah dari `category` -- nilai tetap:
+    // CC, CMP, NDC, RMS, RTD. Diinput langsung lewat form (bukan tabel
+    // master baru), sama gaya dengan `category`.
+    item_group: DataTypes.STRING,
+
     photo_url: DataTypes.TEXT,
 }, {
     tableName: 'products',

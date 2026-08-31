@@ -9,6 +9,10 @@ import {
 // (mobile/src/modules/product/utils/group-by-category.ts).
 const KATEGORI = ['JUAL', 'PROMOSI', 'COMPETITOR']
 
+// Klasifikasi tambahan, terpisah dari KATEGORI -- nilai tetap dari user,
+// bukan tabel master (lihat product.model.js).
+const ITEM_GROUP = ['CC', 'CMP', 'NDC', 'RMS', 'RTD']
+
 // photo_url disimpan sebagai path relatif "/uploads/..." (disajikan di
 // root server, bukan di bawah "/api") -- sama konvensi dengan mobile
 // (UPLOADS_ORIGIN di AttendanceScreen/CustomerVisitHistoryScreen dst).
@@ -25,7 +29,8 @@ export default function ProductsPage() {
         name: '',
         price: '',
         uom: '',
-        category: 'JUAL'
+        category: 'JUAL',
+        item_group: ''
 
     })
 
@@ -85,7 +90,8 @@ export default function ProductsPage() {
             name: '',
             price: '',
             uom: '',
-            category: 'JUAL'
+            category: 'JUAL',
+            item_group: ''
         })
         setPhoto(null)
         setPhotoPreview(null)
@@ -126,6 +132,7 @@ export default function ProductsPage() {
         body.append('price', form.price)
         body.append('uom', form.uom)
         body.append('category', form.category)
+        body.append('item_group', form.item_group)
         if (photo) body.append('photo', photo)
 
         await fetch(url, {
@@ -159,7 +166,8 @@ export default function ProductsPage() {
             name: p.name,
             price: p.price,
             uom: p.uom,
-            category: p.category || 'JUAL'
+            category: p.category || 'JUAL',
+            item_group: p.item_group || ''
 
         })
 
@@ -359,6 +367,34 @@ export default function ProductsPage() {
 
                     </div>
 
+                    <div>
+
+                        <label className="font-medium">
+                            Item Group
+                        </label>
+
+                        <select
+
+                            name="item_group"
+
+                            value={form.item_group}
+
+                            onChange={handleChange}
+
+                            className="w-full mt-2 border rounded-xl p-3"
+
+                        >
+
+                            <option value="">- Pilih -</option>
+
+                            {ITEM_GROUP.map((g) => (
+                                <option key={g} value={g}>{g}</option>
+                            ))}
+
+                        </select>
+
+                    </div>
+
                     <div className="md:col-span-2">
 
                         <label className="font-medium">
@@ -482,6 +518,7 @@ export default function ProductsPage() {
                             <th className="p-4 text-sm font-semibold text-slate-500">Code</th>
                             <th className="p-4 text-sm font-semibold text-slate-500">Name</th>
                             <th className="p-4 text-sm font-semibold text-slate-500">Category</th>
+                            <th className="p-4 text-sm font-semibold text-slate-500">Item Group</th>
                             <th className="p-4 text-sm font-semibold text-slate-500">Price</th>
                             <th className="p-4 text-sm font-semibold text-slate-500">UOM</th>
                             <th className="p-4 text-sm font-semibold text-slate-500">Aksi</th>
@@ -532,6 +569,10 @@ export default function ProductsPage() {
                                             <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700">
                                                 {p.category || 'JUAL'}
                                             </span>
+                                        </td>
+
+                                        <td className="p-4 text-slate-600">
+                                            {p.item_group || '-'}
                                         </td>
 
                                         <td className="p-4 text-blue-600 font-bold">
