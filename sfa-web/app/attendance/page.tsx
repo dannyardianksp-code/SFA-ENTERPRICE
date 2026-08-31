@@ -94,13 +94,20 @@ export default function AttendanceReportPage() {
     const jam = (iso: string | null) =>
         iso ? new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'
 
+    // Format sama dipakai buat kolom Tanggal (a.tanggal, DATEONLY
+    // "YYYY-MM-DD") dan Tanggal Out (dari clock_out_time, timestamp ISO)
+    // -- keduanya harus tampil dengan format yang sama persis.
+    const formatTanggal = (nilai: string | null) =>
+        nilai
+            ? new Date(nilai).toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' })
+            : '-'
+
     // Tanggal Out kolom terpisah -- checkOut bisa menutup absen masuk
     // dari HARI SEBELUMNYA (kasus "belum absen pulang" -- checkOut
     // menutup absen terlama yang masih terbuka, bukan cuma milik
     // tanggal baris ini), jadi tanggal pulang tidak selalu sama dengan
-    // kolom Tanggal (yang itu tanggal absen masuk).
-    const tanggalOut = (iso: string | null) =>
-        iso ? new Date(iso).toLocaleDateString('id-ID') : '-'
+    // kolom Tanggal (yang itu tanggal absen masuk). Sama fungsi format
+    // dengan kolom Tanggal (formatTanggal) supaya tampilannya identik.
 
     // ======================
     // RENDER
@@ -213,8 +220,8 @@ export default function AttendanceReportPage() {
                                 'Sales',
                                 'Tanggal',
                                 'Clock In',
-                                'Clock Out',
                                 'Tanggal Out',
+                                'Clock Out',
                                 'Map Masuk',
                                 'Map Pulang'
                             ].map((h) => (
@@ -261,11 +268,15 @@ export default function AttendanceReportPage() {
                                 </td>
 
                                 <td style={{ padding: 12 }}>
-                                    {a.tanggal}
+                                    {formatTanggal(a.tanggal)}
                                 </td>
 
                                 <td style={{ padding: 12 }}>
                                     {jam(a.clock_in_time)}
+                                </td>
+
+                                <td style={{ padding: 12 }}>
+                                    {formatTanggal(a.clock_out_time)}
                                 </td>
 
                                 <td style={{ padding: 12 }}>
@@ -280,10 +291,6 @@ export default function AttendanceReportPage() {
                                             Belum pulang
                                         </span>
                                     )}
-                                </td>
-
-                                <td style={{ padding: 12 }}>
-                                    {tanggalOut(a.clock_out_time)}
                                 </td>
 
                                 <td style={{ padding: 12 }}>
