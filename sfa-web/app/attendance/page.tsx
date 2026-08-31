@@ -94,23 +94,13 @@ export default function AttendanceReportPage() {
     const jam = (iso: string | null) =>
         iso ? new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'
 
-    // Clock Out bisa menutup absen masuk dari HARI SEBELUMNYA (kasus
-    // "belum absen pulang" -- checkOut menutup absen terlama yang masih
-    // terbuka, bukan cuma milik tanggal baris ini). Kolom "Tanggal" di
-    // tabel cuma tanggal absen MASUK, jadi tanggal pulang ikut
-    // ditampilkan di sini kalau beda hari dari tanggal masuknya --
-    // supaya jelas ini bukan pulang di hari yang sama.
-    const jamPulang = (iso: string | null, tanggalMasuk: string) => {
-        if (!iso) return '-'
-
-        const d = new Date(iso)
-        const tanggalPulang = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' })
-        const jamText = d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
-
-        if (tanggalPulang === tanggalMasuk) return jamText
-
-        return `${d.toLocaleDateString('id-ID')} ${jamText}`
-    }
+    // Tanggal Out kolom terpisah -- checkOut bisa menutup absen masuk
+    // dari HARI SEBELUMNYA (kasus "belum absen pulang" -- checkOut
+    // menutup absen terlama yang masih terbuka, bukan cuma milik
+    // tanggal baris ini), jadi tanggal pulang tidak selalu sama dengan
+    // kolom Tanggal (yang itu tanggal absen masuk).
+    const tanggalOut = (iso: string | null) =>
+        iso ? new Date(iso).toLocaleDateString('id-ID') : '-'
 
     // ======================
     // RENDER
@@ -224,6 +214,7 @@ export default function AttendanceReportPage() {
                                 'Tanggal',
                                 'Clock In',
                                 'Clock Out',
+                                'Tanggal Out',
                                 'Map Masuk',
                                 'Map Pulang'
                             ].map((h) => (
@@ -246,7 +237,7 @@ export default function AttendanceReportPage() {
 
                         {filtered.length === 0 && (
                             <tr>
-                                <td colSpan={7} style={{
+                                <td colSpan={8} style={{
                                     padding: 20,
                                     textAlign: 'center',
                                     color: '#9ca3af'
@@ -278,7 +269,7 @@ export default function AttendanceReportPage() {
                                 </td>
 
                                 <td style={{ padding: 12 }}>
-                                    {a.clock_out_time ? jamPulang(a.clock_out_time, a.tanggal) : (
+                                    {a.clock_out_time ? jam(a.clock_out_time) : (
                                         <span style={{
                                             padding: '4px 10px',
                                             borderRadius: 20,
@@ -289,6 +280,10 @@ export default function AttendanceReportPage() {
                                             Belum pulang
                                         </span>
                                     )}
+                                </td>
+
+                                <td style={{ padding: 12 }}>
+                                    {tanggalOut(a.clock_out_time)}
                                 </td>
 
                                 <td style={{ padding: 12 }}>
