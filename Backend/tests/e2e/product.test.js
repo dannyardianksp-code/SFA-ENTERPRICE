@@ -6,7 +6,16 @@ const jwt = require('jsonwebtoken')
 const mysql = require('mysql2/promise')
 
 const BASE = process.env.TEST_BASE_URL || 'http://localhost:1000'
-const SPG = 1
+
+// Sebelumnya token ini memakai id 1 (DANNY, user sungguhan) dengan
+// asumsi role-nya tidak relevan -- benar selama create/update product
+// belum bergerbang. Sekarang product.routes.js menolak non-administrator
+// (lihat product.controller.js), dan role DANNY yang sebenarnya di
+// database adalah SPG, jadi token id 1 akan ditolak 403. Ganti ke
+// fixture sintetis ber-role ADMINISTRATOR, pola sama dengan
+// USER_ID_SEMENTARA di attendance.test.js.
+const ADMIN_ID = 970
+const SPG_ID = 971
 
 let db
 const produkIdsDibuat = []
@@ -19,7 +28,7 @@ const kirim = async (method, path, body) => {
         method,
         headers: {
             'Content-Type': 'application/json',
-            Authorization: 'Bearer ' + tokenUntuk(SPG),
+            Authorization: 'Bearer ' + tokenUntuk(ADMIN_ID),
         },
         body: body === undefined ? undefined : JSON.stringify(body),
     })
@@ -50,6 +59,20 @@ before(async () => {
         password: process.env.DB_PASS,
         database: process.env.DB_NAME,
     })
+
+    await db.query(
+        `INSERT INTO users (id, code, name, email, password, role, status)
+         VALUES (?, ?, ?, ?, ?, 'ADMINISTRATOR', 'ACTIVE')
+         ON DUPLICATE KEY UPDATE role = 'ADMINISTRATOR', status = 'ACTIVE'`,
+        [ADMIN_ID, 'PRD-TEST-970', 'ADMIN SEMENTARA TES PRODUCT', 'prd-test-970@contoh.test', 'hash-tidak-dipakai']
+    )
+
+    await db.query(
+        `INSERT INTO users (id, code, name, email, password, role, status)
+         VALUES (?, ?, ?, ?, ?, 'SPG', 'ACTIVE')
+         ON DUPLICATE KEY UPDATE role = 'SPG', status = 'ACTIVE'`,
+        [SPG_ID, 'PRD-TEST-971', 'SPG SEMENTARA TES PRODUCT', 'prd-test-971@contoh.test', 'hash-tidak-dipakai']
+    )
 })
 
 after(async () => {
@@ -57,6 +80,8 @@ after(async () => {
         for (const id of produkIdsDibuat) {
             await db.query('DELETE FROM products WHERE id = ?', [id])
         }
+
+        await db.query('DELETE FROM users WHERE id IN (?, ?)', [ADMIN_ID, SPG_ID])
 
         await db.end()
     }
@@ -79,6 +104,24 @@ describe('GET /api/products', () => {
 
 
 describe('POST /api/products', () => {
+
+    test('role SPG ditolak 403 (Product Master admin-only)', async () => {
+        const res = await fetch(BASE + '/api/products', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: 'Bearer ' + tokenUntuk(SPG_ID),
+            },
+            body: JSON.stringify({
+                code: 'UJI-PRODUK-SPG',
+                name: 'Harus Ditolak',
+                price: 1000,
+                uom: 'PCS',
+            }),
+        })
+
+        assert.strictEqual(res.status, 403)
+    })
 
     test('field eksplisit tersimpan, field tak dikenal (mis. id) diabaikan', async () => {
         const { status, data } = await kirim('POST', '/api/products', {

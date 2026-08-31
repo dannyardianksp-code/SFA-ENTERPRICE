@@ -9,6 +9,11 @@ import {
 // (mobile/src/modules/product/utils/group-by-category.ts).
 const KATEGORI = ['JUAL', 'PROMOSI', 'COMPETITOR']
 
+// photo_url disimpan sebagai path relatif "/uploads/..." (disajikan di
+// root server, bukan di bawah "/api") -- sama konvensi dengan mobile
+// (UPLOADS_ORIGIN di AttendanceScreen/CustomerVisitHistoryScreen dst).
+const UPLOADS_ORIGIN = 'http://localhost:1000'
+
 export default function ProductsPage() {
 
     const [products, setProducts] =
@@ -23,6 +28,16 @@ export default function ProductsPage() {
         category: 'JUAL'
 
     })
+
+    // Foto terpisah dari `form` -- file, bukan teks, jadi tidak lewat
+    // handleChange biasa. photoPreview nampilin foto yang SUDAH
+    // tersimpan (mode edit) atau preview lokal foto baru yang baru
+    // dipilih, belum ke-upload.
+    const [photo, setPhoto] = useState<File | null>(null)
+    const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+    // Dipakai buat me-remount <input type="file"> setelah submit --
+    // input file itu uncontrolled, tidak bisa dikosongkan lewat value.
+    const [photoInputKey, setPhotoInputKey] = useState(0)
 
     const [editId, setEditId] =
         useState<number | null>(null)
@@ -64,6 +79,26 @@ export default function ProductsPage() {
 
     }
 
+    const resetForm = () => {
+        setForm({
+            code: '',
+            name: '',
+            price: '',
+            uom: '',
+            category: 'JUAL'
+        })
+        setPhoto(null)
+        setPhotoPreview(null)
+        setPhotoInputKey((k) => k + 1)
+        setEditId(null)
+    }
+
+    const handlePhotoChange = (e: any) => {
+        const file = e.target.files?.[0] || null
+        setPhoto(file)
+        setPhotoPreview(file ? URL.createObjectURL(file) : null)
+    }
+
     // SAVE
     const handleSubmit = async (
         e: any
@@ -81,31 +116,31 @@ export default function ProductsPage() {
         const method =
             editId ? 'PUT' : 'POST'
 
+        // FormData, bukan JSON -- endpoint ini sekarang terima upload
+        // foto (multer.single('photo')). Field teks tetap lewat sebagai
+        // bagian multipart yang sama, backend membacanya dari req.body
+        // seperti biasa.
+        const body = new FormData()
+        body.append('code', form.code)
+        body.append('name', form.name)
+        body.append('price', form.price)
+        body.append('uom', form.uom)
+        body.append('category', form.category)
+        if (photo) body.append('photo', photo)
+
         await fetch(url, {
 
             method,
 
             headers: {
-
-                'Content-Type': 'application/json',
-
                 Authorization: `Bearer ${token}`
-
             },
 
-            body: JSON.stringify(form)
+            body
 
         })
 
-        setForm({
-            code: '',
-            name: '',
-            price: '',
-            uom: '',
-            category: 'JUAL'
-        })
-
-        setEditId(null)
+        resetForm()
 
         fetchProducts()
 
@@ -127,6 +162,10 @@ export default function ProductsPage() {
             category: p.category || 'JUAL'
 
         })
+
+        setPhoto(null)
+        setPhotoPreview(p.photo_url ? `${UPLOADS_ORIGIN}${p.photo_url}` : null)
+        setPhotoInputKey((k) => k + 1)
 
     }
 
@@ -307,6 +346,38 @@ export default function ProductsPage() {
 
                     <div className="md:col-span-2">
 
+                        <label className="font-medium">
+                            Foto Product
+                        </label>
+
+                        <div className="mt-2 flex items-center gap-4">
+
+                            {photoPreview ? (
+                                <img
+                                    src={photoPreview}
+                                    alt="Preview"
+                                    className="w-16 h-16 rounded-xl object-cover border"
+                                />
+                            ) : (
+                                <div className="w-16 h-16 rounded-xl bg-slate-100 flex items-center justify-center text-2xl">
+                                    📦
+                                </div>
+                            )}
+
+                            <input
+                                key={photoInputKey}
+                                type="file"
+                                accept="image/*"
+                                onChange={handlePhotoChange}
+                                className="flex-1"
+                            />
+
+                        </div>
+
+                    </div>
+
+                    <div className="md:col-span-2">
+
                         <button
 
                             type="submit"
@@ -392,6 +463,7 @@ export default function ProductsPage() {
 
                         <tr>
 
+                            <th className="p-4 text-sm font-semibold text-slate-500">Foto</th>
                             <th className="p-4 text-sm font-semibold text-slate-500">Code</th>
                             <th className="p-4 text-sm font-semibold text-slate-500">Name</th>
                             <th className="p-4 text-sm font-semibold text-slate-500">Category</th>
@@ -444,6 +516,20 @@ export default function ProductsPage() {
                                         className="border-b border-slate-100 hover:bg-slate-50"
 
                                     >
+
+                                        <td className="p-4">
+                                            {p.photo_url ? (
+                                                <img
+                                                    src={`${UPLOADS_ORIGIN}${p.photo_url}`}
+                                                    alt={p.name}
+                                                    className="w-12 h-12 rounded-lg object-cover border"
+                                                />
+                                            ) : (
+                                                <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center text-lg">
+                                                    📦
+                                                </div>
+                                            )}
+                                        </td>
 
                                         <td className="p-4 text-slate-600">
                                             {p.code}
