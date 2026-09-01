@@ -39,6 +39,54 @@ function FixMap() {
     return null
 }
 
+// Peta sebelumnya cuma nge-center ke koordinat lokasi PERTAMA di list
+// dengan zoom tetap (11) -- kalau user lain (mis. SPG di bawah
+// supervisor yang login) posisinya jauh dari titik pertama itu,
+// markernya tetap ADA tapi di luar area yang kelihatan di layar,
+// seolah-olah tidak muncul sama sekali. Effect ini menyesuaikan
+// zoom/posisi peta supaya SEMUA marker yang ada kelihatan sekaligus,
+// setiap kali daftar lokasi berubah (bukan cuma sekali saat mount).
+function FitAllMarkers({ locations }: any) {
+    const map = useMap()
+
+    // Cuma sekali, pas data pertama kali datang -- halaman polling GET
+    // tiap 30 detik (page.tsx), dan `locations` jadi array BARU tiap
+    // polling walau isinya sama. Kalau effect ini jalan tiap polling,
+    // dia bakal nimpa terus posisi yang lagi dilihat user (termasuk
+    // hasil klik "fokus ke baris" di FocusOnSelected) tiap 30 detik --
+    // mengganggu, bukan membantu.
+    const sudahFit = useRef(false)
+
+    useEffect(() => {
+        if (sudahFit.current || locations.length === 0) return
+
+        sudahFit.current = true
+
+        if (locations.length === 1) {
+            map.setView(
+                [
+                    parseFloat(locations[0].latitude),
+                    parseFloat(locations[0].longitude)
+                ],
+                14
+            )
+            return
+        }
+
+        const bounds = L.latLngBounds(
+            locations.map((loc: any) => [
+                parseFloat(loc.latitude),
+                parseFloat(loc.longitude)
+            ])
+        )
+
+        map.fitBounds(bounds, { padding: [50, 50] })
+
+    }, [locations, map])
+
+    return null
+}
+
 // Klik baris di list (page.tsx) -- terbangkan map ke titiknya lalu buka
 // popup-nya. Zoom 16 (level jalan) dipakai supaya marker-nya lepas dari
 // cluster (radius cluster mengecil di zoom tinggi) -- bukan panggil API
@@ -122,6 +170,8 @@ export default function LiveTrackingMap({ locations, focusRequest }: any) {
         >
 
             <FixMap />
+
+            <FitAllMarkers locations={locations} />
 
             <FocusOnSelected
                 focusRequest={focusRequest}
