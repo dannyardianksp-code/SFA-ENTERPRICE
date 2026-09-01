@@ -1,5 +1,6 @@
 const UserLocation = require('../models/userLocation.model')
 const User = require('../models/user.model')
+const Area = require('../models/area.model')
 
 const { sendError, sendServerError } = require('../utils/response.util')
 const {
@@ -61,7 +62,18 @@ exports.getAll = async (req, res) => {
         const data = await UserLocation.findAll({
             where: ownerWhere(bolehDilihat),
             include: [
-                { model: User, attributes: ['id', 'name', 'role'] },
+                {
+                    model: User,
+                    attributes: ['id', 'name', 'role'],
+                    include: [
+                        {
+                            model: Area,
+                            as: 'AssignedAreas',
+                            attributes: ['id', 'code', 'name'],
+                            through: { attributes: [] },
+                        },
+                    ],
+                },
             ],
             order: [['updated_at', 'DESC']],
         })

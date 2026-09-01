@@ -11,6 +11,27 @@ const LiveTrackingMap = dynamic(() => import('../components/LiveTrackingMap'), {
 // ini polling tiap 30 detik. Bukan live ketat (detik-ke-detik).
 const POLL_MS = 30 * 1000
 
+// Duplikat kecil dari LiveTrackingMap.tsx (bukan di-import) -- file itu
+// dibungkus dynamic({ ssr:false }) karena leaflet, jadi helper murni ini
+// sengaja tidak ikut lewat jalur yang sama supaya tidak menyeret modul
+// leaflet ke evaluasi SSR halaman ini.
+const formatUmur = (updatedAt: string): string => {
+
+    const detik = Math.max(
+        0,
+        Math.floor((Date.now() - new Date(updatedAt).getTime()) / 1000)
+    )
+
+    if (detik < 60) return 'baru saja'
+    if (detik < 3600) return `${Math.floor(detik / 60)} menit lalu`
+    if (detik < 86400) return `${Math.floor(detik / 3600)} jam lalu`
+
+    return `${Math.floor(detik / 86400)} hari lalu`
+
+}
+
+const SEGAR_DETIK = 5 * 60
+
 export default function LiveTrackingPage() {
 
     const [locations, setLocations] = useState<any[]>([])
@@ -92,6 +113,72 @@ export default function LiveTrackingPage() {
                 )}
 
             </div>
+
+            {/* LIST */}
+            {!loading && locations.length > 0 && (
+
+                <div className="bg-white rounded-3xl shadow-lg overflow-hidden">
+
+                    <table className="w-full text-left">
+
+                        <thead className="bg-slate-50 border-b border-slate-200">
+
+                            <tr>
+                                <th className="p-4 text-sm font-semibold text-slate-500">Nama</th>
+                                <th className="p-4 text-sm font-semibold text-slate-500">Role</th>
+                                <th className="p-4 text-sm font-semibold text-slate-500">Area Cover</th>
+                                <th className="p-4 text-sm font-semibold text-slate-500">Update</th>
+                            </tr>
+
+                        </thead>
+
+                        <tbody>
+
+                            {locations.map((loc: any) => {
+
+                                const segar =
+                                    (Date.now() - new Date(loc.updated_at).getTime()) / 1000
+                                    < SEGAR_DETIK
+
+                                const areaCover =
+                                    loc.User?.AssignedAreas?.length > 0
+                                        ? loc.User.AssignedAreas.map((a: any) => a.code).join(', ')
+                                        : '-'
+
+                                return (
+                                    <tr
+                                        key={loc.user_id}
+                                        className="border-b border-slate-100 hover:bg-slate-50"
+                                    >
+
+                                        <td className="p-4 font-semibold text-slate-900">
+                                            {segar ? '🟢' : '⚪'} {loc.User?.name}
+                                        </td>
+
+                                        <td className="p-4 text-slate-600">
+                                            {loc.User?.role}
+                                        </td>
+
+                                        <td className="p-4 text-slate-600">
+                                            {areaCover}
+                                        </td>
+
+                                        <td className="p-4 text-slate-500 text-sm">
+                                            {formatUmur(loc.updated_at)}
+                                        </td>
+
+                                    </tr>
+                                )
+
+                            })}
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            )}
 
         </div>
     )
