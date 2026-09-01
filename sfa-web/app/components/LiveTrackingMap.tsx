@@ -10,7 +10,7 @@ import {
 
 import MarkerClusterGroup from 'react-leaflet-cluster'
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 import L from 'leaflet'
 
@@ -39,6 +39,40 @@ function FixMap() {
     return null
 }
 
+// Klik baris di list (page.tsx) -- terbangkan map ke titiknya lalu buka
+// popup-nya. Zoom 16 (level jalan) dipakai supaya marker-nya lepas dari
+// cluster (radius cluster mengecil di zoom tinggi) -- bukan panggil API
+// zoomToShowLayer milik react-leaflet-cluster langsung, cukup zoom
+// tinggi buat kasus normal (titik antar user jarang sedempet itu).
+function FocusOnSelected({ focusRequest, locations, markerRefs }: any) {
+    const map = useMap()
+
+    useEffect(() => {
+        if (!focusRequest) return
+
+        const loc = locations.find(
+            (l: any) => l.user_id === focusRequest.userId
+        )
+
+        if (!loc) return
+
+        map.flyTo(
+            [parseFloat(loc.latitude), parseFloat(loc.longitude)],
+            16,
+            { duration: 1 }
+        )
+
+        const timer = setTimeout(() => {
+            markerRefs.current[focusRequest.userId]?.openPopup()
+        }, 1000)
+
+        return () => clearTimeout(timer)
+
+    }, [focusRequest, locations, map, markerRefs])
+
+    return null
+}
+
 // Near-live, bukan live ketat -- posisi bisa berumur beberapa menit
 // (mobile ngirim tiap 2 menit, cuma pas app kebuka). Ditampilkan
 // eksplisit di popup biar admin tahu ini bukan detik-ke-detik.
@@ -62,7 +96,9 @@ const formatUmur = (updatedAt: string): string => {
 // tanpa perlu custom marker icon per warna.
 const SEGAR_DETIK = 5 * 60
 
-export default function LiveTrackingMap({ locations }: any) {
+export default function LiveTrackingMap({ locations, focusRequest }: any) {
+
+    const markerRefs = useRef<Record<number, L.Marker>>({})
 
     const center =
         locations.length > 0
@@ -87,6 +123,12 @@ export default function LiveTrackingMap({ locations }: any) {
 
             <FixMap />
 
+            <FocusOnSelected
+                focusRequest={focusRequest}
+                locations={locations}
+                markerRefs={markerRefs}
+            />
+
             <TileLayer
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
@@ -106,6 +148,9 @@ export default function LiveTrackingMap({ locations }: any) {
                                 parseFloat(loc.latitude),
                                 parseFloat(loc.longitude)
                             ]}
+                            ref={(el) => {
+                                if (el) markerRefs.current[loc.user_id] = el
+                            }}
                         >
 
                             <Popup>

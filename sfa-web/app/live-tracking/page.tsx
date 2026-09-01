@@ -38,6 +38,18 @@ export default function LiveTrackingPage() {
     const [loading, setLoading] = useState(true)
     const [lastFetch, setLastFetch] = useState<Date | null>(null)
 
+    // ts selalu beda tiap klik -- referensi object baru, jadi efek di
+    // LiveTrackingMap tetap kepicu walau baris yang sama diklik dua kali
+    // berturut-turut (userId doang gak akan berubah kalau diklik ulang).
+    const [focusRequest, setFocusRequest] =
+        useState<{ userId: number; ts: number } | null>(null)
+
+    const fokusKe = (userId: number) => {
+        setFocusRequest({ userId, ts: Date.now() })
+        document.getElementById('live-tracking-map')
+            ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+
     const fetchLocations = async () => {
 
         const token = localStorage.getItem('token')
@@ -98,7 +110,10 @@ export default function LiveTrackingPage() {
             </div>
 
             {/* MAP */}
-            <div className="bg-white rounded-3xl shadow-lg overflow-hidden">
+            <div
+                id="live-tracking-map"
+                className="bg-white rounded-3xl shadow-lg overflow-hidden"
+            >
 
                 {loading ? (
                     <div className="p-10 text-center text-slate-400">
@@ -109,7 +124,10 @@ export default function LiveTrackingPage() {
                         Belum ada posisi terkirim.
                     </div>
                 ) : (
-                    <LiveTrackingMap locations={locations} />
+                    <LiveTrackingMap
+                        locations={locations}
+                        focusRequest={focusRequest}
+                    />
                 )}
 
             </div>
@@ -148,7 +166,8 @@ export default function LiveTrackingPage() {
                                 return (
                                     <tr
                                         key={loc.user_id}
-                                        className="border-b border-slate-100 hover:bg-slate-50"
+                                        onClick={() => fokusKe(loc.user_id)}
+                                        className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"
                                     >
 
                                         <td className="p-4 font-semibold text-slate-900">
