@@ -46,6 +46,7 @@ app.use('/api/areas', require('./routes/area.routes'))
 app.use('/api/channels', require('./routes/channel.routes'))
 app.use('/api/classes', require('./routes/class.routes'))
 app.use('/api/activities', require('./routes/activity.routes'))
+app.use('/api/user-locations', require('./routes/userLocation.routes'))
 app.use('/api/dashboard', dashboardRoutes)
 app.use('/api/users',userAreaRoutes)
 

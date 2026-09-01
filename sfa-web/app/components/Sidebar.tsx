@@ -13,6 +13,7 @@ import {
     ShoppingCart,
     BarChart3,
     MapPin,
+    Navigation,
     Tag,
     Package,
     UserCog,
@@ -270,6 +271,14 @@ export default function Sidebar({
                     >
                         <BarChart3 size={18} />
                         {!collapsed && 'Report'}
+                    </Link>
+
+                    <Link
+                        href="/live-tracking"
+                        className={menuClass('/live-tracking')}
+                    >
+                        <Navigation size={18} />
+                        {!collapsed && 'Live Tracking'}
                     </Link>
 
                 </div>

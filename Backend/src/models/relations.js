@@ -12,6 +12,7 @@ const VisitActivity = require('./visitActivity.model')
 const Activity = require('./activity.model')
 const UserArea = require('./userArea.model')
 const Class = require('./class.model')
+const UserLocation = require('./userLocation.model')
 
 
 
@@ -147,6 +148,18 @@ Channel.hasMany(Activity, {
 Activity.belongsTo(Channel, {
 
     foreignKey: 'channel_id'
+
+})
+
+User.hasOne(UserLocation, {
+
+    foreignKey: 'user_id'
+
+})
+
+UserLocation.belongsTo(User, {
+
+    foreignKey: 'user_id'
 
 })
 
