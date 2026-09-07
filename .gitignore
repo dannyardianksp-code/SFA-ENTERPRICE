@@ -5,6 +5,11 @@ Backend/node_modules/
 Backend/.env
 Backend/uploads/
 
+# APK release yang didistribusikan langsung -- binary besar, gak masuk
+# git, di-upload manual ke server lewat SSH (lihat catatan di
+# Backend/src/app.js dekat route /download).
+releases/
+
 # ===========================
 # Frontend
 # ===========================

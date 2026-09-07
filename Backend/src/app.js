@@ -58,6 +58,13 @@ app.use('/api/dashboard', dashboardRoutes)
 app.use('/api/users',userAreaRoutes)
 app.use('/deploy-webhook', require('./routes/deploy.routes'))
 
+// APK release didistribusikan langsung dari sini (bukan Play Store) --
+// file-nya di releases/ (satu tingkat di atas Backend/, gitignored,
+// di-upload manual ke server, TIDAK ikut git pull). Reuse port 4321
+// yang sudah ke-port-forward di Mikrotik, jadi gak perlu daftarin
+// port baru lagi cuma buat distribusi APK.
+app.use('/download', express.static(require('path').join(__dirname, '..', '..', 'releases')))
+
 
 
 // health check
