@@ -27,7 +27,14 @@ const app = express()
 // middleware
 app.use(cors())
 
-app.use(express.json())
+// rawBody ditangkap buat verifikasi signature webhook GitHub (HMAC atas
+// byte mentah, bukan hasil parse) -- lihat deploy.controller.js. Berlaku
+// global (harmless buat route lain, cuma nyimpen buffer tambahan).
+app.use(express.json({
+    verify: (req, _res, buf) => {
+        req.rawBody = buf
+    },
+}))
 
 // routes
 app.use('/api/auth', authRoutes)
@@ -49,6 +56,7 @@ app.use('/api/activities', require('./routes/activity.routes'))
 app.use('/api/user-locations', require('./routes/userLocation.routes'))
 app.use('/api/dashboard', dashboardRoutes)
 app.use('/api/users',userAreaRoutes)
+app.use('/deploy-webhook', require('./routes/deploy.routes'))
 
 
 
