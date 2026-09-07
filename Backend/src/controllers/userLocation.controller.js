@@ -1,6 +1,16 @@
+const { Op } = require('sequelize')
+
 const UserLocation = require('../models/userLocation.model')
 const User = require('../models/user.model')
 const Area = require('../models/area.model')
+
+// Lewat batas ini dianggap bukan "near-live" lagi -- user yang gak
+// pernah buka app lagi (ping cuma sekali lalu berhenti) sebelumnya
+// nyangkut permanen di list/map selamanya, gak pernah hilang walau
+// datanya berbulan-bulan basi. 24 jam: kalau sales gak pernah buka
+// app sepanjang hari kerja, wajar dianggap "gak lagi di-track", bukan
+// sekadar "belum update sebentar".
+const BATAS_BASI_MS = 24 * 60 * 60 * 1000
 
 const { sendError, sendServerError } = require('../utils/response.util')
 const {
@@ -60,7 +70,10 @@ exports.getAll = async (req, res) => {
         const bolehDilihat = await resolveSubordinateUserIds(req.user)
 
         const data = await UserLocation.findAll({
-            where: ownerWhere(bolehDilihat),
+            where: {
+                ...ownerWhere(bolehDilihat),
+                updated_at: { [Op.gte]: new Date(Date.now() - BATAS_BASI_MS) },
+            },
             include: [
                 {
                     model: User,
