@@ -111,6 +111,33 @@ exports.create = async (req, res) => {
 
         }
 
+        // client_ref: dibikin di HP (lihat activity-queue di mobile),
+        // dipakai antrian offline biar retry (otomatis tiap 30 detik
+        // atau tombol "Sync Sekarang") tidak bikin activity dobel kalau
+        // request sebelumnya SEBENARNYA sudah sukses tapi respons-nya
+        // yang gagal sampai ke HP (mis. koneksi putus pas balik).
+        const clientRef =
+            typeof req.body.client_ref === 'string' && req.body.client_ref
+                ? req.body.client_ref
+                : null
+
+        if (clientRef) {
+
+            const sudahAda = await VisitActivity.findOne({
+                where: { client_ref: clientRef },
+                include: [{ model: Activity, as: 'Activity' }],
+            })
+
+            if (sudahAda) {
+                // Sudah pernah dibuat lewat request client_ref yang sama
+                // -- berkas baru yang baru saja diupload multer di
+                // request KEDUA ini duplikat, tidak dipakai.
+                if (req.file) fs.unlinkSync(req.file.path)
+                return res.json(sudahAda)
+            }
+
+        }
+
         const pesanValidasi = validateActivityFields(
             activityId,
             req.body,
@@ -136,6 +163,7 @@ exports.create = async (req, res) => {
             promo_price: req.body.promo_price || null,
             notes: req.body.notes || null,
             photo_url: req.file ? `/uploads/${req.file.filename}` : null,
+            client_ref: clientRef,
         })
 
         // Dimuat ulang dengan include Activity supaya bentuk responsnya
