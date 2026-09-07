@@ -10,6 +10,7 @@ import {
 import { useRouter }
     from 'next/navigation'
 import { getDistanceFromLatLonInKm } from "../utils/distance"
+import { API_BASE_URL } from '@/app/utils/api-config'
 
 // "YYYY-MM-DD" hari ini di waktu lokal browser -- dipakai sebagai
 // default filter tanggal (halaman ini defaultnya tampil rencana HARI
@@ -79,7 +80,7 @@ export default function VisitPlansPage() {
 
         // USERS
         const uRes = await fetch(
-            'http://localhost:1000/api/users',
+            `${API_BASE_URL}/users`,
             {
                 headers: {
                     Authorization: `Bearer ${token}`
@@ -93,7 +94,7 @@ export default function VisitPlansPage() {
 
         // CUSTOMERS
         const cRes = await fetch(
-            'http://localhost:1000/api/customers',
+            `${API_BASE_URL}/customers`,
             {
                 headers: {
                     Authorization: `Bearer ${token}`
@@ -115,7 +116,7 @@ export default function VisitPlansPage() {
 
         // PLANS
         const pRes = await fetch(
-            'http://localhost:1000/api/visit-plans',
+            `${API_BASE_URL}/visit-plans`,
             {
                 headers: {
                     Authorization: `Bearer ${token}`
@@ -207,7 +208,7 @@ export default function VisitPlansPage() {
             localStorage.getItem('token')
 
         await fetch(
-            'http://localhost:1000/api/visit-plans',
+            `${API_BASE_URL}/visit-plans`,
             {
 
                 method: 'POST',
@@ -266,7 +267,7 @@ export default function VisitPlansPage() {
 
             const res = await fetch(
 
-                `http://localhost:1000/api/visit-plans/${id}`,
+                `${API_BASE_URL}/visit-plans/${id}`,
 
                 {
 
@@ -396,7 +397,7 @@ export default function VisitPlansPage() {
             const response =
                 await fetch(
 
-                    "http://localhost:1000/api/visit-plans/template",
+                    `${API_BASE_URL}/visit-plans/template`,
 
                     {
 
@@ -474,7 +475,7 @@ export default function VisitPlansPage() {
             const response =
                 await fetch(
 
-                    "http://localhost:1000/api/visit-plans/upload",
+                    `${API_BASE_URL}/visit-plans/upload`,
 
                     {
 

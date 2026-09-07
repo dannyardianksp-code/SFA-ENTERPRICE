@@ -6,6 +6,7 @@ import {
 } from 'react'
 
 import { useRouter } from 'next/navigation'
+import { API_BASE_URL } from '@/app/utils/api-config'
 
 export default function CreateCustomerPage() {
 
@@ -45,7 +46,7 @@ export default function CreateCustomerPage() {
             localStorage.getItem('token')
 
         const res = await fetch(
-            'http://localhost:1000/api/customer-groups',
+            `${API_BASE_URL}/customer-groups`,
             {
                 headers: {
                     Authorization: `Bearer ${token}`
@@ -67,7 +68,7 @@ export default function CreateCustomerPage() {
 
             // AREA
             const areaRes = await fetch(
-                'http://localhost:1000/api/areas',
+                `${API_BASE_URL}/areas`,
                 {
                     headers: {
                         Authorization: `Bearer ${token}`
@@ -85,7 +86,7 @@ export default function CreateCustomerPage() {
 
             // CHANNEL
             const channelRes = await fetch(
-                'http://localhost:1000/api/channels',
+                `${API_BASE_URL}/channels`,
                 {
                     headers: {
                         Authorization: `Bearer ${token}`
@@ -102,7 +103,7 @@ export default function CreateCustomerPage() {
             )
 
             const groupRes = await fetch(
-                'http://localhost:1000/api/customer-groups',
+                `${API_BASE_URL}/customer-groups`,
                 {
                     headers: {
                         Authorization: `Bearer ${token}`
@@ -120,7 +121,7 @@ export default function CreateCustomerPage() {
 
             // CLASS
             const classRes = await fetch(
-                'http://localhost:1000/api/classes',
+                `${API_BASE_URL}/classes`,
                 {
                     headers: {
                         Authorization: `Bearer ${token}`
@@ -175,7 +176,7 @@ export default function CreateCustomerPage() {
         const token = localStorage.getItem('token')
 
         const res = await fetch(
-            'http://localhost:1000/api/customers',
+            `${API_BASE_URL}/customers`,
             {
                 method: 'POST',
                 headers: {

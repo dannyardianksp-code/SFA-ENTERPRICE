@@ -1,6 +1,7 @@
 'use client'
 
 import {
+    Suspense,
     useEffect,
     useState
 } from 'react'
@@ -12,9 +13,19 @@ import {
 
 import { useRef } from "react";
 
+import { API_BASE_URL } from '@/app/utils/api-config'
+
 
 
 export default function VisitActivityPage() {
+    return (
+        <Suspense fallback={null}>
+            <VisitActivityContent />
+        </Suspense>
+    )
+}
+
+function VisitActivityContent() {
 
     const router =
         useRouter()
@@ -93,7 +104,7 @@ export default function VisitActivityPage() {
                 const res =
                     await fetch(
 
-                        `http://localhost:1000/api/visits/${visit_id}/products`,
+                        `${API_BASE_URL}/visits/${visit_id}/products`,
 
                         {
 
@@ -145,7 +156,7 @@ export default function VisitActivityPage() {
                 const res =
                     await fetch(
 
-                        'http://localhost:1000/api/activities',
+                        `${API_BASE_URL}/activities`,
 
                         {
 
@@ -246,7 +257,7 @@ export default function VisitActivityPage() {
                 const res =
                     await fetch(
 
-                        'http://localhost:1000/api/visit-activities',
+                        `${API_BASE_URL}/visit-activities`,
 
                         {
 

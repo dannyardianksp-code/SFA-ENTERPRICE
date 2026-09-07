@@ -8,6 +8,7 @@ import {
 import {
     useRouter
 } from 'next/navigation'
+import { API_BASE_URL } from '@/app/utils/api-config'
 
 export default function CustomersPage() {
 
@@ -62,7 +63,7 @@ export default function CustomersPage() {
                 )
 
             const res = await fetch(
-                'http://localhost:1000/api/customers',
+                `${API_BASE_URL}/customers`,
                 {
                     headers: {
                         Authorization:
@@ -208,7 +209,7 @@ export default function CustomersPage() {
                     )
 
                 const res = await fetch(
-                    'http://localhost:1000/api/visits/checkin',
+                    `${API_BASE_URL}/visits/checkin`,
                     {
 
                         method: 'POST',

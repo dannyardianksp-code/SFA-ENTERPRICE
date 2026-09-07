@@ -4,6 +4,7 @@ import {
     useEffect,
     useState
 } from 'react'
+import { API_BASE_URL } from '@/app/utils/api-config'
 
 export default function CustomerProductsPage() {
 
@@ -27,7 +28,7 @@ export default function CustomerProductsPage() {
 
         // CUSTOMERS
         const cRes = await fetch(
-            'http://localhost:1000/api/customers',
+            `${API_BASE_URL}/customers`,
             {
                 headers: {
                     Authorization: `Bearer ${token}`
@@ -41,7 +42,7 @@ export default function CustomerProductsPage() {
 
         // PRODUCTS
         const pRes = await fetch(
-            'http://localhost:1000/api/products',
+            `${API_BASE_URL}/products`,
             {
                 headers: {
                     Authorization: `Bearer ${token}`
@@ -96,7 +97,7 @@ export default function CustomerProductsPage() {
             localStorage.getItem('token')
 
         await fetch(
-            'http://localhost:1000/api/customer-products',
+            `${API_BASE_URL}/customer-products`,
             {
 
                 method: 'POST',

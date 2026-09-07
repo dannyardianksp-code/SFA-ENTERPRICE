@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { API_BASE_URL } from '@/app/utils/api-config'
 
 export default function MasterActivitiesPage() {
 
@@ -23,7 +24,7 @@ export default function MasterActivitiesPage() {
 
         const token = localStorage.getItem('token')
 
-        const res = await fetch('http://localhost:1000/api/activities', {
+        const res = await fetch(`${API_BASE_URL}/activities`, {
             headers: {
                 Authorization: `Bearer ${token}`
             }
@@ -37,7 +38,7 @@ export default function MasterActivitiesPage() {
 
         const token = localStorage.getItem('token')
 
-        const res = await fetch('http://localhost:1000/api/channels', {
+        const res = await fetch(`${API_BASE_URL}/channels`, {
             headers: {
                 Authorization: `Bearer ${token}`
             }
@@ -75,8 +76,8 @@ export default function MasterActivitiesPage() {
         const token = localStorage.getItem('token')
 
         const url = editId
-            ? `http://localhost:1000/api/activities/${editId}`
-            : `http://localhost:1000/api/activities`
+            ? `${API_BASE_URL}/activities/${editId}`
+            : `${API_BASE_URL}/activities`
 
         const method = editId ? 'PUT' : 'POST'
 

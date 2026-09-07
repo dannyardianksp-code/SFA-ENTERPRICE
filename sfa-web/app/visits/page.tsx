@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { API_BASE_URL } from '@/app/utils/api-config'
 
 const pad2 = (n: number) => String(n).padStart(2, '0')
 
@@ -43,17 +44,17 @@ export default function VisitHistoryPage() {
 
         const [vRes, uRes, aRes] = await Promise.all([
 
-            fetch('http://localhost:1000/api/visits', {
+            fetch(`${API_BASE_URL}/visits`, {
                 headers: { Authorization: `Bearer ${token}` }
             }),
 
             // Area ada di tabel users, bukan di visits -- dipakai buat
             // memetakan User.id (di setiap visit) ke Area-nya.
-            fetch('http://localhost:1000/api/users', {
+            fetch(`${API_BASE_URL}/users`, {
                 headers: { Authorization: `Bearer ${token}` }
             }),
 
-            fetch('http://localhost:1000/api/areas', {
+            fetch(`${API_BASE_URL}/areas`, {
                 headers: { Authorization: `Bearer ${token}` }
             })
 

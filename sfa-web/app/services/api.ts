@@ -1,4 +1,6 @@
-const BASE_URL = 'http://localhost:1000/api'
+import { API_BASE_URL } from '@/app/utils/api-config'
+
+const BASE_URL = API_BASE_URL
 
 export const fetchOrders = async (token: string) => {
     const res = await fetch(`${BASE_URL}/orders`, {

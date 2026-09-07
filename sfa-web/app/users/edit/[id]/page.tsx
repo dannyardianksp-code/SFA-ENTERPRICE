@@ -10,6 +10,8 @@ import {
     useRouter
 } from 'next/navigation'
 
+import { API_BASE_URL } from '@/app/utils/api-config'
+
 // Role di atas key ini yang mengawasi -- dipakai untuk filter kandidat
 // atasan dan untuk menampilkan/menyembunyikan kartu Hierarchy Assignment.
 // GENERAL MANAGER tidak punya entry (puncak rantai, tidak butuh atasan).
@@ -70,7 +72,7 @@ export default function EditUserPage() {
             const res =
                 await fetch(
 
-                    `http://localhost:1000/api/users/${params.id}`,
+                    `${API_BASE_URL}/users/${params.id}`,
 
                     {
 
@@ -137,7 +139,7 @@ export default function EditUserPage() {
             const areaRes =
                 await fetch(
 
-                    'http://localhost:1000/api/areas',
+                    `${API_BASE_URL}/areas`,
 
                     {
 
@@ -169,7 +171,7 @@ export default function EditUserPage() {
             const channelRes =
                 await fetch(
 
-                    'http://localhost:1000/api/channels',
+                    `${API_BASE_URL}/channels`,
 
                     {
 
@@ -201,7 +203,7 @@ export default function EditUserPage() {
             const spvRes =
                 await fetch(
 
-                    'http://localhost:1000/api/users',
+                    `${API_BASE_URL}/users`,
 
                     {
 
@@ -307,7 +309,7 @@ export default function EditUserPage() {
             const res =
                 await fetch(
 
-                    `http://localhost:1000/api/users/${params.id}`,
+                    `${API_BASE_URL}/users/${params.id}`,
 
                     {
 

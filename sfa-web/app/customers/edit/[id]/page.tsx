@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import { API_BASE_URL } from '@/app/utils/api-config'
 
 export default function EditCustomerPage() {
 
@@ -31,11 +32,11 @@ export default function EditCustomerPage() {
 
             const [custRes, classRes] = await Promise.all([
 
-                fetch(`http://localhost:1000/api/customers/${params.id}`, {
+                fetch(`${API_BASE_URL}/customers/${params.id}`, {
                     headers: { Authorization: `Bearer ${token}` }
                 }),
 
-                fetch('http://localhost:1000/api/classes', {
+                fetch(`${API_BASE_URL}/classes`, {
                     headers: { Authorization: `Bearer ${token}` }
                 })
 
@@ -88,7 +89,7 @@ export default function EditCustomerPage() {
         // customer_group_id dikunci di backend (kode customer dibentuk
         // dari situ), mengirimnya sekalipun tidak berubah cukup rawan
         // salah ketik nilai jadi beda dan ditolak backend.
-        const res = await fetch(`http://localhost:1000/api/customers/${params.id}`, {
+        const res = await fetch(`${API_BASE_URL}/customers/${params.id}`, {
 
             method: 'PUT',
 

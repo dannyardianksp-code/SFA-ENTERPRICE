@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { API_BASE_URL } from '@/app/utils/api-config'
 
 export default function ClassesPage() {
 
@@ -16,7 +17,7 @@ export default function ClassesPage() {
 
         const token = localStorage.getItem('token')
 
-        const res = await fetch('http://localhost:1000/api/classes', {
+        const res = await fetch(`${API_BASE_URL}/classes`, {
             headers: { Authorization: `Bearer ${token}` }
         })
 
@@ -68,8 +69,8 @@ export default function ClassesPage() {
         const token = localStorage.getItem('token')
 
         const url = editId
-            ? `http://localhost:1000/api/classes/${editId}`
-            : `http://localhost:1000/api/classes`
+            ? `${API_BASE_URL}/classes/${editId}`
+            : `${API_BASE_URL}/classes`
 
         const method = editId ? 'PUT' : 'POST'
 

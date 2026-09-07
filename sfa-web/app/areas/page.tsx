@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { API_BASE_URL } from '@/app/utils/api-config'
 
 const DEFAULT_RADIUS = 50
 
@@ -18,7 +19,7 @@ export default function AreasPage() {
 
         const token = localStorage.getItem('token')
 
-        const res = await fetch('http://localhost:1000/api/areas', {
+        const res = await fetch(`${API_BASE_URL}/areas`, {
             headers: { Authorization: `Bearer ${token}` }
         })
 
@@ -75,8 +76,8 @@ export default function AreasPage() {
         const token = localStorage.getItem('token')
 
         const url = editId
-            ? `http://localhost:1000/api/areas/${editId}`
-            : `http://localhost:1000/api/areas`
+            ? `${API_BASE_URL}/areas/${editId}`
+            : `${API_BASE_URL}/areas`
 
         const method = editId ? 'PUT' : 'POST'
 

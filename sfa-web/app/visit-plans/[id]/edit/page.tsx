@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import { API_BASE_URL } from '@/app/utils/api-config'
 
 export default function EditVisitPlanPage() {
 
@@ -27,14 +28,14 @@ export default function EditVisitPlanPage() {
 
             const [cRes, pRes] = await Promise.all([
 
-                fetch('http://localhost:1000/api/customers', {
+                fetch(`${API_BASE_URL}/customers`, {
                     headers: { Authorization: `Bearer ${token}` }
                 }),
 
                 // Tidak ada GET /api/visit-plans/:id -- ambil daftar
                 // penuh dan cari barisnya sendiri, sama seperti halaman
                 // daftar mengambil datanya.
-                fetch('http://localhost:1000/api/visit-plans', {
+                fetch(`${API_BASE_URL}/visit-plans`, {
                     headers: { Authorization: `Bearer ${token}` }
                 })
 
@@ -78,7 +79,7 @@ export default function EditVisitPlanPage() {
 
         const res = await fetch(
 
-            `http://localhost:1000/api/visit-plans/${params.id}`,
+            `${API_BASE_URL}/visit-plans/${params.id}`,
 
             {
 

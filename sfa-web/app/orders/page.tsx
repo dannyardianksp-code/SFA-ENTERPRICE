@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { fetchOrders } from '../services/api'
 import { getToken } from '../utils/auth'
+import { API_BASE_URL } from '@/app/utils/api-config'
 
 export default function OrdersPage() {
     const [orders, setOrders] = useState<any[]>([])
@@ -34,7 +35,7 @@ export default function OrdersPage() {
                     )
 
                 const res = await fetch(
-                    'http://localhost:1000/api/visits/checkin',
+                    `${API_BASE_URL}/visits/checkin`,
                     {
 
                         method: 'POST',

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
+import { API_BASE_URL } from '@/app/utils/api-config'
 
 // 🔥 WAJIB BIAR NGGAK ERROR
 const VisitMap = dynamic(() => import('../../components/VisitMap'), {
@@ -14,7 +15,7 @@ export default function VisitMapPage() {
     useEffect(() => {
         const token = localStorage.getItem('token')
 
-        fetch('http://localhost:1000/api/visits', {
+        fetch(`${API_BASE_URL}/visits`, {
             headers: {
                 Authorization: `Bearer ${token}`
             }

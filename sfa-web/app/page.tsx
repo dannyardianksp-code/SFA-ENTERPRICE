@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import TeamPerformanceChart from './components/TeamPerformanceChart'
+import { API_BASE_URL } from '@/app/utils/api-config'
 // import DashboardMap from './components/DashboardMap'
 export default function Dashboard() {
 
@@ -58,7 +59,7 @@ export default function Dashboard() {
       const res =
         await fetch(
 
-          'http://localhost:1000/api/dashboard/spg',
+          `${API_BASE_URL}/dashboard/spg`,
 
           {
 

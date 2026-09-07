@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { API_BASE_URL } from '@/app/utils/api-config'
 
 const pad2 = (n: number) => String(n).padStart(2, '0')
 
@@ -43,15 +44,15 @@ export default function AttendanceReportPage() {
 
         const [attRes, uRes, arRes] = await Promise.all([
 
-            fetch(`http://localhost:1000/api/attendances?${params.toString()}`, {
+            fetch(`${API_BASE_URL}/attendances?${params.toString()}`, {
                 headers: { Authorization: `Bearer ${token}` }
             }),
 
-            fetch('http://localhost:1000/api/users', {
+            fetch(`${API_BASE_URL}/users`, {
                 headers: { Authorization: `Bearer ${token}` }
             }),
 
-            fetch('http://localhost:1000/api/areas', {
+            fetch(`${API_BASE_URL}/areas`, {
                 headers: { Authorization: `Bearer ${token}` }
             })
 

@@ -4,6 +4,7 @@ import {
     useEffect,
     useState
 } from 'react'
+import { API_BASE_URL, UPLOADS_ORIGIN } from '@/app/utils/api-config'
 
 // Sama persis dengan CategoryKey di mobile
 // (mobile/src/modules/product/utils/group-by-category.ts).
@@ -12,11 +13,6 @@ const KATEGORI = ['JUAL', 'PROMOSI', 'COMPETITOR']
 // Klasifikasi tambahan, terpisah dari KATEGORI -- nilai tetap dari user,
 // bukan tabel master (lihat product.model.js).
 const ITEM_GROUP = ['CC', 'CMP', 'NDC', 'RMS', 'RTD']
-
-// photo_url disimpan sebagai path relatif "/uploads/..." (disajikan di
-// root server, bukan di bawah "/api") -- sama konvensi dengan mobile
-// (UPLOADS_ORIGIN di AttendanceScreen/CustomerVisitHistoryScreen dst).
-const UPLOADS_ORIGIN = 'http://localhost:1000'
 
 export default function ProductsPage() {
 
@@ -54,7 +50,7 @@ export default function ProductsPage() {
             localStorage.getItem('token')
 
         const res = await fetch(
-            'http://localhost:1000/api/products',
+            `${API_BASE_URL}/products`,
             {
                 headers: {
                     Authorization: `Bearer ${token}`
@@ -116,8 +112,8 @@ export default function ProductsPage() {
             localStorage.getItem('token')
 
         const url = editId
-            ? `http://localhost:1000/api/products/${editId}`
-            : 'http://localhost:1000/api/products'
+            ? `${API_BASE_URL}/products/${editId}`
+            : `${API_BASE_URL}/products`
 
         const method =
             editId ? 'PUT' : 'POST'
@@ -186,7 +182,7 @@ export default function ProductsPage() {
             localStorage.getItem('token')
 
         await fetch(
-            `http://localhost:1000/api/products/${id}`,
+            `${API_BASE_URL}/products/${id}`,
             {
 
                 method: 'DELETE',

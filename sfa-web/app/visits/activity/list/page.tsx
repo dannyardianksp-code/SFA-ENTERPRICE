@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { API_BASE_URL, UPLOADS_ORIGIN } from '@/app/utils/api-config'
 
 const pad2 = (n: number) => String(n).padStart(2, '0')
 
@@ -44,19 +45,19 @@ export default function ActivityListPage() {
 
         const [aRes, uRes, arRes, tRes] = await Promise.all([
 
-            fetch('http://localhost:1000/api/visit-activities', {
+            fetch(`${API_BASE_URL}/visit-activities`, {
                 headers: { Authorization: `Bearer ${token}` }
             }),
 
-            fetch('http://localhost:1000/api/users', {
+            fetch(`${API_BASE_URL}/users`, {
                 headers: { Authorization: `Bearer ${token}` }
             }),
 
-            fetch('http://localhost:1000/api/areas', {
+            fetch(`${API_BASE_URL}/areas`, {
                 headers: { Authorization: `Bearer ${token}` }
             }),
 
-            fetch('http://localhost:1000/api/activities', {
+            fetch(`${API_BASE_URL}/activities`, {
                 headers: { Authorization: `Bearer ${token}` }
             })
 
@@ -361,7 +362,7 @@ export default function ActivityListPage() {
                                     <td style={{ padding: 12 }}>
                                         {a.photo_url ? (
                                             <img
-                                                src={`http://localhost:1000${a.photo_url}`}
+                                                src={`${UPLOADS_ORIGIN}${a.photo_url}`}
                                                 style={{
                                                     width: 40,
                                                     height: 40,

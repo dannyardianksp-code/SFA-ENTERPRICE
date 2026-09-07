@@ -9,6 +9,8 @@ import {
     useRouter
 } from 'next/navigation'
 
+import { API_BASE_URL } from '@/app/utils/api-config'
+
 export default function UsersPage() {
 
     const router =
@@ -29,7 +31,7 @@ export default function UsersPage() {
             const res =
                 await fetch(
 
-                    'http://localhost:1000/api/users',
+                    `${API_BASE_URL}/users`,
 
                     {
 
@@ -70,7 +72,7 @@ export default function UsersPage() {
 
             await fetch(
 
-                `http://localhost:1000/api/users/${id}/status`,
+                `${API_BASE_URL}/users/${id}/status`,
 
                 {
 
@@ -116,7 +118,7 @@ export default function UsersPage() {
             const res =
                 await fetch(
 
-                    `http://localhost:1000/api/users/${id}/reset-password`,
+                    `${API_BASE_URL}/users/${id}/reset-password`,
 
                     {
 

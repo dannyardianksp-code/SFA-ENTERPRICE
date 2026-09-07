@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
+import { API_BASE_URL } from '@/app/utils/api-config'
 
 const LiveTrackingMap = dynamic(() => import('../components/LiveTrackingMap'), {
     ssr: false
@@ -54,7 +55,7 @@ export default function LiveTrackingPage() {
 
         const token = localStorage.getItem('token')
 
-        const res = await fetch('http://localhost:1000/api/user-locations', {
+        const res = await fetch(`${API_BASE_URL}/user-locations`, {
             headers: { Authorization: `Bearer ${token}` }
         })
 

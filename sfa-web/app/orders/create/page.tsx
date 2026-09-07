@@ -1,9 +1,18 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
+import { API_BASE_URL } from '@/app/utils/api-config'
 
 export default function CreateOrderPage() {
+    return (
+        <Suspense fallback={null}>
+            <CreateOrderForm />
+        </Suspense>
+    )
+}
+
+function CreateOrderForm() {
     const params = useSearchParams()
     const router = useRouter()
 
@@ -15,7 +24,7 @@ export default function CreateOrderPage() {
     useEffect(() => {
         const token = localStorage.getItem('token')
 
-        fetch('http://localhost:1000/api/products', {
+        fetch(`${API_BASE_URL}/products`, {
             headers: {
                 Authorization: `Bearer ${token}`
             }
@@ -31,7 +40,7 @@ export default function CreateOrderPage() {
     const submitOrder = async () => {
         const token = localStorage.getItem('token')
 
-        await fetch('http://localhost:1000/api/orders', {
+        await fetch(`${API_BASE_URL}/orders`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

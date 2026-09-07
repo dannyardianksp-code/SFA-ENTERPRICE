@@ -10,6 +10,8 @@ import {
     useRouter
 } from 'next/navigation'
 
+import { API_BASE_URL, UPLOADS_ORIGIN } from '@/app/utils/api-config'
+
 export default function VisitDetailPage() {
 
     const params = useParams()
@@ -44,7 +46,7 @@ export default function VisitDetailPage() {
 
             const res = await fetch(
 
-                `http://localhost:1000/api/visit-activities/visit/${params.id}`,
+                `${API_BASE_URL}/visit-activities/visit/${params.id}`,
 
                 {
 
@@ -84,7 +86,7 @@ export default function VisitDetailPage() {
 
         const res = await fetch(
 
-            `http://localhost:1000/api/visits/${params.id}`,
+            `${API_BASE_URL}/visits/${params.id}`,
 
             {
 
@@ -121,7 +123,7 @@ export default function VisitDetailPage() {
 
             const res = await fetch(
 
-                `http://localhost:1000/api/visits/${params.id}/checkout`,
+                `${API_BASE_URL}/visits/${params.id}/checkout`,
 
                 {
 
@@ -372,7 +374,7 @@ export default function VisitDetailPage() {
                             <div>
                                 {a.photo_url ? (
                                     <a
-                                        href={`http://localhost:1000${a.photo_url}`}
+                                        href={`${UPLOADS_ORIGIN}${a.photo_url}`}
                                         target="_blank"
                                         className="text-blue-600 font-semibold text-sm"
                                     >
