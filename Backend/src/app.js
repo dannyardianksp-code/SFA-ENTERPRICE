@@ -60,7 +60,7 @@ app.use('/deploy-webhook', require('./routes/deploy.routes'))
 
 
 
-// test endpoint
+// health check
 app.get('/', (req, res) => {
     res.send('SFA API RUNNING 🚀')
 })
