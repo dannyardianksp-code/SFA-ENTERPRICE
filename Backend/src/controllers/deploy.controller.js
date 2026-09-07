@@ -3,9 +3,11 @@ const { execFile } = require('child_process')
 const path = require('path')
 
 // Root repo (satu tingkat di atas Backend/) -- git pull jalan dari sini,
-// npm install + pm2 restart dari dalam Backend/.
+// npm install + pm2 restart masing-masing dari dalam Backend/ dan
+// sfa-web/.
 const REPO_ROOT = path.join(__dirname, '..', '..', '..')
 const BACKEND_DIR = path.join(__dirname, '..', '..')
+const SFA_WEB_DIR = path.join(REPO_ROOT, 'sfa-web')
 
 const verifySignature = (req) => {
     const secret = process.env.DEPLOY_WEBHOOK_SECRET
@@ -42,10 +44,19 @@ const deployWebhook = (req, res) => {
 
     res.json({ ok: true, deploying: true })
 
+    // sfa-web dibangun ulang & di-restart DULUAN -- proses itu independen
+    // dari proses yang lagi jalanin script ini. sfa-backend restart
+    // PALING TERAKHIR dengan sengaja: itu me-restart proses Node yang
+    // sedang mengeksekusi handler ini sendiri, jadi apa pun yang masih
+    // perlu jalan setelahnya berisiko keputus.
     const cmd = [
         'set -e',
         `cd "${REPO_ROOT}"`,
         'git pull origin main',
+        `cd "${SFA_WEB_DIR}"`,
+        'npm install',
+        'npm run build',
+        'pm2 restart sfa-web',
         `cd "${BACKEND_DIR}"`,
         'npm install --omit=dev',
         'pm2 restart sfa-backend',
