@@ -4,6 +4,15 @@ const router =
 const Area =
     require('../models/area.model')
 
+const User =
+    require('../models/user.model')
+
+const Customer =
+    require('../models/customer.model')
+
+const UserArea =
+    require('../models/userArea.model')
+
 const auth =
     require('../middleware/auth.middleware')
 
@@ -93,10 +102,7 @@ router.post(
 )
 
 // UPDATE -- ADMINISTRATOR saja, sama pola gerbang dengan user
-// management. Cuma name/code/checkin_radius_meters, area tidak
-// pernah dibuat/dihapus lewat endpoint ini (43 area sudah di-seed,
-// menambah/menghapus butuh koordinasi struktur organisasi yang lebih
-// luas -- di luar cakupan halaman ini).
+// management.
 router.put(
 
     '/:id',
@@ -156,6 +162,70 @@ router.put(
 
         } catch (err) {
             return sendServerError(res, err, 'UPDATE AREA')
+        }
+
+    }
+
+)
+
+// DELETE -- ADMINISTRATOR saja. Ditolak (400) kalau area ini masih
+// dipakai User/Customer/penugasan area (user_areas) -- users.area_id
+// dan customers.area_id TIDAK punya FK constraint di database (dicek
+// langsung lewat information_schema saat menulis endpoint ini), jadi
+// tanpa pengecekan manual ini penghapusan akan "berhasil" tapi
+// meninggalkan baris User/Customer yang menunjuk ke area_id yang
+// sudah tidak ada.
+router.delete(
+
+    '/:id',
+
+    auth,
+
+    async (req, res) => {
+
+        try {
+
+            if (!req.user || !USER_MANAGER_ROLES.includes(req.user.role)) {
+                return sendError(
+                    res,
+                    403,
+                    'Hanya administrator yang boleh mengelola area.'
+                )
+            }
+
+            const area = await Area.findByPk(req.params.id)
+
+            if (!area) {
+                return sendError(res, 404, 'Area tidak ditemukan.')
+            }
+
+            const [jumlahUser, jumlahCustomer, jumlahPenugasan] = await Promise.all([
+                User.count({ where: { area_id: req.params.id } }),
+                Customer.count({ where: { area_id: req.params.id } }),
+                UserArea.count({ where: { area_id: req.params.id } }),
+            ])
+
+            if (jumlahUser > 0 || jumlahCustomer > 0 || jumlahPenugasan > 0) {
+
+                const bagian = []
+                if (jumlahUser > 0) bagian.push(`${jumlahUser} user`)
+                if (jumlahCustomer > 0) bagian.push(`${jumlahCustomer} customer`)
+                if (jumlahPenugasan > 0) bagian.push(`${jumlahPenugasan} penugasan sales`)
+
+                return sendError(
+                    res,
+                    400,
+                    `Area ini tidak bisa dihapus -- masih dipakai oleh ${bagian.join(', ')}.`
+                )
+
+            }
+
+            await area.destroy()
+
+            res.json({ message: 'Area berhasil dihapus.' })
+
+        } catch (err) {
+            return sendServerError(res, err, 'DELETE AREA')
         }
 
     }

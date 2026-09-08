@@ -5,6 +5,9 @@ const { Op } = require('sequelize')
 const Activity =
     require('../models/activity.model')
 
+const VisitActivity =
+    require('../models/visitActivity.model')
+
 const auth =
     require('../middleware/auth.middleware')
 
@@ -127,6 +130,53 @@ router.put(
 
         } catch (err) {
             return sendServerError(res, err, 'UPDATE ACTIVITY')
+        }
+
+    }
+)
+
+// DELETE -- ADMINISTRATOR saja. Ditolak (400, bukan 500 dari FK
+// constraint mentah) kalau activity ini pernah dipakai di visit_activities
+// -- menghapusnya akan merusak riwayat activity yang sudah tercatat.
+router.delete(
+    '/:id',
+    auth,
+    async (req, res) => {
+
+        try {
+
+            if (!req.user || !USER_MANAGER_ROLES.includes(req.user.role)) {
+                return sendError(
+                    res,
+                    403,
+                    'Hanya administrator yang boleh mengelola activity.'
+                )
+            }
+
+            const activity = await Activity.findByPk(req.params.id)
+
+            if (!activity) {
+                return sendError(res, 404, 'Activity tidak ditemukan.')
+            }
+
+            const jumlahDipakai = await VisitActivity.count({
+                where: { activity_id: req.params.id }
+            })
+
+            if (jumlahDipakai > 0) {
+                return sendError(
+                    res,
+                    400,
+                    `Activity ini tidak bisa dihapus -- masih dipakai di ${jumlahDipakai} riwayat kunjungan.`
+                )
+            }
+
+            await activity.destroy()
+
+            res.json({ message: 'Activity berhasil dihapus.' })
+
+        } catch (err) {
+            return sendServerError(res, err, 'DELETE ACTIVITY')
         }
 
     }
