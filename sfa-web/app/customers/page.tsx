@@ -26,7 +26,11 @@ export default function CustomersPage() {
     // ==================================================
     // GET USER GPS
     // ==================================================
-
+    // Cuma buat fitur "jarak terdekat" (sort + KPI Nearby Customer) --
+    // TIDAK boleh dijadikan syarat buat menampilkan list customer.
+    // Sebelumnya fetch customer digantung nunggu ini, jadi kalau browser
+    // menolak/menunda izin lokasi (umum banget di desktop/laptop admin),
+    // list customer tidak pernah muncul sama sekali.
     useEffect(() => {
 
         navigator.geolocation.getCurrentPosition(
@@ -43,6 +47,12 @@ export default function CustomersPage() {
 
                 })
 
+            },
+
+            () => {
+                // Izin ditolak / gagal / timeout -- list customer tetap
+                // tampil tanpa info jarak, cuma fitur sortir terdekat
+                // yang tidak aktif.
             }
 
         )
@@ -52,7 +62,8 @@ export default function CustomersPage() {
     // ==================================================
     // LOAD CUSTOMERS
     // ==================================================
-
+    // Jalan sekali di awal, TIDAK menunggu userLocation. Efek terpisah
+    // di bawah yang menambahkan jarak begitu lokasi tersedia.
     useEffect(() => {
 
         const fetchCustomers = async () => {
@@ -75,56 +86,60 @@ export default function CustomersPage() {
             const data =
                 await res.json()
 
-            // HITUNG JARAK
-            const mapped =
-                data.map((c: any) => {
-
-                    let distance = 0
-
-                    if (
-                        userLocation &&
-                        c.latitude &&
-                        c.longitude
-                    ) {
-
-                        distance =
-                            getDistanceFromLatLonInKm(
-
-                                userLocation.latitude,
-                                userLocation.longitude,
-
-                                parseFloat(c.latitude),
-                                parseFloat(c.longitude)
-
-                            )
-
-                    }
-
-                    return {
-
-                        ...c,
-
-                        distance
-
-                    }
-
-                })
-
-            // SORT NEAREST
-            mapped.sort(
-                (a: any, b: any) =>
-                    a.distance - b.distance
+            // distance: null (bukan 0) selama lokasi belum ada --
+            // 0 akan membuat KPI "Nearby Customer" menghitung SEMUA
+            // customer sebagai terdekat sebelum lokasi sungguhan didapat.
+            setCustomers(
+                data.map((c: any) => ({
+                    ...c,
+                    distance: null
+                }))
             )
 
-            setCustomers(mapped)
-
         }
 
-        if (userLocation) {
+        fetchCustomers()
 
-            fetchCustomers()
+    }, [])
 
-        }
+    // ==================================================
+    // HITUNG JARAK begitu lokasi user tersedia
+    // ==================================================
+    useEffect(() => {
+
+        if (!userLocation) return
+
+        setCustomers((prev) => {
+
+            const withDistance = prev.map((c: any) => {
+
+                if (!c.latitude || !c.longitude) {
+                    return { ...c, distance: null }
+                }
+
+                return {
+                    ...c,
+                    distance: getDistanceFromLatLonInKm(
+                        userLocation.latitude,
+                        userLocation.longitude,
+                        parseFloat(c.latitude),
+                        parseFloat(c.longitude)
+                    )
+                }
+
+            })
+
+            // SORT NEAREST -- customer tanpa koordinat/jarak diketahui
+            // didorong ke akhir, bukan ikut di posisi terdepan seolah
+            // jaraknya 0.
+            withDistance.sort(
+                (a: any, b: any) =>
+                    (a.distance ?? Infinity) - (b.distance ?? Infinity)
+            )
+
+            return withDistance
+
+        })
 
     }, [userLocation])
 
@@ -341,7 +356,7 @@ export default function CustomersPage() {
 
                             customers.filter(
 
-                                c => c.distance < 5
+                                c => c.distance != null && c.distance < 5
 
                             ).length
 
