@@ -62,6 +62,30 @@ export default function ClassesPage() {
         setForm({ code: '', name: '' })
     }
 
+    const handleDelete = async (c: any) => {
+
+        if (!confirm(`Hapus class "${c.name}"? Tindakan ini tidak bisa dibatalkan.`)) {
+            return
+        }
+
+        const token = localStorage.getItem('token')
+
+        const res = await fetch(`${API_BASE_URL}/classes/${c.id}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` }
+        })
+
+        const data = await res.json()
+
+        if (!res.ok) {
+            alert(data.message || 'Gagal menghapus class')
+            return
+        }
+
+        fetchClasses()
+
+    }
+
     const handleSubmit = async (e: any) => {
 
         e.preventDefault()
@@ -222,12 +246,18 @@ export default function ClassesPage() {
                                 <td className="p-4 font-semibold text-slate-900">{c.name}</td>
 
                                 {isAdmin && (
-                                    <td className="p-4">
+                                    <td className="p-4 flex gap-2">
                                         <button
                                             onClick={() => handleEdit(c)}
                                             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-semibold"
                                         >
                                             Edit
+                                        </button>
+                                        <button
+                                            onClick={() => handleDelete(c)}
+                                            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl text-sm font-semibold"
+                                        >
+                                            🗑 Delete
                                         </button>
                                     </td>
                                 )}

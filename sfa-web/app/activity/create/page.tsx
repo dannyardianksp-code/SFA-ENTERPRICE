@@ -112,6 +112,30 @@ export default function MasterActivitiesPage() {
         setForm({ code: '', name: '', channel_id: '' })
     }
 
+    const handleDelete = async (a: any) => {
+
+        if (!confirm(`Hapus activity "${a.name}"? Tindakan ini tidak bisa dibatalkan.`)) {
+            return
+        }
+
+        const token = localStorage.getItem('token')
+
+        const res = await fetch(`${API_BASE_URL}/activities/${a.id}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` }
+        })
+
+        const data = await res.json()
+
+        if (!res.ok) {
+            alert(data.message || 'Gagal menghapus activity')
+            return
+        }
+
+        fetchData()
+
+    }
+
     const channelName = (channelId: number | null) => {
 
         if (!channelId) return 'Semua Channel'
@@ -275,12 +299,18 @@ export default function MasterActivitiesPage() {
                                     </span>
                                 </td>
 
-                                <td className="p-4">
+                                <td className="p-4 flex gap-2">
                                     <button
                                         onClick={() => handleEdit(a)}
                                         className="bg-blue-600 text-white py-2 px-3 rounded-xl font-semibold text-sm"
                                     >
                                         Edit
+                                    </button>
+                                    <button
+                                        onClick={() => handleDelete(a)}
+                                        className="bg-red-600 text-white py-2 px-3 rounded-xl font-semibold text-sm"
+                                    >
+                                        🗑 Delete
                                     </button>
                                 </td>
 
