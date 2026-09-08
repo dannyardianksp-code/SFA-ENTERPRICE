@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { API_BASE_URL } from '@/app/utils/api-config'
+import { exportToExcel } from '@/app/utils/export-excel'
 
 const pad2 = (n: number) => String(n).padStart(2, '0')
 
@@ -111,6 +112,35 @@ export default function AttendanceReportPage() {
     // dengan kolom Tanggal (formatTanggal) supaya tampilannya identik.
 
     // ======================
+    // EXPORT EXCEL
+    // ======================
+    // Sama pola dengan Report Visit/Activity -- ekspor `filtered`.
+    // Lat/long checkin & checkout ikut diekspor mentah (bukan tombol
+    // Map yang tidak berarti apa-apa di Excel).
+    const handleExport = () => {
+
+        const rows = filtered.map((a: any, i: number) => ({
+            'No': i + 1,
+            'Sales': a.User?.name || '-',
+            'Tanggal': formatTanggal(a.tanggal),
+            'Clock In': jam(a.clock_in_time),
+            'Tanggal Out': formatTanggal(a.clock_out_time),
+            'Clock Out': a.clock_out_time ? jam(a.clock_out_time) : 'Belum pulang',
+            'Latitude Masuk': a.clock_in_latitude ?? '-',
+            'Longitude Masuk': a.clock_in_longitude ?? '-',
+            'Latitude Pulang': a.clock_out_latitude ?? '-',
+            'Longitude Pulang': a.clock_out_longitude ?? '-'
+        }))
+
+        exportToExcel(
+            `report-absen_${dateFrom}_${dateTo}`,
+            'Absen',
+            rows
+        )
+
+    }
+
+    // ======================
     // RENDER
     // ======================
     return (
@@ -188,6 +218,22 @@ export default function AttendanceReportPage() {
 
                 <button onClick={fetchData} style={{ alignSelf: 'flex-end' }}>
                     🔄 Refresh
+                </button>
+
+                <button
+                    onClick={handleExport}
+                    style={{
+                        alignSelf: 'flex-end',
+                        background: '#16a34a',
+                        color: 'white',
+                        border: 'none',
+                        padding: '8px 16px',
+                        borderRadius: 8,
+                        fontWeight: 600,
+                        cursor: 'pointer'
+                    }}
+                >
+                    📥 Export Excel
                 </button>
 
             </div>

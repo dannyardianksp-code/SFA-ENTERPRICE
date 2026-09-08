@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { fetchOrders } from '../services/api'
 import { getToken } from '../utils/auth'
 import { API_BASE_URL } from '@/app/utils/api-config'
+import { exportToExcel } from '@/app/utils/export-excel'
 
 export default function OrdersPage() {
     const [orders, setOrders] = useState<any[]>([])
@@ -92,9 +93,45 @@ Jarak: ${data.distance} meter`
 
     }
 
+    const handleExport = () => {
+
+        const rows = orders.map((o, i) => ({
+            'No': i + 1,
+            'Doc No': o.doc_no,
+            'Sales': o.User?.name || '-',
+            'Customer': o.Customer?.name || '-',
+            'Total': Number(o.total || 0)
+        }))
+
+        exportToExcel('report-order', 'Order', rows)
+
+    }
+
     return (
         <div style={{ padding: 20 }}>
-            <h1>Order Report</h1>
+            <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+            }}>
+                <h1>Order Report</h1>
+
+                <button
+                    onClick={handleExport}
+                    style={{
+                        background: '#16a34a',
+                        color: 'white',
+                        border: 'none',
+                        padding: '8px 16px',
+                        borderRadius: 8,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        height: 'fit-content'
+                    }}
+                >
+                    📥 Export Excel
+                </button>
+            </div>
 
             <table border={1} cellPadding={10}>
                 <thead>

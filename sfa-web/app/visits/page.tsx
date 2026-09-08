@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { API_BASE_URL } from '@/app/utils/api-config'
+import { exportToExcel } from '@/app/utils/export-excel'
 
 const pad2 = (n: number) => String(n).padStart(2, '0')
 
@@ -106,6 +107,33 @@ export default function VisitHistoryPage() {
     })
 
     // ======================
+    // EXPORT EXCEL
+    // ======================
+    // Ngekspor `filtered`, bukan `visits` mentah -- biar file yang
+    // didownload persis sama dengan yang lagi kelihatan di tabel
+    // (sudah kena search + filter tanggal/area/sales).
+    const handleExport = () => {
+
+        const rows = filtered.map((v, i) => ({
+            'No': i + 1,
+            'Sales': v.User?.name || '-',
+            'Customer': v.Customer?.name || '-',
+            'Waktu Checkin': v.checkin_time
+                ? new Date(v.checkin_time).toLocaleString('id-ID')
+                : '-',
+            'Latitude': v.latitude ?? '-',
+            'Longitude': v.longitude ?? '-'
+        }))
+
+        exportToExcel(
+            `report-visit_${dateFrom}_${dateTo}`,
+            'Visit',
+            rows
+        )
+
+    }
+
+    // ======================
     // UI
     // ======================
     return (
@@ -133,6 +161,8 @@ export default function VisitHistoryPage() {
 
             {/* SEARCH */}
             <div style={{
+                display: 'flex',
+                gap: 10,
                 marginBottom: 15
             }}>
                 <input
@@ -140,12 +170,27 @@ export default function VisitHistoryPage() {
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     style={{
-                        width: '100%',
+                        flex: 1,
                         padding: 12,
                         borderRadius: 12,
                         border: '1px solid #ddd'
                     }}
                 />
+
+                <button
+                    onClick={handleExport}
+                    style={{
+                        background: '#16a34a',
+                        color: 'white',
+                        border: 'none',
+                        padding: '0 20px',
+                        borderRadius: 12,
+                        fontWeight: 600,
+                        cursor: 'pointer'
+                    }}
+                >
+                    📥 Export Excel
+                </button>
             </div>
 
             {/* FILTER */}

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { API_BASE_URL, UPLOADS_ORIGIN } from '@/app/utils/api-config'
+import { exportToExcel } from '@/app/utils/export-excel'
 
 const pad2 = (n: number) => String(n).padStart(2, '0')
 
@@ -124,6 +125,37 @@ export default function ActivityListPage() {
             minimumFractionDigits: 0
         })
 
+    // ======================
+    // EXPORT EXCEL
+    // ======================
+    // Sama pola dengan Report Visit -- ekspor `filtered` (yang lagi
+    // kelihatan di tabel), bukan `activities` mentah. Harga & Qty
+    // diekspor sebagai angka mentah (bukan string "Rp ..." yang sudah
+    // diformat `money()`) supaya masih bisa dijumlah langsung di Excel.
+    const handleExport = () => {
+
+        const rows = filtered.map((a: any) => ({
+            'ID': a.id,
+            'Tanggal': new Date(a.created_at).toLocaleDateString('id-ID'),
+            'Sales': a.Visit?.User?.name || '-',
+            'Customer': a.Visit?.Customer?.name || '-',
+            'Activity': a.Activity?.name || '-',
+            'Catatan': a.notes || '-',
+            'Produk': a.product_name || '-',
+            'Qty': a.qty ?? '-',
+            'Expired': a.expired_date || '-',
+            'Harga Normal': Number(a.normal_price || 0),
+            'Harga Promo': Number(a.promo_price || 0)
+        }))
+
+        exportToExcel(
+            `report-activity_${dateFrom}_${dateTo}`,
+            'Activity',
+            rows
+        )
+
+    }
+
     const badge = (text: string) => (
         <span style={{
             padding: '4px 10px',
@@ -240,6 +272,22 @@ export default function ActivityListPage() {
                     style={{ alignSelf: 'flex-end' }}
                 >
                     🔄 Refresh
+                </button>
+
+                <button
+                    onClick={handleExport}
+                    style={{
+                        alignSelf: 'flex-end',
+                        background: '#16a34a',
+                        color: 'white',
+                        border: 'none',
+                        padding: '8px 16px',
+                        borderRadius: 8,
+                        fontWeight: 600,
+                        cursor: 'pointer'
+                    }}
+                >
+                    📥 Export Excel
                 </button>
 
             </div>
