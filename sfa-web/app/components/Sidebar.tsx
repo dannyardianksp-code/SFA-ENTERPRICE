@@ -20,18 +20,23 @@ import {
     Settings,
     LogOut,
     ChevronLeft,
-    ChevronRight
+    ChevronRight,
+    X
 } from 'lucide-react'
 
 export default function Sidebar({
 
     collapsed,
-    onToggleCollapsed
+    onToggleCollapsed,
+    mobileOpen,
+    onCloseMobile
 
 }: {
 
     collapsed: boolean
     onToggleCollapsed: () => void
+    mobileOpen: boolean
+    onCloseMobile: () => void
 
 }) {
 
@@ -41,6 +46,28 @@ export default function Sidebar({
     const [name, setName] = useState('')
     const router =
         useRouter()
+
+    // Breakpoint sama dengan Tailwind `md` (768px) -- dipakai supaya
+    // label menu tidak ikut hilang gara-gara `collapsed` waktu drawer
+    // dibuka di layar kecil. Lebar drawer sendiri sudah dipaksa penuh
+    // (w-72) di bawah md lewat className, jadi cuma render label yang
+    // perlu tahu ukuran layar.
+    const [isMobile, setIsMobile] = useState(false)
+
+    useEffect(() => {
+
+        const mq = window.matchMedia('(max-width: 767px)')
+
+        const update = () => setIsMobile(mq.matches)
+
+        update()
+        mq.addEventListener('change', update)
+
+        return () => mq.removeEventListener('change', update)
+
+    }, [])
+
+    const collapsedVisual = collapsed && !isMobile
 
     const handleLogout = () => {
 
@@ -92,24 +119,29 @@ export default function Sidebar({
     left-0
     top-0
     h-screen
+    flex
+    flex-col
     bg-slate-950
     border-r
     border-slate-800
     transition-all
     duration-300
     z-50
-    ${collapsed ? 'w-20' : 'w-72'}
+    w-72
+    ${collapsed ? 'md:w-20' : 'md:w-72'}
+    ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
+    md:translate-x-0
   `}
 
         >
 
             {/* HEADER */}
 
-            <div className="p-5 border-b border-slate-800">
+            <div className="shrink-0 p-5 border-b border-slate-800">
 
                 <div className="flex items-center justify-between">
 
-                    {!collapsed && (
+                    {!collapsedVisual && (
 
                         <div>
 
@@ -130,6 +162,8 @@ export default function Sidebar({
                         onClick={onToggleCollapsed}
 
                         className="
+          hidden
+          md:block
           text-slate-700
           hover:text-white
           cursor-pointer
@@ -149,13 +183,30 @@ export default function Sidebar({
 
                     </button>
 
+                    <button
+
+                        onClick={onCloseMobile}
+
+                        className="
+          md:hidden
+          text-slate-700
+          hover:text-white
+          cursor-pointer
+        "
+
+                    >
+
+                        <X size={20} />
+
+                    </button>
+
                 </div>
 
             </div>
 
             {/* USER */}
 
-            <div className="p-5">
+            <div className="shrink-0 p-5">
 
                 <div className="flex items-center gap-3">
 
@@ -188,7 +239,7 @@ export default function Sidebar({
 
                     </div>
 
-                    {!collapsed && (
+                    {!collapsedVisual && (
 
                         <div>
 
@@ -212,11 +263,11 @@ export default function Sidebar({
 
             </div>
 
-            <div className="px-4 pb-24 overflow-y-auto h-full">
+            <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
 
                 {/* MAIN */}
 
-                {!collapsed && (
+                {!collapsedVisual && (
                     <p className="text-xs ext-slate-700 mb-3">
                         MAIN
                     </p>
@@ -224,32 +275,34 @@ export default function Sidebar({
 
                 <div className="space-y-2">
 
-                    <Link href="/" className={menuClass('/')}>
+                    <Link href="/" className={menuClass('/')} onClick={onCloseMobile}>
                         <Home size={18} />
-                        {!collapsed && 'Dashboard'}
+                        {!collapsedVisual && 'Dashboard'}
                     </Link>
 
                     <Link
                         href="/visit-plans"
                         className={menuClass('/visit-plans')}
+                        onClick={onCloseMobile}
                     >
                         <CalendarDays size={18} />
-                        {!collapsed && 'Visit Plan'}
+                        {!collapsedVisual && 'Visit Plan'}
                     </Link>
 
                     <Link
                         href="/customers"
                         className={menuClass('/customers')}
+                        onClick={onCloseMobile}
                     >
                         <Users size={18} />
-                        {!collapsed && 'Customer'}
+                        {!collapsedVisual && 'Customer'}
                     </Link>
 
                 </div>
 
                 {/* SALES */}
 
-                {!collapsed && (
+                {!collapsedVisual && (
                     <p className="text-xs ext-slate-700 mt-8 mb-3">
                         SALES
                     </p>
@@ -260,25 +313,28 @@ export default function Sidebar({
                     <Link
                         href="/orders"
                         className={menuClass('/orders')}
+                        onClick={onCloseMobile}
                     >
                         <ShoppingCart size={18} />
-                        {!collapsed && 'Orders'}
+                        {!collapsedVisual && 'Orders'}
                     </Link>
 
                     <Link
                         href="/report"
                         className={menuClass('/report')}
+                        onClick={onCloseMobile}
                     >
                         <BarChart3 size={18} />
-                        {!collapsed && 'Report'}
+                        {!collapsedVisual && 'Report'}
                     </Link>
 
                     <Link
                         href="/live-tracking"
                         className={menuClass('/live-tracking')}
+                        onClick={onCloseMobile}
                     >
                         <Navigation size={18} />
-                        {!collapsed && 'Live Tracking'}
+                        {!collapsedVisual && 'Live Tracking'}
                     </Link>
 
                 </div>
@@ -291,7 +347,7 @@ export default function Sidebar({
 
                     <>
 
-                        {!collapsed && (
+                        {!collapsedVisual && (
                             <p className="text-xs ext-slate-700 mt-8 mb-3">
                                 ADMIN
                             </p>
@@ -302,41 +358,46 @@ export default function Sidebar({
                             <Link
                                 href="/products"
                                 className={menuClass('/products')}
+                                onClick={onCloseMobile}
                             >
                                 <Package size={18} />
-                                {!collapsed && 'Products'}
+                                {!collapsedVisual && 'Products'}
                             </Link>
 
                             <Link
                                 href="/users"
                                 className={menuClass('/users')}
+                                onClick={onCloseMobile}
                             >
                                 <UserCog size={18} />
-                                {!collapsed && 'Users'}
+                                {!collapsedVisual && 'Users'}
                             </Link>
 
                             <Link
                                 href="/activity/create"
                                 className={menuClass('/activity/create')}
+                                onClick={onCloseMobile}
                             >
                                 <Settings size={18} />
-                                {!collapsed && 'Activity Master'}
+                                {!collapsedVisual && 'Activity Master'}
                             </Link>
 
                             <Link
                                 href="/areas"
                                 className={menuClass('/areas')}
+                                onClick={onCloseMobile}
                             >
                                 <MapPin size={18} />
-                                {!collapsed && 'Areas'}
+                                {!collapsedVisual && 'Areas'}
                             </Link>
 
                             <Link
                                 href="/classes"
                                 className={menuClass('/classes')}
+                                onClick={onCloseMobile}
                             >
                                 <Tag size={18} />
-                                {!collapsed && 'Classes'}
+                                {!collapsedVisual && 'Classes'}
                             </Link>
 
                         </div>
@@ -347,15 +408,16 @@ export default function Sidebar({
 
             </div>
 
-            {/* LOGOUT */}
+            {/* LOGOUT -- child flex biasa (bukan absolute) supaya
+                selalu duduk tepat di bawah nav apa adanya, ikut aliran
+                flex-col aside; nav di atasnya (flex-1 min-h-0) yang
+                otomatis menyusut ngasih sisa ruang ke footer ini,
+                jadi tidak pernah saling tumpuk di ukuran/zoom manapun. */}
 
             <div
 
                 className="
-      absolute
-      bottom-0
-      left-0
-      right-0
+      shrink-0
       p-4
       border-t
       border-slate-800
@@ -382,7 +444,7 @@ export default function Sidebar({
 
                     <LogOut size={18} />
 
-                    {!collapsed && 'Logout'}
+                    {!collapsedVisual && 'Logout'}
 
                 </button>
 
