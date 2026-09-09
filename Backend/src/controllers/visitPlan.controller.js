@@ -113,7 +113,7 @@ exports.getAll =
             // mobile -- persis gerbang default di bawah, sengaja tidak
             // diubah supaya sfa-web/app/visit-plans/page.tsx (dasbor
             // manajemen tim lintas tanggal) tetap jalan seperti semula.
-            if (loginUser.role === 'SPG' || req.query.mine === '1') {
+            if (loginUser.role === 'MD' || req.query.mine === '1') {
 
                 const [hariIni, besok] = spgDateRange()
 

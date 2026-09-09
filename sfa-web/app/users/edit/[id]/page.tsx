@@ -16,7 +16,7 @@ import { API_BASE_URL } from '@/app/utils/api-config'
 // atasan dan untuk menampilkan/menyembunyikan kartu Hierarchy Assignment.
 // GENERAL MANAGER tidak punya entry (puncak rantai, tidak butuh atasan).
 const ROLE_ABOVE: Record<string, string> = {
-    SPG: 'SUPERVISOR',
+    MD: 'SUPERVISOR',
     SUPERVISOR: 'MANAGER',
     MANAGER: 'REGIONAL MANAGER',
     'REGIONAL MANAGER': 'GENERAL MANAGER',
@@ -434,7 +434,7 @@ export default function EditUserPage() {
                             <option value="REGIONAL MANAGER">REGIONAL MANAGER</option>
                             <option value="MANAGER">MANAGER</option>
                             <option value="SUPERVISOR">SUPERVISOR</option>
-                            <option value="SPG">SPG</option>
+                            <option value="MD">MD</option>
                         </select>
                     </div>
 

@@ -112,7 +112,7 @@ exports.getAll =
             // ROLE YANG DIBATASI
             const restrictedRoles = [
 
-                'SPG',
+                'MD',
 
                 'SUPERVISOR'
 
@@ -815,7 +815,7 @@ async (req, res) => {
 
 
         const isRestricted =
-            ['SPG', 'SUPERVISOR'].includes(user.role);
+            ['MD', 'SUPERVISOR'].includes(user.role);
 
 
         const areaWhere =

@@ -98,7 +98,7 @@ export default function VisitMap({ visits }: any) {
                                 <hr />
 
                                 <p>
-                                    <b>SPG:</b> {v.User?.name}
+                                    <b>MD:</b> {v.User?.name}
                                 </p>
 
                                 <p>

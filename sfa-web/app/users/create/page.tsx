@@ -15,7 +15,7 @@ import { API_BASE_URL } from '@/app/utils/api-config'
 // atasan dan untuk menampilkan/menyembunyikan kartu Hierarchy Assignment.
 // GENERAL MANAGER tidak punya entry (puncak rantai, tidak butuh atasan).
 const ROLE_ABOVE: Record<string, string> = {
-    SPG: 'SUPERVISOR',
+    MD: 'SUPERVISOR',
     SUPERVISOR: 'MANAGER',
     MANAGER: 'REGIONAL MANAGER',
     'REGIONAL MANAGER': 'GENERAL MANAGER',
@@ -50,13 +50,13 @@ export default function CreateUserPage() {
 
             password: '',
 
-            role: 'SPG',
+            role: 'MD',
 
             channel_id: '',
 
             supervisor_id: '',
 
-            // Default ikut role awal (SPG terkunci dari web) -- admin
+            // Default ikut role awal (MD terkunci dari web) -- admin
             // tetap bisa override lewat checkbox sebelum submit.
             can_access_web: false
 
@@ -313,11 +313,11 @@ export default function CreateUserPage() {
                 [e.target.name]:
                     e.target.value,
 
-                // Ganti role -> ganti default can_access_web (SPG
+                // Ganti role -> ganti default can_access_web (MD
                 // terkunci, role lain terbuka). Admin masih bisa
                 // override lewat checkbox sesudahnya.
                 ...(e.target.name === 'role' && {
-                    can_access_web: e.target.value !== 'SPG'
+                    can_access_web: e.target.value !== 'MD'
                 })
 
             })
@@ -535,7 +535,7 @@ export default function CreateUserPage() {
                             <option value="REGIONAL MANAGER">REGIONAL MANAGER</option>
                             <option value="MANAGER">MANAGER</option>
                             <option value="SUPERVISOR">SUPERVISOR</option>
-                            <option value="SPG">SPG</option>
+                            <option value="MD">MD</option>
                         </select>
                     </div>
 

@@ -14,14 +14,14 @@ const User = db.define('User', {
     password: DataTypes.STRING,
     role: {
         type: DataTypes.ENUM(
-            'SPG',
+            'MD',
             'SUPERVISOR',
             'MANAGER',
             'REGIONAL MANAGER',
             'GENERAL MANAGER',
             'ADMINISTRATOR'
         ),
-        defaultValue: 'SPG'
+        defaultValue: 'MD'
     },
     // Kontrol admin per-user: boleh/tidaknya login lewat sfa-web.
     // Dicek di auth.controller.js saat platform login === 'web'.

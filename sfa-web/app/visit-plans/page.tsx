@@ -595,7 +595,7 @@ Failed : ${result.failed}`
 
             {
 
-                role !== 'SPG'
+                role !== 'MD'
 
                 &&
 
@@ -757,7 +757,7 @@ Failed : ${result.failed}`
             {/* UPLOAD / DOWNLOAD */}
 
             {
-                role !== "SPG" && (
+                role !== "MD" && (
                     <div className="bg-white rounded-2xl shadow p-5 mb-6">
 
                         <h3 className="text-lg font-semibold mb-4">
@@ -1310,7 +1310,7 @@ Failed : ${result.failed}`
 
                                                     {
 
-                                                        role !== 'SPG'
+                                                        role !== 'MD'
 
                                                         &&
 

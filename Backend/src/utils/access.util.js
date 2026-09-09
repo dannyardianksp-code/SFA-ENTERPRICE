@@ -8,10 +8,10 @@ const User = require('../models/user.model')
  * Role yang aksesnya dibatasi ke area dan channel miliknya sendiri.
  *
  * Nilai ini harus cocok dengan kolom users.role yang sebenarnya —
- * enum('SPG','ADMINISTRATOR','MANAGER','SUPERVISOR'). Model User masih
+ * enum('MD','ADMINISTRATOR','MANAGER','SUPERVISOR'). Model User masih
  * menulis ADMIN/SPV dan itu usang; jangan dijadikan acuan.
  */
-const RESTRICTED_ROLES = ['SPG', 'SUPERVISOR']
+const RESTRICTED_ROLES = ['MD', 'SUPERVISOR']
 
 /**
  * Memeriksa apakah user berhak menyentuh customer di area dan channel
@@ -84,7 +84,7 @@ const USER_MANAGER_ROLES = ['ADMINISTRATOR']
  * kembali sebagai 500.
  */
 const USER_ROLES = [
-    'SPG',
+    'MD',
     'SUPERVISOR',
     'MANAGER',
     'REGIONAL MANAGER',
@@ -198,7 +198,7 @@ const MAX_HIERARCHY_DEPTH = 10
  * batas kedalaman — bisa dibuat dengan pengambil palsu. Keduanya tidak
  * mungkin dibuat dari data sungguhan.
  *
- * rootId selalu jadi elemen pertama: dengan begitu kasus SPG tanpa
+ * rootId selalu jadi elemen pertama: dengan begitu kasus MD tanpa
  * bawahan jatuh dengan sendirinya menjadi [dirinya], tanpa cabang khusus.
  *
  * @param {number} rootId

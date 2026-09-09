@@ -367,14 +367,14 @@ router.post(
                     supervisor_id:
                         supervisor_id || null,
 
-                    // Tidak dikirim klien -> default berdasar role, SPG
+                    // Tidak dikirim klien -> default berdasar role, MD
                     // tetap terkunci dari web kecuali admin membukanya
                     // eksplisit. Dikirim eksplisit (termasuk false) ->
                     // pilihan admin menang.
                     can_access_web:
                         can_access_web !== undefined
                             ? can_access_web
-                            : role !== 'SPG'
+                            : role !== 'MD'
 
                 })
 

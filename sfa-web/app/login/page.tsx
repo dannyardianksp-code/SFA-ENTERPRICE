@@ -75,7 +75,7 @@ export default function LoginPage() {
             else if (
 
                 data.user.role ===
-                'SPG'
+                'MD'
 
             ) {
 
