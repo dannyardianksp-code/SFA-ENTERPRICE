@@ -25,7 +25,7 @@ describe('spgDateRange', () => {
     })
 
     // Jam malam UTC sudah tanggal berikutnya di Jakarta. Ini yang
-    // dulu keliru dan membuat SPG melihat rencana kemarin.
+    // dulu keliru dan membuat MD melihat rencana kemarin.
     test('jam malam UTC memakai tanggal Jakarta', () => {
         const malam = new Date('2026-08-10T22:00:00Z')
 

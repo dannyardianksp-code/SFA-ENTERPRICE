@@ -17,7 +17,7 @@ const USER_ID = Number(process.env.TEST_USER_ID || 1)
 
 const authHeader = () => ({
     Authorization: 'Bearer ' + jwt.sign(
-        { id: USER_ID, role: 'SPG' },
+        { id: USER_ID, role: 'MD' },
         process.env.JWT_SECRET,
         { expiresIn: '10m' }
     ),
@@ -44,7 +44,7 @@ before(async () => {
 })
 
 
-describe('GET /api/visit-plans (SPG)', () => {
+describe('GET /api/visit-plans (MD)', () => {
 
     const dibuat = []
 
@@ -58,7 +58,7 @@ describe('GET /api/visit-plans (SPG)', () => {
     //
     // Baris disisipkan LANGSUNG lewat mysql2, bukan lewat
     // POST /api/visit-plans: create sekarang menggerbang role
-    // (SUPERVISOR ke atas), sedangkan tes ini memakai token SPG murni
+    // (SUPERVISOR ke atas), sedangkan tes ini memakai token MD murni
     // untuk menguji GET-nya sendiri. Memanggil endpoint create di sini
     // hanya akan meminjam gerbang otorisasi yang tidak sedang diuji.
     before(async () => {
@@ -190,7 +190,7 @@ describe('GET /api/visit-plans (SPG)', () => {
 })
 
 
-describe('GET /api/visit-plans -- ?mine=1 untuk role non-SPG', () => {
+describe('GET /api/visit-plans -- ?mine=1 untuk role non-MD', () => {
 
     // Supervisor sungguhan dari fixture yang sudah dipakai sub-proyek
     // lain (subtree: 1, 3, 37, 38).
@@ -276,7 +276,7 @@ describe('GET /api/visit-plans -- ?mine=1 untuk role non-SPG', () => {
         )
     })
 
-    test('dengan ?mine=1: SUPERVISOR TIDAK melihat rencana lusa (dibatasi hari ini/besok, sama seperti SPG)', async () => {
+    test('dengan ?mine=1: SUPERVISOR TIDAK melihat rencana lusa (dibatasi hari ini/besok, sama seperti MD)', async () => {
         const res = await getSebagai('/api/visit-plans?mine=1', SUPERVISOR, 'SUPERVISOR')
 
         assert.strictEqual(res.status, 200)

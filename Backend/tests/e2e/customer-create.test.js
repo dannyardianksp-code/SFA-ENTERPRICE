@@ -10,7 +10,7 @@ const USER_ID = Number(process.env.TEST_USER_ID || 1)
 
 const authHeader = () => ({
     Authorization: 'Bearer ' + jwt.sign(
-        { id: USER_ID, role: 'SPG' },
+        { id: USER_ID, role: 'MD' },
         process.env.JWT_SECRET,
         { expiresIn: '10m' }
     ),
@@ -89,7 +89,7 @@ describe('GET /api/customers/form-options', () => {
     test('role terbatas hanya dapat satu channel', async () => {
         const res = await get('/api/customers/form-options')
         assert.strictEqual(res.body.channels.length, 1,
-            `SPG seharusnya dapat tepat 1 channel, dapat ${res.body.channels.length}`)
+            `MD seharusnya dapat tepat 1 channel, dapat ${res.body.channels.length}`)
     })
 
     // Database dev punya 53 customer_group, hanya 6 yang diberi code

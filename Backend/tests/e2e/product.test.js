@@ -11,7 +11,7 @@ const BASE = process.env.TEST_BASE_URL || 'http://localhost:1000'
 // asumsi role-nya tidak relevan -- benar selama create/update product
 // belum bergerbang. Sekarang product.routes.js menolak non-administrator
 // (lihat product.controller.js), dan role DANNY yang sebenarnya di
-// database adalah SPG, jadi token id 1 akan ditolak 403. Ganti ke
+// database adalah MD, jadi token id 1 akan ditolak 403. Ganti ke
 // fixture sintetis ber-role ADMINISTRATOR, pola sama dengan
 // USER_ID_SEMENTARA di attendance.test.js.
 const ADMIN_ID = 970
@@ -69,9 +69,9 @@ before(async () => {
 
     await db.query(
         `INSERT INTO users (id, code, name, email, password, role, status)
-         VALUES (?, ?, ?, ?, ?, 'SPG', 'ACTIVE')
-         ON DUPLICATE KEY UPDATE role = 'SPG', status = 'ACTIVE'`,
-        [SPG_ID, 'PRD-TEST-971', 'SPG SEMENTARA TES PRODUCT', 'prd-test-971@contoh.test', 'hash-tidak-dipakai']
+         VALUES (?, ?, ?, ?, ?, 'MD', 'ACTIVE')
+         ON DUPLICATE KEY UPDATE role = 'MD', status = 'ACTIVE'`,
+        [SPG_ID, 'PRD-TEST-971', 'MD SEMENTARA TES PRODUCT', 'prd-test-971@contoh.test', 'hash-tidak-dipakai']
     )
 })
 
@@ -105,7 +105,7 @@ describe('GET /api/products', () => {
 
 describe('POST /api/products', () => {
 
-    test('role SPG ditolak 403 (Product Master admin-only)', async () => {
+    test('role MD ditolak 403 (Product Master admin-only)', async () => {
         const res = await fetch(BASE + '/api/products', {
             method: 'POST',
             headers: {
@@ -113,7 +113,7 @@ describe('POST /api/products', () => {
                 Authorization: 'Bearer ' + tokenUntuk(SPG_ID),
             },
             body: JSON.stringify({
-                code: 'UJI-PRODUK-SPG',
+                code: 'UJI-PRODUK-MD',
                 name: 'Harus Ditolak',
                 price: 1000,
                 uom: 'PCS',

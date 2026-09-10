@@ -10,11 +10,11 @@ const BASE = process.env.TEST_BASE_URL || 'http://localhost:1000'
 
 // Akun sungguhan, dipakai HANYA sebagai pemanggil baca-saja. Tidak ada
 // satu pun tes di berkas ini yang menjadikannya sasaran tulis.
-const SPG = 1               // anak dari 3
+const MD = 1               // anak dari 3
 const ADMIN = 2
 const SUPERVISOR = 3        // anak dari 30; punya 1, 37, 38
 const MANAGER = 30          // punya 3, 31, 33 dan cucunya
-const SPG_LUAR = 34         // anak dari 33 — di luar subtree 3
+const MD_LUAR = 34         // anak dari 33 — di luar subtree 3
 
 // `visits` tidak punya kolom teks bebas seperti `doc_no` milik
 // sales_orders untuk menandai baris fixture. `latitude` dipinjam untuk
@@ -167,18 +167,18 @@ describe('GET /api/users memakai subtree', () => {
 
     // Angka pastinya, bukan "kurang dari 11". "Kurang" tetap hijau kalau
     // filternya bocor sebagian — dan bocor sebagian tetap bocor.
-    test('SPG melihat tepat 1 user, dirinya sendiri', async () => {
-        const { status, data } = await kirim('GET', '/api/users', SPG)
+    test('MD melihat tepat 1 user, dirinya sendiri', async () => {
+        const { status, data } = await kirim('GET', '/api/users', MD)
 
         assert.strictEqual(status, 200)
 
         const daftar = daftarDari(data)
 
         assert.strictEqual(daftar.length, 1)
-        assert.strictEqual(Number(daftar[0].id), SPG)
+        assert.strictEqual(Number(daftar[0].id), MD)
     })
 
-    test('SUPERVISOR melihat 4: dirinya dan tiga SPG-nya', async () => {
+    test('SUPERVISOR melihat 4: dirinya dan tiga MD-nya', async () => {
         const { data } = await kirim('GET', '/api/users', SUPERVISOR)
 
         const ids = daftarDari(data)
@@ -223,7 +223,7 @@ describe('GET /api/users memakai subtree', () => {
 
     // Relasi User pernah membawa seluruh baris termasuk hash bcrypt.
     test('tidak ada respons yang memuat password', async () => {
-        for (const pemanggil of [SPG, SUPERVISOR, MANAGER, ADMIN]) {
+        for (const pemanggil of [MD, SUPERVISOR, MANAGER, ADMIN]) {
             const { data } = await kirim('GET', '/api/users', pemanggil)
 
             for (const u of daftarDari(data)) {
@@ -241,36 +241,36 @@ describe('GET /api/users memakai subtree', () => {
 
 describe('GET /api/users/:id memakai subtree', () => {
 
-    test('SPG membaca administrator ditolak 403', async () => {
-        const { status } = await kirim('GET', `/api/users/${ADMIN}`, SPG)
+    test('MD membaca administrator ditolak 403', async () => {
+        const { status } = await kirim('GET', `/api/users/${ADMIN}`, MD)
 
         assert.strictEqual(status, 403)
     })
 
-    test('SPG membaca dirinya sendiri boleh', async () => {
-        const { status } = await kirim('GET', `/api/users/${SPG}`, SPG)
+    test('MD membaca dirinya sendiri boleh', async () => {
+        const { status } = await kirim('GET', `/api/users/${MD}`, MD)
 
         assert.strictEqual(status, 200)
     })
 
-    test('SUPERVISOR membaca SPG di luar subtree ditolak 403', async () => {
+    test('SUPERVISOR membaca MD di luar subtree ditolak 403', async () => {
         const { status } = await kirim(
             'GET',
-            `/api/users/${SPG_LUAR}`,
+            `/api/users/${MD_LUAR}`,
             SUPERVISOR
         )
 
         assert.strictEqual(status, 403)
     })
 
-    test('SUPERVISOR membaca SPG-nya sendiri boleh', async () => {
-        const { status } = await kirim('GET', `/api/users/${SPG}`, SUPERVISOR)
+    test('SUPERVISOR membaca MD-nya sendiri boleh', async () => {
+        const { status } = await kirim('GET', `/api/users/${MD}`, SUPERVISOR)
 
         assert.strictEqual(status, 200)
     })
 
     test('ADMINISTRATOR membaca siapa pun boleh', async () => {
-        const { status } = await kirim('GET', `/api/users/${SPG}`, ADMIN)
+        const { status } = await kirim('GET', `/api/users/${MD}`, ADMIN)
 
         assert.strictEqual(status, 200)
     })
@@ -299,19 +299,19 @@ describe('GET /api/orders memakai subtree', () => {
     }
 
     before(async () => {
-        // Buat order milik SPG_LUAR (user 34, di luar subtree supervisor 3).
+        // Buat order milik MD_LUAR (user 34, di luar subtree supervisor 3).
         // Diperlukan untuk membuktikan filter benar-benar membedakan anggota
         // subtree dari yang di luarnya, bukan hanya mengalami keberuntungan data.
         const [resultLuar] = await db.query(
             'INSERT INTO sales_orders (doc_no, user_id, customer_id, doc_date, total, status) VALUES (?, ?, ?, NOW(), ?, ?)',
-            ['UJI-LUAR-' + Date.now(), SPG_LUAR, null, 0, 'DRAFT']
+            ['UJI-LUAR-' + Date.now(), MD_LUAR, null, 0, 'DRAFT']
         )
         ujiOrderLuarSubtreeId = resultLuar.insertId
 
-        // Buat order milik SPG (user 1, dalam subtree supervisor 3).
+        // Buat order milik MD (user 1, dalam subtree supervisor 3).
         const [resultDalam] = await db.query(
             'INSERT INTO sales_orders (doc_no, user_id, customer_id, doc_date, total, status) VALUES (?, ?, ?, NOW(), ?, ?)',
-            ['UJI-DALAM-' + Date.now(), SPG, null, 0, 'DRAFT']
+            ['UJI-DALAM-' + Date.now(), MD, null, 0, 'DRAFT']
         )
         ujiOrderDalamSubtreeId = resultDalam.insertId
     })
@@ -347,13 +347,13 @@ describe('GET /api/orders memakai subtree', () => {
         assert.strictEqual(hasil.length, Number(subtree[0].n))
     })
 
-    test('SPG hanya melihat ordernya sendiri', async () => {
+    test('MD hanya melihat ordernya sendiri', async () => {
         const [milikSendiri] = await db.query(
             'SELECT COUNT(*) n FROM sales_orders WHERE user_id = ?',
-            [SPG]
+            [MD]
         )
 
-        const hasil = await daftarOrder(SPG)
+        const hasil = await daftarOrder(MD)
 
         assert.strictEqual(hasil.length, Number(milikSendiri[0].n))
     })
@@ -404,7 +404,7 @@ describe('GET /api/visits/:id/products memakai subtree', () => {
 
         visitDalam = dalam[0]?.id ?? null
 
-        // Kunjungan milik SPG_LUAR (34), anak dari supervisor 33 --
+        // Kunjungan milik MD_LUAR (34), anak dari supervisor 33 --
         // di luar subtree supervisor 3 (1, 37, 38). customer_id memakai
         // customer nyata (2, ALFAMART DEPOK, dipakai juga oleh visit
         // dalam-subtree lain) supaya rantai Customer->CustomerGroup->
@@ -412,7 +412,7 @@ describe('GET /api/visits/:id/products memakai subtree', () => {
         // chain, bukan karena kebocoran datanya sendiri terbukti.
         const [resultLuar] = await db.query(
             'INSERT INTO visits (user_id, customer_id, latitude) VALUES (?, ?, ?)',
-            [SPG_LUAR, 2, VISIT_FIXTURE_MARKER]
+            [MD_LUAR, 2, VISIT_FIXTURE_MARKER]
         )
         visitLuarFixtureId = resultLuar.insertId
     })
@@ -487,7 +487,7 @@ describe('GET /api/visit-activities/visit/:id memakai subtree', () => {
 
     const VISIT_YATIM = 999999901
 
-    // Fixture: kunjungan milik SPG_LUAR (34), anak dari supervisor 33 --
+    // Fixture: kunjungan milik MD_LUAR (34), anak dari supervisor 33 --
     // di luar subtree supervisor 3 (1, 3, 37, 38). Dicek langsung ke
     // database sebelum menulis tes ini: 9 baris visits, dan SEMUANYA di
     // dalam subtree 3 (8 milik user 1, 1 milik user 37) -- sisi luar
@@ -501,7 +501,7 @@ describe('GET /api/visit-activities/visit/:id memakai subtree', () => {
     before(async () => {
         const [luar] = await db.query(
             'INSERT INTO visits (user_id, customer_id, latitude) VALUES (?, ?, ?)',
-            [SPG_LUAR, 2, VISIT_FIXTURE_MARKER]
+            [MD_LUAR, 2, VISIT_FIXTURE_MARKER]
         )
         visitLuar = luar.insertId
 
@@ -624,14 +624,14 @@ describe('POST /api/visit-plans', () => {
         customerUji = c[0]?.id ?? null
 
         // Dipersempit ke user_id yang benar-benar dipakai tes di blok
-        // ini (SPG, SPG_LUAR, 37), bukan seluruh tanggal -- supaya
+        // ini (MD, MD_LUAR, 37), bukan seluruh tanggal -- supaya
         // pembersihan ini tidak bisa menyentuh jadwal sungguhan siapa
         // pun. Ini yang membuat sesi yang mati di tengah jalan bisa
         // pulih sendiri di jalan berikutnya, tanpa perlu operasi manual
         // ke database.
         await db.query(
             'DELETE FROM visit_plans WHERE visit_date = ? AND user_id IN (?, ?, ?)',
-            [TANGGAL, SPG, SPG_LUAR, 37]
+            [TANGGAL, MD, MD_LUAR, 37]
         )
     })
 
@@ -665,14 +665,14 @@ describe('POST /api/visit-plans', () => {
 
     // Keputusan sub-proyek visit-plan: SUPERVISOR ke atas. create tidak
     // punya gerbang role sama sekali sebelum perbaikan ini.
-    test('SPG tidak boleh membuat jadwal kunjungan', async (t) => {
+    test('MD tidak boleh membuat jadwal kunjungan', async (t) => {
         if (customerUji === null) {
             t.skip('tidak ada customer selain id 97 di database')
             return
         }
 
-        const { status } = await kirim('POST', '/api/visit-plans', SPG, {
-            user_id: SPG,
+        const { status } = await kirim('POST', '/api/visit-plans', MD, {
+            user_id: MD,
             customer_id: customerUji,
             visit_date: TANGGAL,
         })
@@ -681,33 +681,33 @@ describe('POST /api/visit-plans', () => {
 
         // Diperiksa ke database. Tanpa ini, tesnya juga lulus pada
         // handler yang menyimpan barisnya lalu mengembalikan 403.
-        assert.strictEqual(await jumlahPada(SPG), 0)
+        assert.strictEqual(await jumlahPada(MD), 0)
     })
 
-    test('SUPERVISOR tidak boleh menjadwalkan untuk SPG di luar subtree', async (t) => {
+    test('SUPERVISOR tidak boleh menjadwalkan untuk MD di luar subtree', async (t) => {
         if (customerUji === null) {
             t.skip('tidak ada customer selain id 97 di database')
             return
         }
 
         const { status } = await kirim('POST', '/api/visit-plans', SUPERVISOR, {
-            user_id: SPG_LUAR,
+            user_id: MD_LUAR,
             customer_id: customerUji,
             visit_date: TANGGAL,
         })
 
         assert.strictEqual(status, 403)
-        assert.strictEqual(await jumlahPada(SPG_LUAR), 0)
+        assert.strictEqual(await jumlahPada(MD_LUAR), 0)
     })
 
-    test('SUPERVISOR boleh menjadwalkan untuk SPG-nya sendiri', async (t) => {
+    test('SUPERVISOR boleh menjadwalkan untuk MD-nya sendiri', async (t) => {
         if (customerUji === null) {
             t.skip('tidak ada customer selain id 97 di database')
             return
         }
 
         const { status, data } = await kirim('POST', '/api/visit-plans', SUPERVISOR, {
-            user_id: SPG,
+            user_id: MD,
             customer_id: customerUji,
             visit_date: TANGGAL,
         })
@@ -715,7 +715,7 @@ describe('POST /api/visit-plans', () => {
         // res.json(data), bukan res.status(201) — diperiksa, bukan
         // diandaikan.
         assert.strictEqual(status, 200)
-        assert.strictEqual(await jumlahPada(SPG), 1)
+        assert.strictEqual(await jumlahPada(MD), 1)
 
         idsDibuat.push(data.id)
     })
@@ -763,7 +763,7 @@ describe('POST /api/visit-plans', () => {
     // Temuan review lanjutan: assertWithinSubtree mengembalikan "boleh"
     // seketika saat subordinateIds === null (ADMINISTRATOR), TANPA
     // PERNAH melihat user_id. Keempat tes di bawah memanggil sebagai
-    // ADMINISTRATOR karena di situlah lubangnya -- SPG dan SUPERVISOR
+    // ADMINISTRATOR karena di situlah lubangnya -- MD dan SUPERVISOR
     // tidak pernah lolos gerbang kepemilikan dengan subordinateIds
     // berupa array, apa pun nilai user_id yang mereka kirim.
     //
@@ -855,7 +855,7 @@ describe('POST /api/visit-plans', () => {
         const sebelum = await totalPada()
 
         const { status } = await kirim('POST', '/api/visit-plans', ADMIN, {
-            user_id: SPG,
+            user_id: MD,
             customer_id: 0,
             visit_date: TANGGAL,
         })
@@ -905,7 +905,7 @@ describe('POST /api/visit-plans', () => {
         const sebelum = await totalPada()
 
         const { status } = await kirim('POST', '/api/visit-plans', ADMIN, {
-            user_id: SPG,
+            user_id: MD,
             customer_id: 999999,
             visit_date: TANGGAL,
         })
@@ -933,22 +933,22 @@ describe('POST /api/visit-plans/upload', () => {
     // FIX 1 dari review akhir, dan satu-satunya CRITICAL-nya: endpoint
     // ini menyimpulkan pemilik baris LANGSUNG dari kolom "Sales Code" di
     // spreadsheet lewat User.findOne, lalu VisitPlan.create -- tanpa
-    // gerbang role dan tanpa assertWithinSubtree sama sekali. SPG mana
+    // gerbang role dan tanpa assertWithinSubtree sama sekali. MD mana
     // pun yang punya token bisa mengunggah spreadsheet berisi kode sales
     // siapa saja dan membuat jadwal kunjungan untuk SELURUH perusahaan.
     //
     // Tanggal sentinel SENGAJA berbeda dari blok "POST /api/visit-plans"
     // di atas (2026-12-30) -- keduanya independen: kalau blok ini
     // memakai tanggal yang sama, baris yang dibuat blok atas untuk
-    // (SPG, customerUji, TANGGAL) bisa membuat pemeriksaan DUPLICATE di
+    // (MD, customerUji, TANGGAL) bisa membuat pemeriksaan DUPLICATE di
     // uploadExcel diam-diam men-skip baris yang seharusnya diimpor di
     // sini, tergantung urutan cleanup antar describe.
     const TANGGAL_UPLOAD = new Date(2026, 11, 29) // 2026-12-29
 
     // Kode sales sungguhan, bukan id -- uploadExcel mencari
     // User.findOne({ where: { code } }), bukan by id.
-    const KODE_DALAM_SUBTREE = 'JKT001' // user 1 (SPG), anak dari supervisor 3
-    const KODE_LUAR_SUBTREE = 'SBY001'  // user 34 (SPG_LUAR), anak dari supervisor 33
+    const KODE_DALAM_SUBTREE = 'JKT001' // user 1 (MD), anak dari supervisor 3
+    const KODE_LUAR_SUBTREE = 'SBY001'  // user 34 (MD_LUAR), anak dari supervisor 33
 
     let customerCodeUji
     const idsDibuat = []
@@ -960,13 +960,13 @@ describe('POST /api/visit-plans/upload', () => {
 
         customerCodeUji = c[0]?.code ?? null
 
-        // Dipersempit ke user_id yang dipakai blok ini (SPG dan
-        // SPG_LUAR, lewat kode JKT001/SBY001), bukan seluruh tanggal --
+        // Dipersempit ke user_id yang dipakai blok ini (MD dan
+        // MD_LUAR, lewat kode JKT001/SBY001), bukan seluruh tanggal --
         // supaya sesi yang mati di tengah bisa pulih sendiri tanpa
         // menyentuh jadwal sungguhan siapa pun.
         await db.query(
             'DELETE FROM visit_plans WHERE visit_date = ? AND user_id IN (?, ?)',
-            ['2026-12-29', SPG, SPG_LUAR]
+            ['2026-12-29', MD, MD_LUAR]
         )
     })
 
@@ -985,27 +985,27 @@ describe('POST /api/visit-plans/upload', () => {
         return Number(r[0].n)
     }
 
-    // Bukti gerbang FIX 1 sisi SPG: request HTTP sungguhan, file .xlsx
+    // Bukti gerbang FIX 1 sisi MD: request HTTP sungguhan, file .xlsx
     // sungguhan, ditolak 403, dan TIDAK ADA baris tersimpan -- bukan cuma
     // status HTTP-nya yang diperiksa.
-    test('SPG mengunggah file ditolak 403, tidak ada baris tersimpan', async (t) => {
+    test('MD mengunggah file ditolak 403, tidak ada baris tersimpan', async (t) => {
         if (customerCodeUji === null) {
             t.skip('tidak ada customer selain id 97/123 di database')
             return
         }
 
-        const sebelum = await jumlahPadaUpload(SPG)
+        const sebelum = await jumlahPadaUpload(MD)
 
-        const { status } = await kirimExcel(SPG, [
+        const { status } = await kirimExcel(MD, [
             {
-                'Sales Code': KODE_DALAM_SUBTREE, // SPG mencoba menjadwalkan dirinya sendiri
+                'Sales Code': KODE_DALAM_SUBTREE, // MD mencoba menjadwalkan dirinya sendiri
                 'Customer Code': customerCodeUji,
                 'Visit Date': TANGGAL_UPLOAD,
             },
         ])
 
         assert.strictEqual(status, 403)
-        assert.strictEqual(await jumlahPadaUpload(SPG), sebelum)
+        assert.strictEqual(await jumlahPadaUpload(MD), sebelum)
     })
 
     // Bukti gerbang FIX 1 sisi SUPERVISOR: satu file, DUA baris -- satu
@@ -1018,8 +1018,8 @@ describe('POST /api/visit-plans/upload', () => {
             return
         }
 
-        const sebelumDalam = await jumlahPadaUpload(SPG)
-        const sebelumLuar = await jumlahPadaUpload(SPG_LUAR)
+        const sebelumDalam = await jumlahPadaUpload(MD)
+        const sebelumLuar = await jumlahPadaUpload(MD_LUAR)
 
         const { status, data } = await kirimExcel(SUPERVISOR, [
             {
@@ -1050,16 +1050,16 @@ describe('POST /api/visit-plans/upload', () => {
             'Sales Code tidak ditemukan'
         )
 
-        assert.strictEqual(await jumlahPadaUpload(SPG), sebelumDalam + 1)
+        assert.strictEqual(await jumlahPadaUpload(MD), sebelumDalam + 1)
 
         // Baris di luar subtree TIDAK BOLEH tersimpan sama sekali.
-        assert.strictEqual(await jumlahPadaUpload(SPG_LUAR), sebelumLuar)
+        assert.strictEqual(await jumlahPadaUpload(MD_LUAR), sebelumLuar)
 
         // Ditangkap untuk dihapus di after() -- lewat id, bukan lewat
         // tanggal, konsisten dengan blok lain di berkas ini.
         const [baris] = await db.query(
             'SELECT id FROM visit_plans WHERE visit_date = ? AND user_id = ? ORDER BY id DESC LIMIT 1',
-            ['2026-12-29', SPG]
+            ['2026-12-29', MD]
         )
 
         if (baris[0]) {
@@ -1086,7 +1086,7 @@ describe('PUT /api/users/:id tidak menghapus field yang tidak dikirim', () => {
             `INSERT INTO users
                 (code, name, email, password, role, status,
                  area_id, channel_id, supervisor_id)
-             VALUES (?, ?, ?, ?, 'SPG', 'ACTIVE', 1, 2, 3)`,
+             VALUES (?, ?, ?, ?, 'MD', 'ACTIVE', 1, 2, 3)`,
             [
                 SEMENTARA.code,
                 'User Uji Nullable',
@@ -1126,7 +1126,7 @@ describe('PUT /api/users/:id tidak menghapus field yang tidak dikirim', () => {
             'PUT',
             `/api/users/${idSementara}`,
             ADMIN,
-            { name: 'Nama Sudah Diubah', email: SEMENTARA.email, role: 'SPG' }
+            { name: 'Nama Sudah Diubah', email: SEMENTARA.email, role: 'MD' }
         )
 
         assert.strictEqual(status, 200)
@@ -1159,7 +1159,7 @@ describe('PUT /api/users/:id tidak menghapus field yang tidak dikirim', () => {
             {
                 name: 'Nama Sudah Diubah',
                 email: SEMENTARA.email,
-                role: 'SPG',
+                role: 'MD',
                 supervisor_id: '',
             }
         )
@@ -1183,7 +1183,7 @@ describe('PUT /api/users/:id tidak menghapus field yang tidak dikirim', () => {
             {
                 name: 'Nama Sudah Diubah',
                 email: SEMENTARA.email,
-                role: 'SPG',
+                role: 'MD',
                 area_id: 3,
             }
         )

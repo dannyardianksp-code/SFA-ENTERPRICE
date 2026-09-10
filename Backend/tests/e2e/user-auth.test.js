@@ -12,7 +12,7 @@ const {
 const BASE = process.env.TEST_BASE_URL || 'http://localhost:1000'
 
 // User acuan di database dev.
-const DANNY = 1          // SPG
+const DANNY = 1          // MD
 const ADMIN = 2          // ADMINISTRATOR
 const JAKARTA = 3        // SUPERVISOR
 const MANAGER = 30       // MANAGER
@@ -91,7 +91,7 @@ describe('PUT /api/users/:id/reset-password', () => {
 
         const [hasil] = await c.query(
             `INSERT INTO users (code, name, email, password, role)
-             VALUES (?, ?, ?, ?, 'SPG')`,
+             VALUES (?, ?, ?, ?, 'MD')`,
             [
                 `ZZTEST${penanda}`,
                 'TARGET RESET PASSWORD (TES)',
@@ -136,14 +136,14 @@ describe('PUT /api/users/:id/reset-password', () => {
         assert.strictEqual(res.status, 401)
     })
 
-    // INI lubangnya: sebelum perbaikan, SPG mana pun bisa mereset
+    // INI lubangnya: sebelum perbaikan, MD mana pun bisa mereset
     // password ADMINISTRATOR lalu login sebagai administrator.
-    test('SPG ditolak 403', async () => {
+    test('MD ditolak 403', async () => {
         const res = await kirim(
             'PUT',
             `/api/users/${targetId}/reset-password`,
             DANNY,
-            'SPG'
+            'MD'
         )
 
         assert.strictEqual(res.status, 403)
@@ -172,9 +172,9 @@ describe('PUT /api/users/:id/reset-password', () => {
         assert.strictEqual(res.status, 403)
     })
 
-    // Role diambil dari database, bukan dari token. Token SPG yang
+    // Role diambil dari database, bukan dari token. Token MD yang
     // mengaku ADMINISTRATOR tidak boleh dipercaya.
-    test('token SPG yang mengaku ADMINISTRATOR tetap ditolak 403', async () => {
+    test('token MD yang mengaku ADMINISTRATOR tetap ditolak 403', async () => {
         const res = await kirim(
             'PUT',
             `/api/users/${targetId}/reset-password`,
@@ -185,14 +185,14 @@ describe('PUT /api/users/:id/reset-password', () => {
         assert.strictEqual(res.status, 403)
     })
 
-    test('SPG yang ditolak tidak mengubah password apa pun', async () => {
+    test('MD yang ditolak tidak mengubah password apa pun', async () => {
         const sebelum = await hashDi(targetId)
 
         await kirim(
             'PUT',
             `/api/users/${targetId}/reset-password`,
             DANNY,
-            'SPG'
+            'MD'
         )
 
         assert.strictEqual(
@@ -342,7 +342,7 @@ describe('GET /api/users/:id/areas', () => {
             'GET',
             `/api/users/${DANNY}/areas`,
             DANNY,
-            'SPG'
+            'MD'
         )
 
         assert.strictEqual(res.status, 200, JSON.stringify(res.body))

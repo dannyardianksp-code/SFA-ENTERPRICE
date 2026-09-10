@@ -73,7 +73,7 @@ before(async () => {
         )
     }
 
-    const customers = await get('/api/customers', DANNY, 'SPG')
+    const customers = await get('/api/customers', DANNY, 'MD')
 
     assert.strictEqual(customers.status, 200)
     assert.ok(customers.body.length > 0, 'Danny tidak melihat customer apa pun')
@@ -131,8 +131,8 @@ describe('GET /api/visit-plans — cakupan hierarki', () => {
 
     const idDi = (body) => body.map(p => p.id)
 
-    test('SPG hanya melihat rencana miliknya', async () => {
-        const res = await get('/api/visit-plans', DANNY, 'SPG')
+    test('MD hanya melihat rencana miliknya', async () => {
+        const res = await get('/api/visit-plans', DANNY, 'MD')
 
         assert.strictEqual(res.status, 200)
 
@@ -143,7 +143,7 @@ describe('GET /api/visit-plans — cakupan hierarki', () => {
         assert.ok(!ids.includes(rencanaTria), 'rencana Tria seharusnya tidak terlihat')
     })
 
-    // Tes ini membuktikan supervisor melihat rencana seluruh SPG di
+    // Tes ini membuktikan supervisor melihat rencana seluruh MD di
     // bawahnya. Ia TIDAK membedakan aturan lama dari aturan baru: di
     // database dev, Danny, Tino, dan SUBUR semuanya punya area_id dan
     // channel_id yang sama dengan supervisornya JAKARTA, jadi filter
@@ -152,7 +152,7 @@ describe('GET /api/visit-plans — cakupan hierarki', () => {
     // lama ada di tes unit collectSubtreeIds pada
     // tests/unit/access.util.test.js, yang membuktikan penurunannya
     // hanya memakai supervisor_id.
-    test('supervisor melihat rencana seluruh SPG di bawahnya', async () => {
+    test('supervisor melihat rencana seluruh MD di bawahnya', async () => {
         const res = await get('/api/visit-plans', JAKARTA, 'SUPERVISOR')
 
         assert.strictEqual(res.status, 200)
@@ -233,8 +233,8 @@ describe('GET /api/visit-activities — cakupan hierarki', () => {
         console.log(`  (bersih-bersih: 1 visit activity yatim dihapus)`)
     })
 
-    test('SPG mendapat array, bukan objek berbungkus', async () => {
-        const res = await get('/api/visit-activities', DANNY, 'SPG')
+    test('MD mendapat array, bukan objek berbungkus', async () => {
+        const res = await get('/api/visit-activities', DANNY, 'MD')
 
         assert.strictEqual(res.status, 200)
         assert.ok(
@@ -243,8 +243,8 @@ describe('GET /api/visit-activities — cakupan hierarki', () => {
         )
     })
 
-    test('setiap activity yang terlihat SPG milik kunjungan SPG itu', async () => {
-        const res = await get('/api/visit-activities', DANNY, 'SPG')
+    test('setiap activity yang terlihat MD milik kunjungan MD itu', async () => {
+        const res = await get('/api/visit-activities', DANNY, 'MD')
 
         for (const a of res.body) {
             assert.ok(a.Visit, 'relasi Visit tidak di-include')
@@ -259,8 +259,8 @@ describe('GET /api/visit-activities — cakupan hierarki', () => {
     // Supervisor melihat miliknya sendiri DAN bawahannya. Sebelum
     // perbaikan ini, cabangnya hanya mengambil bawahan, jadi activity
     // supervisor sendiri tidak pernah terlihat olehnya.
-    test('supervisor melihat minimal semua yang dilihat SPG bawahannya', async () => {
-        const spg = await get('/api/visit-activities', DANNY, 'SPG')
+    test('supervisor melihat minimal semua yang dilihat MD bawahannya', async () => {
+        const spg = await get('/api/visit-activities', DANNY, 'MD')
         const spv = await get('/api/visit-activities', JAKARTA, 'SUPERVISOR')
 
         assert.strictEqual(spv.status, 200)
@@ -325,8 +325,8 @@ describe('GET /api/visit-activities — cakupan hierarki', () => {
 
 describe('GET /api/visits — cakupan hierarki', () => {
 
-    test('SPG mendapat array dan semuanya miliknya', async () => {
-        const res = await get('/api/visits', DANNY, 'SPG')
+    test('MD mendapat array dan semuanya miliknya', async () => {
+        const res = await get('/api/visits', DANNY, 'MD')
 
         assert.strictEqual(res.status, 200)
         assert.ok(Array.isArray(res.body))
@@ -341,7 +341,7 @@ describe('GET /api/visits — cakupan hierarki', () => {
     })
 
     test('supervisor melihat minimal semua yang dilihat bawahannya', async () => {
-        const spg = await get('/api/visits', DANNY, 'SPG')
+        const spg = await get('/api/visits', DANNY, 'MD')
         const spv = await get('/api/visits', JAKARTA, 'SUPERVISOR')
 
         assert.strictEqual(spv.status, 200)
@@ -376,9 +376,9 @@ describe('GET /api/visits — cakupan hierarki', () => {
     })
 
     // Role diambil dari database, bukan dari token. Token yang mengaku
-    // ADMINISTRATOR untuk user yang sebenarnya SPG tidak boleh dipercaya.
+    // ADMINISTRATOR untuk user yang sebenarnya MD tidak boleh dipercaya.
     test('role dari token yang dipalsukan tidak dipercaya', async () => {
-        const jujur = await get('/api/visits', DANNY, 'SPG')
+        const jujur = await get('/api/visits', DANNY, 'MD')
         const palsu = await get('/api/visits', DANNY, 'ADMINISTRATOR')
 
         assert.strictEqual(palsu.status, 200)
@@ -423,7 +423,7 @@ describe('GET /api/visits -- ?mine=1 dan filter tanggal', () => {
         const bulanLalu = '2020-01-15 08:00:00' // jauh di luar bulan berjalan manapun
         const idLama = await buatVisit(DANNY, bulanLalu)
 
-        const res = await get('/api/visits', DANNY, 'SPG')
+        const res = await get('/api/visits', DANNY, 'MD')
 
         assert.strictEqual(res.status, 200)
         assert.ok(
@@ -437,7 +437,7 @@ describe('GET /api/visits -- ?mine=1 dan filter tanggal', () => {
         const idLama = await buatVisit(DANNY, bulanLalu)
         const idBaru = await buatVisit(DANNY, `${localDateString()} 08:00:00`)
 
-        const res = await get('/api/visits?mine=1', DANNY, 'SPG')
+        const res = await get('/api/visits?mine=1', DANNY, 'MD')
 
         assert.strictEqual(res.status, 200)
 
@@ -468,7 +468,7 @@ describe('GET /api/visits -- ?mine=1 dan filter tanggal', () => {
         const res = await get(
             `/api/visits?from=${localDateString()}&to=${localDateString()}`,
             DANNY,
-            'SPG'
+            'MD'
         )
 
         assert.strictEqual(res.status, 200)
@@ -506,7 +506,7 @@ describe('GET /api/visits -- ?mine=1 dan filter tanggal', () => {
         const res = await get(
             `/api/visits?mine=1&customer_id=${customerA.id}`,
             DANNY,
-            'SPG'
+            'MD'
         )
 
         assert.strictEqual(res.status, 200)
@@ -548,7 +548,7 @@ describe('GET /api/visits/:id — kepemilikan', () => {
             return
         }
 
-        const res = await get(`/api/visits/${visitId}`, pemilikId, 'SPG')
+        const res = await get(`/api/visits/${visitId}`, pemilikId, 'MD')
 
         assert.strictEqual(res.status, 200)
         assert.strictEqual(res.body.id, visitId)
@@ -568,7 +568,7 @@ describe('GET /api/visits/:id — kepemilikan', () => {
             return
         }
 
-        const res = await get(`/api/visits/${visitId}`, TRIA, 'SPG')
+        const res = await get(`/api/visits/${visitId}`, TRIA, 'MD')
 
         assert.strictEqual(res.status, 403)
         assert.match(res.body.message, /jangkauan|akses|berhak/i)
@@ -621,24 +621,24 @@ describe('PUT dan DELETE /api/visit-plans/:id', () => {
         return localDateString(d)
     }
 
-    test('SPG ditolak 403 saat mengubah', async () => {
+    test('MD ditolak 403 saat mengubah', async () => {
         const res = await kirim(
             'PUT',
             `/api/visit-plans/${rencanaDanny}`,
             DANNY,
-            'SPG',
+            'MD',
             { visit_date: besok() }
         )
 
         assert.strictEqual(res.status, 403)
     })
 
-    test('SPG ditolak 403 saat menghapus', async () => {
+    test('MD ditolak 403 saat menghapus', async () => {
         const res = await kirim(
             'DELETE',
             `/api/visit-plans/${rencanaDanny}`,
             DANNY,
-            'SPG'
+            'MD'
         )
 
         assert.strictEqual(res.status, 403)
@@ -931,7 +931,7 @@ describe('GET /api/visit-activities -- ?mine=1 dan ?customer_id', () => {
         const res = await get(
             `/api/visit-activities?mine=1&customer_id=${customerA.id}`,
             DANNY,
-            'SPG'
+            'MD'
         )
 
         assert.strictEqual(res.status, 200)
@@ -988,11 +988,11 @@ describe('GET /api/attendances -- cakupan hierarki dan filter tanggal', () => {
         assert.ok(ids.includes(idAtasan), 'absen sendiri harus ikut')
     })
 
-    test('SPG cuma melihat absennya sendiri, bukan rekan setingkat', async () => {
+    test('MD cuma melihat absennya sendiri, bukan rekan setingkat', async () => {
         const idSendiri = await buatAbsen(DANNY, tanggalLampau)
         const idRekan = await buatAbsen(TINO, tanggalLampau)
 
-        const res = await get('/api/attendances', DANNY, 'SPG')
+        const res = await get('/api/attendances', DANNY, 'MD')
 
         assert.strictEqual(res.status, 200)
         const ids = res.body.map(a => a.id)
@@ -1008,7 +1008,7 @@ describe('GET /api/attendances -- cakupan hierarki dan filter tanggal', () => {
         const res = await get(
             `/api/attendances?from=${tanggalLampau}&to=${tanggalLampau}`,
             DANNY,
-            'SPG'
+            'MD'
         )
 
         assert.strictEqual(res.status, 200)
@@ -1071,7 +1071,7 @@ describe('POST /api/attendances/checkin -- dikunci selama ada absen pulang terti
     test('checkin ditolak 409 kalau ada absen pulang tanggal sebelumnya yang belum selesai', async () => {
         await buatAbsenTerbuka(SUBUR, tanggalLampau1)
 
-        const res = await kirim('POST', '/api/attendances/checkin', SUBUR, 'SPG', {
+        const res = await kirim('POST', '/api/attendances/checkin', SUBUR, 'MD', {
             latitude: '-6.2',
             longitude: '106.8',
         })
@@ -1089,7 +1089,7 @@ describe('POST /api/attendances/checkin -- dikunci selama ada absen pulang terti
         // Tanpa foto (multipart) sengaja ditolak di langkah validasi foto
         // -- pesannya "Foto wajib diisi", BUKAN "Anda belum absen masuk",
         // itu bukti checkout sudah menemukan baris yang tanggalnya lampau.
-        const res = await kirim('POST', '/api/attendances/checkout', SUBUR, 'SPG', {
+        const res = await kirim('POST', '/api/attendances/checkout', SUBUR, 'MD', {
             latitude: '-6.2',
             longitude: '106.8',
         })
@@ -1107,7 +1107,7 @@ describe('POST /api/attendances/checkin -- dikunci selama ada absen pulang terti
         // seharusnya konsisten dengan urutan ASC di checkIn/checkOut:
         // yang PALING LAMA (tanggalLampau1), bukan yang baru saja
         // dibuat tes ini.
-        const res = await get('/api/attendances/today', SUBUR, 'SPG')
+        const res = await get('/api/attendances/today', SUBUR, 'MD')
 
         assert.strictEqual(res.status, 200)
         assert.ok(res.body.staleUnresolved, 'staleUnresolved seharusnya ada')
@@ -1138,7 +1138,7 @@ describe('PUT /api/areas/:id -- radius check-in per area', () => {
             'PUT',
             `/api/areas/${AREA_ID}`,
             DANNY,
-            'SPG',
+            'MD',
             { checkin_radius_meters: 500 }
         )
 
@@ -1215,7 +1215,7 @@ describe('POST /api/areas -- tambah area baru', () => {
             'POST',
             '/api/areas',
             DANNY,
-            'SPG',
+            'MD',
             { code: 'TESTAREA', name: 'Test Area' }
         )
 

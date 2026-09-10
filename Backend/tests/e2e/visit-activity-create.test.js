@@ -9,10 +9,10 @@ const path = require('path')
 
 const BASE = process.env.TEST_BASE_URL || 'http://localhost:1000'
 
-// Hierarki sungguhan: supervisor 3 -> SPG 1, 37, 38. SPG 34 di luar
+// Hierarki sungguhan: supervisor 3 -> MD 1, 37, 38. MD 34 di luar
 // subtree 3.
-const SPG = 1
-const SPG_LUAR = 34
+const MD = 1
+const MD_LUAR = 34
 const SUPERVISOR = 3
 
 let db
@@ -162,7 +162,7 @@ describe('POST /api/visit-activities', () => {
         const [v1] = await db.query(
             `INSERT INTO visits (user_id, customer_id, checkin_time)
              VALUES (?, ?, NOW())`,
-            [SPG, customerId]
+            [MD, customerId]
         )
 
         visitMilikSPG = v1.insertId
@@ -171,16 +171,16 @@ describe('POST /api/visit-activities', () => {
         const [v2] = await db.query(
             `INSERT INTO visits (user_id, customer_id, checkin_time)
              VALUES (?, ?, NOW())`,
-            [SPG_LUAR, customerId]
+            [MD_LUAR, customerId]
         )
 
         visitMilikSPGLuar = v2.insertId
         visitIdsDibuat.push(visitMilikSPGLuar)
     })
 
-    test('SPG mencatat activity tipe FOTO untuk kunjungannya sendiri', async () => {
+    test('MD mencatat activity tipe FOTO untuk kunjungannya sendiri', async () => {
         const { status, data } = await kirimDenganFoto(
-            SPG,
+            MD,
             { visit_id: visitMilikSPG, activity_id: 11 },
             true
         )
@@ -200,9 +200,9 @@ describe('POST /api/visit-activities', () => {
         assert.ok(rows[0].photo_url)
     })
 
-    test('SPG mencoba mencatat activity untuk kunjungan SPG lain: ditolak 403', async () => {
+    test('MD mencoba mencatat activity untuk kunjungan MD lain: ditolak 403', async () => {
         const { status } = await kirimDenganFoto(
-            SPG,
+            MD,
             { visit_id: visitMilikSPGLuar, activity_id: 11 },
             true
         )
@@ -217,7 +217,7 @@ describe('POST /api/visit-activities', () => {
         assert.strictEqual(rows.length, 0)
     })
 
-    test('SPG mencoba mencatat activity untuk kunjungan SPG lain dengan foto terlampir: disk tetap bersih setelah 403', async () => {
+    test('MD mencoba mencatat activity untuk kunjungan MD lain dengan foto terlampir: disk tetap bersih setelah 403', async () => {
         // Bukan cuma status code -- multer sudah menulis berkasnya ke
         // disk SEBELUM controller sempat memeriksa kepemilikan. Kalau
         // jalur 403 tidak menghapusnya, berkas itu tertinggal permanen
@@ -229,7 +229,7 @@ describe('POST /api/visit-activities', () => {
         const sebelum = new Set(fs.readdirSync(dirUpload))
 
         const { status } = await kirimDenganFoto(
-            SPG,
+            MD,
             { visit_id: visitMilikSPGLuar, activity_id: 11 },
             true
         )
@@ -248,7 +248,7 @@ describe('POST /api/visit-activities', () => {
 
     test('tipe STOCK tanpa qty: ditolak 400, tidak ada baris tersimpan', async () => {
         const { status } = await kirimDenganFoto(
-            SPG,
+            MD,
             {
                 visit_id: visitMilikSPG,
                 activity_id: 4,
@@ -263,7 +263,7 @@ describe('POST /api/visit-activities', () => {
 
     test('tipe FOTO tanpa berkas foto: ditolak 400', async () => {
         const { status } = await kirimDenganFoto(
-            SPG,
+            MD,
             { visit_id: visitMilikSPG, activity_id: 11 },
             false
         )
@@ -273,7 +273,7 @@ describe('POST /api/visit-activities', () => {
 
     test('visit_id yang tidak ada: 404', async () => {
         const { status } = await kirimDenganFoto(
-            SPG,
+            MD,
             { visit_id: 99999999, activity_id: 11 },
             true
         )
@@ -283,7 +283,7 @@ describe('POST /api/visit-activities', () => {
 
     test('activity_id di luar 1-11: ditolak 400, bukan 500 dari FK constraint', async () => {
         const { status } = await kirimDenganFoto(
-            SPG,
+            MD,
             { visit_id: visitMilikSPG, activity_id: 999 },
             true
         )
@@ -293,7 +293,7 @@ describe('POST /api/visit-activities', () => {
 
     test('tipe STOCK lengkap dengan qty valid: berhasil', async () => {
         const { status, data } = await kirimDenganFoto(
-            SPG,
+            MD,
             {
                 visit_id: visitMilikSPG,
                 activity_id: 4,
@@ -322,7 +322,7 @@ describe('POST /api/visit-activities -- batas upload', () => {
         const [v] = await db.query(
             `INSERT INTO visits (user_id, customer_id, checkin_time)
              VALUES (?, ?, NOW())`,
-            [SPG, customerRow[0].id]
+            [MD, customerRow[0].id]
         )
 
         visitMilikSPG = v.insertId
@@ -346,7 +346,7 @@ describe('POST /api/visit-activities -- batas upload', () => {
 
         const res = await fetch(BASE + '/api/visit-activities', {
             method: 'POST',
-            headers: { Authorization: 'Bearer ' + tokenUntuk(SPG) },
+            headers: { Authorization: 'Bearer ' + tokenUntuk(MD) },
             body: form,
         })
 
@@ -367,7 +367,7 @@ describe('POST /api/visit-activities -- batas upload', () => {
 
     test('berkas gambar biasa tetap diterima', async () => {
         const { status, data } = await kirimDenganFoto(
-            SPG,
+            MD,
             { visit_id: visitMilikSPG, activity_id: 11 },
             true
         )

@@ -211,7 +211,7 @@ describe('exports.create — retry saat unique index menabrak', () => {
 
         try {
 
-            // Role di luar ['SPG', 'SUPERVISOR'] supaya cabang pembatasan
+            // Role di luar ['MD', 'SUPERVISOR'] supaya cabang pembatasan
             // area/channel dilewati — bukan itu yang sedang diuji di sini.
             User.findByPk = async () => ({
                 id: 1,

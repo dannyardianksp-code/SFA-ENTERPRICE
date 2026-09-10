@@ -12,24 +12,24 @@ const {
 describe('assertAreaChannelAccess', () => {
 
     const spg = {
-        role: 'SPG',
+        role: 'MD',
         channel_id: 2,
         area_id: null,
         AssignedAreas: [{ id: 1 }, { id: 5 }],
     }
 
-    test('SPG boleh di salah satu area yang di-assign', () => {
+    test('MD boleh di salah satu area yang di-assign', () => {
         assert.strictEqual(assertAreaChannelAccess(spg, 5, 2), null)
     })
 
-    test('SPG ditolak 403 di luar area', () => {
+    test('MD ditolak 403 di luar area', () => {
         const hasil = assertAreaChannelAccess(spg, 9, 2)
 
         assert.strictEqual(hasil.status, 403)
         assert.match(hasil.message, /wilayah Anda/)
     })
 
-    test('SPG ditolak 403 di channel lain', () => {
+    test('MD ditolak 403 di channel lain', () => {
         const hasil = assertAreaChannelAccess(spg, 1, 7)
 
         assert.strictEqual(hasil.status, 403)
@@ -65,7 +65,7 @@ describe('assertAreaChannelAccess', () => {
 
     test('fallback area_id dipakai kalau AssignedAreas kosong', () => {
         const lama = {
-            role: 'SPG',
+            role: 'MD',
             channel_id: 2,
             area_id: 3,
             AssignedAreas: [],
@@ -121,9 +121,9 @@ describe('collectSubtreeIds', () => {
         assert.deepStrictEqual(hasil, [3, 1, 37, 38])
     })
 
-    // Anak langsung MANAGER semuanya SUPERVISOR — nol SPG. Penurunan
-    // satu tingkat tidak akan pernah mencapai SPG mana pun.
-    test('dua tingkat: manager -> supervisor -> SPG', async () => {
+    // Anak langsung MANAGER semuanya SUPERVISOR — nol MD. Penurunan
+    // satu tingkat tidak akan pernah mencapai MD mana pun.
+    test('dua tingkat: manager -> supervisor -> MD', async () => {
         const hasil = await collectSubtreeIds(
             30,
             pengambilDari({

@@ -16,11 +16,11 @@ const BASE = process.env.TEST_BASE_URL || 'http://localhost:1000'
 // Bukan kerapian: kalau sebuah penjaga regresi, request yang seharusnya
 // ditolak akan BERHASIL. Assertion-nya gagal dengan berisik, tapi barisnya
 // tidak dikembalikan siapa pun — dan akun administrator yang terlanjur
-// jadi SPG tidak punya jalur pemulihan, karena reset password pun
+// jadi MD tidak punya jalur pemulihan, karena reset password pun
 // ADMINISTRATOR-saja. Percobaan sebelumnya menonaktifkan akun
 // administrator asli lewat berkas ini, dan 401 yang dihasilkannya menjalar
 // ke blok tes lain yang sedang berjalan bersamaan.
-const SPG = 1
+const MD = 1
 const ADMIN = 2
 
 // Password user sungguhan TIDAK BOLEH diubah tes mana pun, jadi seluruh
@@ -96,7 +96,7 @@ before(async () => {
     // perbaikannya.
     const [hasil] = await db.query(
         `INSERT INTO users (code, name, email, password, role, status)
-         VALUES (?, ?, ?, ?, 'SPG', 'ACTIVE')`,
+         VALUES (?, ?, ?, ?, 'MD', 'ACTIVE')`,
         [
             SEMENTARA.code,
             SEMENTARA.name,
@@ -290,7 +290,7 @@ describe('gerbang role pada penulisan user', () => {
     // Blok ini SEBELUMNYA hanya punya after. Kalau prosesnya mati antara
     // INSERT-nya 'ADMINISTRATOR boleh membuat user' dan after itu, barisnya
     // bertahan — pembersihan di level berkas hanya menyentuh SEMENTARA.code.
-    // Pada run berikutnya 'SPG tidak boleh membuat user' gagal pada
+    // Pada run berikutnya 'MD tidak boleh membuat user' gagal pada
     // assertion "baris tidak boleh ada" dan 'ADMINISTRATOR boleh membuat
     // user' mendapat 500 dari unique index alih-alih 200, sehingga regresi
     // sungguhan tidak bisa dibedakan dari sisa yang basi.
@@ -319,8 +319,8 @@ describe('gerbang role pada penulisan user', () => {
         return baris[0].role
     }
 
-    test('SPG tidak boleh membuat user', async () => {
-        const { status } = await kirim('POST', '/api/users', SPG, {
+    test('MD tidak boleh membuat user', async () => {
+        const { status } = await kirim('POST', '/api/users', MD, {
             code: KODE_SELUNDUPAN,
             name: 'Administrator Selundupan',
             email: EMAIL_SELUNDUPAN,
@@ -340,7 +340,7 @@ describe('gerbang role pada penulisan user', () => {
         )
     })
 
-    test('SPG tidak boleh menaikkan role dirinya sendiri', async () => {
+    test('MD tidak boleh menaikkan role dirinya sendiri', async () => {
         const { status } = await kirim(
             'PUT',
             `/api/users/${idSementara}`,
@@ -349,7 +349,7 @@ describe('gerbang role pada penulisan user', () => {
         )
 
         assert.strictEqual(status, 403)
-        assert.strictEqual(await roleDi(idSementara), 'SPG')
+        assert.strictEqual(await roleDi(idSementara), 'MD')
     })
 
     // Unit test sudah membuktikan helper-nya menolak ketiga role, tapi
@@ -384,7 +384,7 @@ describe('gerbang role pada penulisan user', () => {
             name: 'User Dibuat Admin',
             email: EMAIL_SELUNDUPAN,
             password: 'RahasiaUji123',
-            role: 'SPG',
+            role: 'MD',
         })
 
         assert.strictEqual(status, 200)
@@ -417,7 +417,7 @@ describe('gerbang role pada penulisan user', () => {
         )
 
         assert.strictEqual(status, 400)
-        assert.strictEqual(await roleDi(idSementara), 'SPG')
+        assert.strictEqual(await roleDi(idSementara), 'MD')
     })
 
 })
@@ -431,7 +431,7 @@ describe('penjaga identitas diri sendiri pada PUT /api/users/:id', () => {
     // tanpa after yang memulihkannya. Assertion-nya benar hari ini, tapi
     // kalau penjaganya regresi maka request-nya BERHASIL: User.update
     // berjalan dengan where id = 2, sehingga role administrator sungguhan
-    // menjadi SPG dan code, area_id, channel_id, supervisor_id-nya
+    // menjadi MD dan code, area_id, channel_id, supervisor_id-nya
     // tertimpa NULL. Assertion-nya gagal dengan berisik, tapi tidak ada
     // yang mengembalikan barisnya.
     //
@@ -496,7 +496,7 @@ describe('penjaga identitas diri sendiri pada PUT /api/users/:id', () => {
             'PUT',
             `/api/users/${idAdminSendiri}`,
             idAdminSendiri,
-            { name: ADMIN_SENDIRI.name, role: 'SPG' }
+            { name: ADMIN_SENDIRI.name, role: 'MD' }
         )
 
         assert.strictEqual(status, 400)
@@ -605,14 +605,14 @@ describe('penjaga identitas diri sendiri pada PUT /api/users/:id', () => {
     // pembanding req.user.id maupun findByPk.
     //
     // Sasarannya administrator sekali pakai, bukan akun ADMIN sungguhan:
-    // kalau parseId regresi, request ini BERHASIL dan menulis role SPG
+    // kalau parseId regresi, request ini BERHASIL dan menulis role MD
     // plus NULL ke empat kolom lain pada baris sasarannya.
     test('id dengan akhiran huruf ditolak 400 sebelum penjaga atau where', async () => {
         const { status } = await kirim(
             'PUT',
             `/api/users/${idAdminSendiri}abc`,
             idAdminSendiri,
-            { name: ADMIN_SENDIRI.name, role: 'SPG' }
+            { name: ADMIN_SENDIRI.name, role: 'MD' }
         )
 
         assert.strictEqual(status, 400)
@@ -632,7 +632,7 @@ describe('gerbang pada penonaktifan akun', () => {
     // jadi administrator sekali pakai ini lolos gerbang yang sama persis
     // seperti akun ADMIN sungguhan — tapi kalau larangan diri sendirinya
     // pernah rusak (regresi), yang ternonaktifkan hanya baris sekali
-    // pakai ini, bukan akun administrator sungguhan. ADMIN dan SPG
+    // pakai ini, bukan akun administrator sungguhan. ADMIN dan MD
     // sungguhan di berkas ini hanya dipakai sebagai pemanggil baca-saja
     // pada tes lain, tidak pernah sebagai sasaran tulis.
     const ADMIN_SEMENTARA = {
@@ -686,11 +686,11 @@ describe('gerbang pada penonaktifan akun', () => {
         }
     })
 
-    test('SPG tidak boleh menonaktifkan siapa pun', async () => {
+    test('MD tidak boleh menonaktifkan siapa pun', async () => {
         const { status } = await kirim(
             'PUT',
             `/api/users/${idSementara}/status`,
-            SPG
+            MD
         )
 
         assert.strictEqual(status, 403)
@@ -728,11 +728,11 @@ describe('gerbang pada penonaktifan akun', () => {
 
     // Pemanggil yang tidak berhak tidak perlu diberi tahu apakah id
     // targetnya ada.
-    test('SPG mendapat 403, bukan 404, untuk id yang tidak ada', async () => {
+    test('MD mendapat 403, bukan 404, untuk id yang tidak ada', async () => {
         const { status } = await kirim(
             'PUT',
             '/api/users/99999999/status',
-            SPG
+            MD
         )
 
         assert.strictEqual(status, 403)
@@ -781,7 +781,7 @@ describe('register dihapus', () => {
     after(bersihkan)
 
     // Endpoint ini berjalan tanpa autentikasi. Ia hanya bisa membuat
-    // SPG, tapi SPG itulah satu-satunya prasyarat untuk seluruh jalur
+    // MD, tapi MD itulah satu-satunya prasyarat untuk seluruh jalur
     // eskalasi di berkas ini — rantainya jadi tidak butuh kredensial
     // apa pun.
     test('POST /api/auth/register tidak ada lagi', async () => {
@@ -909,13 +909,13 @@ describe('lantai administrator aktif di bawah dua request bersamaan', () => {
         const [a, b] = await Promise.all([
             kirim('PUT', `/api/users/${idB}`, idA, {
                 name: 'B diturunkan A',
-                role: 'SPG',
+                role: 'MD',
                 code: ADMIN_B.code,
                 email: ADMIN_B.email,
             }),
             kirim('PUT', `/api/users/${idA}`, idB, {
                 name: 'A diturunkan B',
-                role: 'SPG',
+                role: 'MD',
                 code: ADMIN_A.code,
                 email: ADMIN_A.email,
             }),
@@ -984,7 +984,7 @@ describe('lantai administrator aktif di bawah dua request bersamaan', () => {
 
         const { status } = await kirim('PUT', `/api/users/${idB}`, idA, {
             name: 'B diturunkan berurutan',
-            role: 'SPG',
+            role: 'MD',
             code: ADMIN_B.code,
             email: ADMIN_B.email,
         })
@@ -998,7 +998,7 @@ describe('lantai administrator aktif di bawah dua request bersamaan', () => {
 
         assert.strictEqual(
             baris[0].role,
-            'SPG',
+            'MD',
             'transaksi harus commit, bukan diam-diam rollback'
         )
     })
@@ -1217,7 +1217,7 @@ describe('kontensi lock dijawab 503 yang bisa diulang', () => {
 
         const [hasil] = await db.query(
             `INSERT INTO users (code, name, email, password, role, status)
-             VALUES (?, ?, ?, 'hash-tidak-dipakai', 'SPG', 'ACTIVE')`,
+             VALUES (?, ?, ?, 'hash-tidak-dipakai', 'MD', 'ACTIVE')`,
             [KONTENSI.code, KONTENSI.name, KONTENSI.email]
         )
 

@@ -19,7 +19,7 @@ describe('assertUserManagement', () => {
     })
 
     test('role lain ditolak 403', () => {
-        for (const role of ['SPG', 'SUPERVISOR', 'MANAGER']) {
+        for (const role of ['MD', 'SUPERVISOR', 'MANAGER']) {
             const hasil = assertUserManagement({ id: 1, role })
 
             assert.ok(hasil, `${role} seharusnya ditolak`)
@@ -78,7 +78,7 @@ describe('wouldRemoveLastActiveAdministrator', () => {
         assert.strictEqual(
             wouldRemoveLastActiveAdministrator(
                 ADMIN_AKTIF,
-                { role: 'SPG' },
+                { role: 'MD' },
                 1
             ),
             true
@@ -102,7 +102,7 @@ describe('wouldRemoveLastActiveAdministrator', () => {
         assert.strictEqual(
             wouldRemoveLastActiveAdministrator(
                 ADMIN_AKTIF,
-                { role: 'SPG' },
+                { role: 'MD' },
                 0
             ),
             true
@@ -114,7 +114,7 @@ describe('wouldRemoveLastActiveAdministrator', () => {
             assert.strictEqual(
                 wouldRemoveLastActiveAdministrator(
                     ADMIN_AKTIF,
-                    { role: 'SPG' },
+                    { role: 'MD' },
                     jumlah
                 ),
                 false,
@@ -149,7 +149,7 @@ describe('wouldRemoveLastActiveAdministrator', () => {
 
     test('sasaran yang bukan administrator aktif tidak pernah menyentuh lantai', () => {
         const bukan = [
-            { role: 'SPG', status: 'ACTIVE' },
+            { role: 'MD', status: 'ACTIVE' },
             { role: 'MANAGER', status: 'ACTIVE' },
             { role: 'ADMINISTRATOR', status: 'INACTIVE' },
             { role: 'ADMINISTRATOR', status: null },
@@ -159,7 +159,7 @@ describe('wouldRemoveLastActiveAdministrator', () => {
             assert.strictEqual(
                 wouldRemoveLastActiveAdministrator(
                     target,
-                    { role: 'SPG', status: 'INACTIVE' },
+                    { role: 'MD', status: 'INACTIVE' },
                     1
                 ),
                 false,
@@ -176,7 +176,7 @@ describe('wouldRemoveLastActiveAdministrator', () => {
             assert.strictEqual(
                 wouldRemoveLastActiveAdministrator(
                     kosong,
-                    { role: 'SPG' },
+                    { role: 'MD' },
                     1
                 ),
                 false
@@ -199,7 +199,7 @@ describe('konstanta role', () => {
     test('USER_ROLES sama dengan ENUM database', () => {
         assert.deepStrictEqual(
             [...USER_ROLES].sort(),
-            ['ADMINISTRATOR', 'GENERAL MANAGER', 'MANAGER', 'REGIONAL MANAGER', 'SPG', 'SUPERVISOR']
+            ['ADMINISTRATOR', 'GENERAL MANAGER', 'MANAGER', 'MD', 'REGIONAL MANAGER', 'SUPERVISOR']
         )
     })
 

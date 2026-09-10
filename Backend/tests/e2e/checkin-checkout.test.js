@@ -7,11 +7,11 @@ const mysql = require('mysql2/promise')
 
 const BASE = process.env.TEST_BASE_URL || 'http://localhost:1000'
 
-// Hierarki sungguhan: supervisor 3 -> SPG 1, 37, 38. SPG 34 di bawah
+// Hierarki sungguhan: supervisor 3 -> MD 1, 37, 38. MD 34 di bawah
 // supervisor 33, di luar subtree 3.
-const SPG = 1
+const MD = 1
 const SPG_LAIN = 37       // sama-sama anak supervisor 3
-const SPG_LUAR = 34       // di luar subtree supervisor 3
+const MD_LUAR = 34       // di luar subtree supervisor 3
 const SUPERVISOR = 3
 
 let db
@@ -64,10 +64,10 @@ const ambilCustomerUji = async () => {
 }
 
 /**
- * Customer di area SPG lewat user_areas yang BUKAN area_id lama di
+ * Customer di area MD lewat user_areas yang BUKAN area_id lama di
  * kolom users -- bukti bahwa gerbang area harus memakai multi-area,
  * bukan diam-diam jatuh ke fallback kolom tunggal. Customer yang
- * dikembalikan sudah dicocokkan dengan channel_id SPG supaya gerbang
+ * dikembalikan sudah dicocokkan dengan channel_id MD supaya gerbang
  * channel tidak ikut menolak dan mengacaukan pembuktian area.
  */
 const ambilCustomerAreaKedua = async (userId) => {
@@ -172,7 +172,7 @@ describe('POST /api/visits/checkin', () => {
 
     before(async () => {
         customerUji = await ambilCustomerUji()
-        customerAreaKedua = await ambilCustomerAreaKedua(SPG)
+        customerAreaKedua = await ambilCustomerAreaKedua(MD)
     })
 
     const koordinatBaik = () => ({
@@ -181,18 +181,18 @@ describe('POST /api/visits/checkin', () => {
         accuracy: 15,
     })
 
-    test('SPG check-in ke plan miliknya sendiri berhasil', async (t) => {
+    test('MD check-in ke plan miliknya sendiri berhasil', async (t) => {
         if (!customerUji) {
             t.skip('tidak ada customer dengan koordinat di database')
             return
         }
 
-        const planId = await buatPlanUntuk(SPG, customerUji.id)
+        const planId = await buatPlanUntuk(MD, customerUji.id)
 
         const { status, data } = await kirim(
             'POST',
             '/api/visits/checkin',
-            SPG,
+            MD,
             { visit_plan_id: planId, ...koordinatBaik() }
         )
 
@@ -213,14 +213,14 @@ describe('POST /api/visits/checkin', () => {
         assert.strictEqual(row[0].customer_id, customerUji.id)
     })
 
-    test('SPG check-in ke plan bertanggal besok ditolak 400', async (t) => {
+    test('MD check-in ke plan bertanggal besok ditolak 400', async (t) => {
         if (!customerUji) {
             t.skip('tidak ada customer dengan koordinat di database')
             return
         }
 
         const planId = await buatPlanUntukTanggal(
-            SPG,
+            MD,
             customerUji.id,
             'DATE_ADD(CURDATE(), INTERVAL 1 DAY)'
         )
@@ -228,7 +228,7 @@ describe('POST /api/visits/checkin', () => {
         const { status } = await kirim(
             'POST',
             '/api/visits/checkin',
-            SPG,
+            MD,
             { visit_plan_id: planId, ...koordinatBaik() }
         )
 
@@ -242,14 +242,14 @@ describe('POST /api/visits/checkin', () => {
         assert.strictEqual(visits.length, 0)
     })
 
-    test('SPG check-in ke plan bertanggal kemarin tetap berhasil (susulan)', async (t) => {
+    test('MD check-in ke plan bertanggal kemarin tetap berhasil (susulan)', async (t) => {
         if (!customerUji) {
             t.skip('tidak ada customer dengan koordinat di database')
             return
         }
 
         const planId = await buatPlanUntukTanggal(
-            SPG,
+            MD,
             customerUji.id,
             'DATE_SUB(CURDATE(), INTERVAL 1 DAY)'
         )
@@ -257,7 +257,7 @@ describe('POST /api/visits/checkin', () => {
         const { status, data } = await kirim(
             'POST',
             '/api/visits/checkin',
-            SPG,
+            MD,
             { visit_plan_id: planId, ...koordinatBaik() }
         )
 
@@ -266,7 +266,7 @@ describe('POST /api/visits/checkin', () => {
         visitIdsDibuat.push(data.data.id)
     })
 
-    test('SPG check-in ke plan milik SPG lain ditolak 403', async (t) => {
+    test('MD check-in ke plan milik MD lain ditolak 403', async (t) => {
         if (!customerUji) {
             t.skip('tidak ada customer dengan koordinat di database')
             return
@@ -277,7 +277,7 @@ describe('POST /api/visits/checkin', () => {
         const { status } = await kirim(
             'POST',
             '/api/visits/checkin',
-            SPG,
+            MD,
             { visit_plan_id: planId, ...koordinatBaik() }
         )
 
@@ -297,12 +297,12 @@ describe('POST /api/visits/checkin', () => {
             return
         }
 
-        const planId = await buatPlanUntuk(SPG, customerUji.id)
+        const planId = await buatPlanUntuk(MD, customerUji.id)
 
         const { status, data } = await kirim(
             'POST',
             '/api/visits/checkin',
-            SPG,
+            MD,
             {
                 visit_plan_id: planId,
                 latitude: Number(customerUji.latitude),
@@ -328,12 +328,12 @@ describe('POST /api/visits/checkin', () => {
             return
         }
 
-        const planId = await buatPlanUntuk(SPG, customerUji.id)
+        const planId = await buatPlanUntuk(MD, customerUji.id)
 
         const { status } = await kirim(
             'POST',
             '/api/visits/checkin',
-            SPG,
+            MD,
             {
                 visit_plan_id: planId,
                 // Jauh dari customerUji dengan sengaja -- 1 derajat
@@ -363,12 +363,12 @@ describe('POST /api/visits/checkin', () => {
             return
         }
 
-        const planId = await buatPlanUntuk(SPG, customerUji.id)
+        const planId = await buatPlanUntuk(MD, customerUji.id)
 
         const { status, data } = await kirim(
             'POST',
             '/api/visits/checkin',
-            SPG,
+            MD,
             {
                 visit_plan_id: planId,
                 customer_id: customerLain[0].id,
@@ -395,7 +395,7 @@ describe('POST /api/visits/checkin', () => {
             return
         }
 
-        const planId = await buatPlanUntuk(SPG, customerUji.id)
+        const planId = await buatPlanUntuk(MD, customerUji.id)
 
         await db.query(
             "UPDATE visit_plans SET status = 'COMPLETED' WHERE id = ?",
@@ -405,7 +405,7 @@ describe('POST /api/visits/checkin', () => {
         const { status } = await kirim(
             'POST',
             '/api/visits/checkin',
-            SPG,
+            MD,
             { visit_plan_id: planId, ...koordinatBaik() }
         )
 
@@ -416,30 +416,30 @@ describe('POST /api/visits/checkin', () => {
         const { status } = await kirim(
             'POST',
             '/api/visits/checkin',
-            SPG,
+            MD,
             { visit_plan_id: 99999999, ...koordinatBaik() }
         )
 
         assert.strictEqual(status, 404)
     })
 
-    test('SPG multi-area berhasil check-in di area kedua lewat user_areas, di luar area_id lama', async (t) => {
+    test('MD multi-area berhasil check-in di area kedua lewat user_areas, di luar area_id lama', async (t) => {
         if (!customerAreaKedua) {
-            t.skip('SPG uji tidak punya area kedua lewat user_areas, atau tidak ada customer dengan koordinat di area itu')
+            t.skip('MD uji tidak punya area kedua lewat user_areas, atau tidak ada customer dengan koordinat di area itu')
             return
         }
 
-        // Customer ini SENGAJA di area yang bukan area_id lama SPG --
+        // Customer ini SENGAJA di area yang bukan area_id lama MD --
         // kalau gerbang area diam-diam memakai req.user tanpa
         // AssignedAreas (bug yang diperbaiki di sini), ia jatuh ke
         // fallback area_id tunggal dan menolak 403 walau user_areas
-        // mengizinkan SPG ini di area tersebut.
-        const planId = await buatPlanUntuk(SPG, customerAreaKedua.id)
+        // mengizinkan MD ini di area tersebut.
+        const planId = await buatPlanUntuk(MD, customerAreaKedua.id)
 
         const { status, data } = await kirim(
             'POST',
             '/api/visits/checkin',
-            SPG,
+            MD,
             {
                 visit_plan_id: planId,
                 latitude: Number(customerAreaKedua.latitude),
@@ -459,12 +459,12 @@ describe('POST /api/visits/checkin', () => {
             return
         }
 
-        const planId = await buatPlanUntuk(SPG, customerUji.id)
+        const planId = await buatPlanUntuk(MD, customerUji.id)
 
         const { status, data } = await kirim(
             'POST',
             '/api/visits/checkin',
-            SPG,
+            MD,
             {
                 visit_plan_id: planId,
                 // Akurasi DAN jarak sama-sama buruk sekaligus --
@@ -502,12 +502,12 @@ describe('POST /api/visits/checkin', () => {
             return
         }
 
-        const planId = await buatPlanUntuk(SPG, customerUji.id)
+        const planId = await buatPlanUntuk(MD, customerUji.id)
 
         const { status } = await kirim(
             'POST',
             '/api/visits/checkin',
-            SPG,
+            MD,
             { visit_plan_id: planId, accuracy: 10 }
         )
 
@@ -530,12 +530,12 @@ describe('POST /api/visits/checkin', () => {
             return
         }
 
-        const planId = await buatPlanUntuk(SPG, customerUji.id)
+        const planId = await buatPlanUntuk(MD, customerUji.id)
 
         const { status } = await kirim(
             'POST',
             '/api/visits/checkin',
-            SPG,
+            MD,
             {
                 visit_plan_id: planId,
                 latitude: Number(customerUji.latitude),
@@ -572,14 +572,14 @@ describe('POST /api/visits/checkin', () => {
             return
         }
 
-        const planId = await buatPlanUntuk(SPG, customerUji.id)
+        const planId = await buatPlanUntuk(MD, customerUji.id)
 
         const [hasil] = await db.query(
             `INSERT INTO visits
                 (user_id, customer_id, visit_plan_id, checkin_time,
                  latitude, longitude, location_accuracy)
              VALUES (?, ?, ?, NOW(), ?, ?, 10)`,
-            [SPG, customerUji.id, planId, customerUji.latitude, customerUji.longitude]
+            [MD, customerUji.id, planId, customerUji.latitude, customerUji.longitude]
         )
 
         const visitIdLama = hasil.insertId
@@ -588,7 +588,7 @@ describe('POST /api/visits/checkin', () => {
         const { status, data } = await kirim(
             'POST',
             '/api/visits/checkin',
-            SPG,
+            MD,
             { visit_plan_id: planId, ...koordinatBaik() }
         )
 
@@ -616,14 +616,14 @@ describe('POST /api/visits/:id/checkout', () => {
 
         if (!customerUji) return
 
-        const planId = await buatPlanUntuk(SPG, customerUji.id)
+        const planId = await buatPlanUntuk(MD, customerUji.id)
 
         const [hasil] = await db.query(
             `INSERT INTO visits
                 (user_id, customer_id, visit_plan_id, checkin_time,
                  latitude, longitude, location_accuracy)
              VALUES (?, ?, ?, NOW(), ?, ?, 10)`,
-            [SPG, customerUji.id, planId, customerUji.latitude, customerUji.longitude]
+            [MD, customerUji.id, planId, customerUji.latitude, customerUji.longitude]
         )
 
         visitId = hasil.insertId
@@ -639,7 +639,7 @@ describe('POST /api/visits/:id/checkout', () => {
         const { status } = await kirim(
             'POST',
             `/api/visits/${visitId}/checkout`,
-            SPG_LUAR
+            MD_LUAR
         )
 
         assert.strictEqual(status, 403)
@@ -714,7 +714,7 @@ describe('POST /api/visits/:id/checkout', () => {
         const { status } = await kirim(
             'POST',
             `/api/visits/${visitId}/checkout`,
-            SPG
+            MD
         )
 
         assert.strictEqual(status, 400)
@@ -731,7 +731,7 @@ describe('POST /api/visits/:id/checkout', () => {
         const { status } = await kirim(
             'POST',
             '/api/visits/99999999/checkout',
-            SPG
+            MD
         )
 
         assert.strictEqual(status, 404)
@@ -741,26 +741,26 @@ describe('POST /api/visits/:id/checkout', () => {
         const { status } = await kirim(
             'POST',
             '/api/visits/12abc/checkout',
-            SPG
+            MD
         )
 
         assert.strictEqual(status, 400)
     })
 
-    test('SPG check-out kunjungannya sendiri: status benar-benar COMPLETED', async (t) => {
+    test('MD check-out kunjungannya sendiri: status benar-benar COMPLETED', async (t) => {
         if (!customerUji) {
             t.skip('tidak ada customer dengan koordinat di database')
             return
         }
 
-        const planId = await buatPlanUntuk(SPG, customerUji.id)
+        const planId = await buatPlanUntuk(MD, customerUji.id)
 
         const [hasil] = await db.query(
             `INSERT INTO visits
                 (user_id, customer_id, visit_plan_id, checkin_time,
                  latitude, longitude, location_accuracy)
              VALUES (?, ?, ?, NOW(), ?, ?, 10)`,
-            [SPG, customerUji.id, planId, customerUji.latitude, customerUji.longitude]
+            [MD, customerUji.id, planId, customerUji.latitude, customerUji.longitude]
         )
 
         const visitId = hasil.insertId
@@ -780,7 +780,7 @@ describe('POST /api/visits/:id/checkout', () => {
         const { status } = await kirim(
             'POST',
             `/api/visits/${visitId}/checkout`,
-            SPG
+            MD
         )
 
         assert.strictEqual(status, 200)
@@ -809,7 +809,7 @@ describe('POST /api/visits/:id/checkout -- gerbang minimal activity', () => {
         const [v] = await db.query(
             `INSERT INTO visits (user_id, customer_id, checkin_time)
              VALUES (?, ?, NOW())`,
-            [SPG, customerUji.id]
+            [MD, customerUji.id]
         )
 
         visitTanpaActivity = v.insertId
@@ -825,7 +825,7 @@ describe('POST /api/visits/:id/checkout -- gerbang minimal activity', () => {
         const { status } = await kirim(
             'POST',
             `/api/visits/${visitTanpaActivity}/checkout`,
-            SPG
+            MD
         )
 
         assert.strictEqual(status, 400)
@@ -855,7 +855,7 @@ describe('POST /api/visits/:id/checkout -- gerbang minimal activity', () => {
         const { status } = await kirim(
             'POST',
             `/api/visits/${visitTanpaActivity}/checkout`,
-            SPG
+            MD
         )
 
         assert.strictEqual(status, 200)

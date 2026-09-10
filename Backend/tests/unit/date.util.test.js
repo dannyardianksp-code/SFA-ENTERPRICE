@@ -21,7 +21,7 @@ describe('localDateString', () => {
     })
 
     // INI BUG YANG DIPERBAIKI. 22:00 UTC sudah 05:00 tanggal 11 di
-    // Jakarta. toISOString() masih menyebutnya tanggal 10, sehingga SPG
+    // Jakarta. toISOString() masih menyebutnya tanggal 10, sehingga MD
     // yang membuka aplikasi jam 6 pagi melihat kemarin + hari ini,
     // bukan hari ini + besok — justru pada jam sales mulai kerja.
     test('malam UTC sudah tanggal berikutnya di Jakarta', () => {

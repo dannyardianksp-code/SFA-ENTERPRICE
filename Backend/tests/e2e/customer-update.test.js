@@ -9,7 +9,7 @@ const USER_ID = Number(process.env.TEST_USER_ID || 1)
 
 const authHeader = () => ({
     Authorization: 'Bearer ' + jwt.sign(
-        { id: USER_ID, role: 'SPG' },
+        { id: USER_ID, role: 'MD' },
         process.env.JWT_SECRET,
         { expiresIn: '10m' }
     ),

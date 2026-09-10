@@ -32,7 +32,7 @@ describe('model User', () => {
     test('ENUM role memuat enam nilai yang benar-benar ada di database', () => {
         assert.deepStrictEqual(
             [...User.rawAttributes.role.type.values].sort(),
-            ['ADMINISTRATOR', 'GENERAL MANAGER', 'MANAGER', 'REGIONAL MANAGER', 'SPG', 'SUPERVISOR']
+            ['ADMINISTRATOR', 'GENERAL MANAGER', 'MANAGER', 'MD', 'REGIONAL MANAGER', 'SUPERVISOR']
         )
     })
 

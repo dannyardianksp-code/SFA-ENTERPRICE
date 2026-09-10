@@ -94,7 +94,7 @@ before(async () => {
     for (const id of USER_ID_SEMENTARA) {
         await db.query(
             `INSERT INTO users (id, code, name, email, password, role, status)
-             VALUES (?, ?, ?, ?, ?, 'SPG', 'ACTIVE')
+             VALUES (?, ?, ?, ?, ?, 'MD', 'ACTIVE')
              ON DUPLICATE KEY UPDATE status = 'ACTIVE'`,
             [
                 id,
