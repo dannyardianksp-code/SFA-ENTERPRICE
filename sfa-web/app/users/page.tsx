@@ -20,6 +20,11 @@ export default function UsersPage() {
     const [users, setUsers] =
         useState<any[]>([])
 
+    // Cuma buat tahu TOTAL jumlah area yang ada -- perbandingan
+    // "user ini ke-assign semua area" di kolom tabel butuh angka ini.
+    const [areas, setAreas] =
+        useState<any[]>([])
+
     const fetchUsers =
         async () => {
 
@@ -53,9 +58,49 @@ export default function UsersPage() {
 
         }
 
+    const fetchAreas =
+        async () => {
+
+            const token =
+                localStorage.getItem(
+                    'token'
+                )
+
+            const res =
+                await fetch(
+
+                    `${API_BASE_URL}/areas`,
+
+                    {
+
+                        headers: {
+
+                            Authorization:
+                                `Bearer ${token}`
+
+                        }
+
+                    }
+
+                )
+
+            const data =
+                await res.json()
+
+            setAreas(
+                Array.isArray(data.data)
+                    ? data.data
+                    : Array.isArray(data)
+                        ? data
+                        : []
+            )
+
+        }
+
     useEffect(() => {
 
         fetchUsers()
+        fetchAreas()
 
     }, [])
 
@@ -274,16 +319,22 @@ export default function UsersPage() {
 
                                     <td className="p-4">
                                         {u.AssignedAreas && u.AssignedAreas.length > 0 ? (
-                                            <div className="flex flex-wrap gap-1">
-                                                {u.AssignedAreas.map((a: any) => (
-                                                    <span
-                                                        key={a.id}
-                                                        className="px-2 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700"
-                                                    >
-                                                        {a.code}
-                                                    </span>
-                                                ))}
-                                            </div>
+                                            areas.length > 0 && u.AssignedAreas.length === areas.length ? (
+                                                <span className="px-2 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700">
+                                                    All Area
+                                                </span>
+                                            ) : (
+                                                <div className="flex flex-wrap gap-1">
+                                                    {u.AssignedAreas.map((a: any) => (
+                                                        <span
+                                                            key={a.id}
+                                                            className="px-2 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700"
+                                                        >
+                                                            {a.code}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )
                                         ) : (
                                             <span className="text-slate-600">{u.Area?.code || '-'}</span>
                                         )}
