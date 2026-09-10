@@ -4,11 +4,6 @@ const { test, describe, before, after } = require('node:test')
 const assert = require('node:assert')
 const jwt = require('jsonwebtoken')
 
-const {
-    PASSWORD_ALPHABET,
-    PASSWORD_LENGTH,
-} = require('../../src/utils/password.util')
-
 const BASE = process.env.TEST_BASE_URL || 'http://localhost:1000'
 
 // User acuan di database dev.
@@ -213,35 +208,36 @@ describe('PUT /api/users/:id/reset-password', () => {
         assert.strictEqual(res.status, 404)
     })
 
-    test('administrator berhasil, passwordnya acak dan sesuai alfabet', async () => {
+    // Tidak ada lagi auto-generate: admin yang menentukan password
+    // barunya sendiri lewat body. Tanpa field ini (atau kosong setelah
+    // di-trim), endpoint harus menolak 400, bukan diam-diam
+    // mengosongkan password.
+    test('password kosong ditolak 400', async () => {
         const res = await kirim(
             'PUT',
             `/api/users/${targetId}/reset-password`,
             ADMIN,
-            'ADMINISTRATOR'
+            'ADMINISTRATOR',
+            { password: '   ' }
+        )
+
+        assert.strictEqual(res.status, 400)
+    })
+
+    test('administrator berhasil, password sesuai yang diminta', async () => {
+        const res = await kirim(
+            'PUT',
+            `/api/users/${targetId}/reset-password`,
+            ADMIN,
+            'ADMINISTRATOR',
+            { password: 'PasswordPilihanAdmin1' }
         )
 
         assert.strictEqual(res.status, 200, JSON.stringify(res.body))
-        assert.ok(res.body.password, 'password tidak dikembalikan')
 
-        assert.strictEqual(
-            res.body.password.length,
-            PASSWORD_LENGTH,
-            `panjangnya ${res.body.password.length}`
-        )
-
-        for (const c of res.body.password) {
-            assert.ok(
-                PASSWORD_ALPHABET.includes(c),
-                `karakter ${JSON.stringify(c)} di luar alfabet`
-            )
-        }
-
-        assert.notStrictEqual(
-            res.body.password,
-            '123456',
-            'password masih nilai tetap yang lama'
-        )
+        // Password ditentukan admin lewat body, bukan digenerate server
+        // -- tidak ada lagi alasan mengembalikannya di respons.
+        assert.strictEqual(res.body.password, undefined)
     })
 
     test('hash di database benar-benar berubah', async () => {
@@ -251,7 +247,8 @@ describe('PUT /api/users/:id/reset-password', () => {
             'PUT',
             `/api/users/${targetId}/reset-password`,
             ADMIN,
-            'ADMINISTRATOR'
+            'ADMINISTRATOR',
+            { password: 'PasswordPilihanAdmin2' }
         )
 
         assert.strictEqual(res.status, 200)
@@ -267,11 +264,14 @@ describe('PUT /api/users/:id/reset-password', () => {
     // hasilnya berguna. Hash yang berubah menjadi nilai yang tidak cocok
     // dengan password mana pun akan lolos semua tes di atas.
     test('password baru benar-benar bisa dipakai login', async () => {
+        const passwordBaru = 'PasswordPilihanAdmin3'
+
         const reset = await kirim(
             'PUT',
             `/api/users/${targetId}/reset-password`,
             ADMIN,
-            'ADMINISTRATOR'
+            'ADMINISTRATOR',
+            { password: passwordBaru }
         )
 
         assert.strictEqual(reset.status, 200)
@@ -281,7 +281,7 @@ describe('PUT /api/users/:id/reset-password', () => {
             '/api/auth/login',
             null,
             null,
-            { email: targetEmail, password: reset.body.password }
+            { email: targetEmail, password: passwordBaru }
         )
 
         assert.strictEqual(
@@ -294,20 +294,23 @@ describe('PUT /api/users/:id/reset-password', () => {
     })
 
     test('password lama tidak bisa dipakai lagi setelah reset', async () => {
-        const reset = await kirim(
-            'PUT',
-            `/api/users/${targetId}/reset-password`,
-            ADMIN,
-            'ADMINISTRATOR'
-        )
-
-        const passwordLama = reset.body.password
+        const passwordLama = 'PasswordPilihanAdmin4'
+        const passwordBaru = 'PasswordPilihanAdmin5'
 
         await kirim(
             'PUT',
             `/api/users/${targetId}/reset-password`,
             ADMIN,
-            'ADMINISTRATOR'
+            'ADMINISTRATOR',
+            { password: passwordLama }
+        )
+
+        await kirim(
+            'PUT',
+            `/api/users/${targetId}/reset-password`,
+            ADMIN,
+            'ADMINISTRATOR',
+            { password: passwordBaru }
         )
 
         const login = await kirim(

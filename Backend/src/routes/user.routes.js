@@ -30,10 +30,6 @@ const {
 } = require('../utils/response.util')
 
 const {
-    generateTempPassword,
-} = require('../utils/password.util')
-
-const {
     assertUserManagement,
     USER_ROLES,
     wouldRemoveLastActiveAdministrator,
@@ -1090,7 +1086,24 @@ router.put(
 
             }
 
-            const password = generateTempPassword()
+            // Admin yang menentukan password barunya sendiri -- tidak
+            // di-generate otomatis, supaya admin bisa kasih password
+            // yang dia mau, bukan string acak yang harus disampaikan
+            // ulang ke sales.
+            const password =
+                typeof req.body.password === 'string'
+                    ? req.body.password.trim()
+                    : ''
+
+            if (!password) {
+
+                return sendError(
+                    res,
+                    400,
+                    'Password baru wajib diisi.'
+                )
+
+            }
 
             user.password =
                 await bcrypt.hash(password, 10)
@@ -1101,8 +1114,6 @@ router.put(
 
                 message:
                     'Password berhasil direset',
-
-                password
 
             })
 

@@ -99,12 +99,15 @@ export default function UsersPage() {
             id: number
         ) => {
 
-            const confirmReset =
-                confirm(
-                    'Reset password user?'
+            const passwordBaru =
+                prompt(
+                    'Masukkan password baru untuk user ini:'
                 )
 
-            if (!confirmReset) {
+            // null = admin menekan Cancel. String kosong/spasi ditolak
+            // di server, tapi dicegat di sini dulu supaya tidak ada
+            // request kosong yang terkirim percuma.
+            if (!passwordBaru || !passwordBaru.trim()) {
 
                 return
 
@@ -126,10 +129,18 @@ export default function UsersPage() {
 
                         headers: {
 
+                            'Content-Type':
+                                'application/json',
+
                             Authorization:
                                 `Bearer ${token}`
 
-                        }
+                        },
+
+                        body:
+                            JSON.stringify({
+                                password: passwordBaru
+                            })
 
                     }
 
@@ -139,8 +150,8 @@ export default function UsersPage() {
                 await res.json()
 
             // Tanpa pemeriksaan ini, penolakan server (misalnya 403
-            // untuk non-administrator) tampil sebagai "Password baru:
-            // undefined" alih-alih alasan penolakannya.
+            // untuk non-administrator) tampil sebagai "Password berhasil
+            // direset" alih-alih alasan penolakannya.
             if (!res.ok) {
 
                 alert(
@@ -152,9 +163,7 @@ export default function UsersPage() {
             }
 
             alert(
-
-                `Password baru: ${data.password}`
-
+                'Password berhasil direset.'
             )
 
         }
