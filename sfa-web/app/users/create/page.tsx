@@ -79,6 +79,23 @@ export default function CreateUserPage() {
 
     }
 
+    // Semua area sudah terpilih -> checkbox "Pilih Semua" tercentang.
+    // areas.length > 0 dicek supaya tidak keliru tercentang saat master
+    // data area belum selesai di-fetch (array kosong).
+    const semuaAreaTerpilih =
+        areas.length > 0 &&
+        areas.every((a: any) => areaIds.includes(a.id))
+
+    const toggleAllAreas = () => {
+
+        setAreaIds(
+            semuaAreaTerpilih
+                ? []
+                : areas.map((a: any) => a.id)
+        )
+
+    }
+
     // ======================
     // FETCH MASTER DATA
     // ======================
@@ -542,6 +559,15 @@ export default function CreateUserPage() {
                     <div>
                         <label className="text-sm text-slate-500">
                             Area {areaIds.length > 0 && `(${areaIds.length} dipilih)`}
+                        </label>
+
+                        <label className="mt-2 flex items-center gap-2 text-sm font-medium text-blue-600 cursor-pointer w-fit">
+                            <input
+                                type="checkbox"
+                                checked={semuaAreaTerpilih}
+                                onChange={toggleAllAreas}
+                            />
+                            Pilih Semua Area
                         </label>
 
                         <div className="mt-2 border rounded-xl p-3 grid sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto">
