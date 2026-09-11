@@ -15,16 +15,30 @@ import { useEffect, useRef } from 'react'
 import L from 'leaflet'
 
 import 'leaflet/dist/leaflet.css'
-import 'leaflet/dist/images/marker-icon.png'
-import 'leaflet/dist/images/marker-shadow.png'
 
-// Sama fix icon dengan VisitMap.tsx -- kalau salah satu berubah, ubah
-// keduanya.
-delete (L.Icon.Default.prototype as any)._getIconUrl
-
-L.Icon.Default.mergeOptions({
-    iconUrl: require('leaflet/dist/images/marker-icon.png'),
-    shadowUrl: require('leaflet/dist/images/marker-shadow.png')
+// Marker orang (bukan pin default Leaflet) -- warna badge ikut status
+// segar/basi yang sama dengan 🟢/⚪ di popup dan list (page.tsx), supaya
+// sekilas lihat peta juga langsung kelihatan mana yang datanya baru.
+const buatIkonOrang = (segar: boolean) => L.divIcon({
+    className: 'live-tracking-person-icon',
+    html: `
+        <div style="
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            background: ${segar ? '#22c55e' : '#94a3b8'};
+            border: 2px solid white;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            line-height: 1;
+        ">🧍</div>
+    `,
+    iconSize: [34, 34],
+    iconAnchor: [17, 17],
+    popupAnchor: [0, -17],
 })
 
 function FixMap() {
@@ -198,6 +212,7 @@ export default function LiveTrackingMap({ locations, focusRequest }: any) {
                                 parseFloat(loc.latitude),
                                 parseFloat(loc.longitude)
                             ]}
+                            icon={buatIkonOrang(segar)}
                             ref={(el) => {
                                 if (el) markerRefs.current[loc.user_id] = el
                             }}
