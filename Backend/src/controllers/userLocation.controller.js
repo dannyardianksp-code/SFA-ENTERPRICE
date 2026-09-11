@@ -7,10 +7,9 @@ const Area = require('../models/area.model')
 // Lewat batas ini dianggap bukan "near-live" lagi -- user yang gak
 // pernah buka app lagi (ping cuma sekali lalu berhenti) sebelumnya
 // nyangkut permanen di list/map selamanya, gak pernah hilang walau
-// datanya berbulan-bulan basi. 24 jam: kalau sales gak pernah buka
-// app sepanjang hari kerja, wajar dianggap "gak lagi di-track", bukan
-// sekadar "belum update sebentar".
-const BATAS_BASI_MS = 24 * 60 * 60 * 1000
+// datanya berbulan-bulan basi. 3 jam: cukup buat nutup jam kerja aktif
+// tanpa nyeret posisi basi dari sales yang app-nya udah lama ketutup.
+const BATAS_BASI_MS = 3 * 60 * 60 * 1000
 
 const { sendError, sendServerError } = require('../utils/response.util')
 const {
