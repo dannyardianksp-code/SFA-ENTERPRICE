@@ -15,6 +15,7 @@ import {
     MapPin,
     Navigation,
     Tag,
+    Layers,
     Package,
     UserCog,
     Settings,
@@ -398,6 +399,15 @@ export default function Sidebar({
                             >
                                 <Tag size={18} />
                                 {!collapsedVisual && 'Classes'}
+                            </Link>
+
+                            <Link
+                                href="/customer-groups"
+                                className={menuClass('/customer-groups')}
+                                onClick={onCloseMobile}
+                            >
+                                <Layers size={18} />
+                                {!collapsedVisual && 'Customer Groups'}
                             </Link>
 
                         </div>
