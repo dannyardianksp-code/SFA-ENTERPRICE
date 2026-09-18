@@ -26,9 +26,10 @@ export default function CustomerProductsPage() {
         const token =
             localStorage.getItem('token')
 
-        // CUSTOMERS
+        // CUSTOMERS -- cuma yang ACTIVE, ini picker buat assign produk
+        // ke customer tertentu.
         const cRes = await fetch(
-            `${API_BASE_URL}/customers`,
+            `${API_BASE_URL}/customers?status=ACTIVE`,
             {
                 headers: {
                     Authorization: `Bearer ${token}`

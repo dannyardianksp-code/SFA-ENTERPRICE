@@ -100,9 +100,12 @@ export default function VisitPlansPage() {
 
         setUsers(uData)
 
-        // CUSTOMERS
+        // CUSTOMERS -- cuma yang ACTIVE, ini feed buat dropdown/picker
+        // toko (form satu-satu & kalender), bukan buat nampilin riwayat
+        // plan yang sudah ada (itu pakai p.Customer dari /visit-plans
+        // sendiri, tidak lewat sini).
         const cRes = await fetch(
-            `${API_BASE_URL}/customers`,
+            `${API_BASE_URL}/customers?status=ACTIVE`,
             {
                 headers: {
                     Authorization: `Bearer ${token}`
@@ -1428,6 +1431,38 @@ Failed : ${result.failed}`
                                                             >
 
                                                                 Edit
+
+                                                            </button>
+
+                                                        )
+
+                                                    }
+
+                                                    {
+
+                                                        role === 'ADMINISTRATOR'
+
+                                                        &&
+
+                                                        p.status === 'PENDING'
+
+                                                        &&
+
+                                                        (
+
+                                                            <button
+
+                                                                onClick={() =>
+
+                                                                    handleDelete(p.id)
+
+                                                                }
+
+                                                                className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-xl text-sm"
+
+                                                            >
+
+                                                                Hapus
 
                                                             </button>
 

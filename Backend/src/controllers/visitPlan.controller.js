@@ -29,6 +29,7 @@ const {
 const {
     resolveSubordinateUserIds,
     PLAN_WRITER_ROLES,
+    USER_MANAGER_ROLES,
     ownerWhere,
     assertWithinSubtree,
 } = require('../utils/access.util')
@@ -476,13 +477,17 @@ exports.delete =
                 return sendError(res, 404, 'User tidak ditemukan.')
             }
 
-            // Allowlist, bukan blacklist: role NULL, nilai warisan, atau
-            // role baru apa pun tidak otomatis mendapat hak tulis.
-            if (!PLAN_WRITER_ROLES.includes(loginUser.role)) {
+            // Lebih ketat dari update (PLAN_WRITER_ROLES, supervisor ke
+            // atas) -- hapus permanen menghilangkan datanya sama sekali,
+            // beda dengan update yang masih bisa ditelusuri riwayatnya.
+            // USER_MANAGER_ROLES dipakai ulang (bukan konstanta baru)
+            // supaya "siapa itu administrator" tetap satu sumber
+            // kebenaran dengan gerbang pengelolaan akun user.
+            if (!USER_MANAGER_ROLES.includes(loginUser.role)) {
                 return sendError(
                     res,
                     403,
-                    'Hanya supervisor ke atas yang boleh mengubah visit plan.'
+                    'Hanya administrator yang boleh menghapus visit plan.'
                 )
             }
 

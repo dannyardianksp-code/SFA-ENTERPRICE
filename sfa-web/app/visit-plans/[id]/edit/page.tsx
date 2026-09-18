@@ -28,7 +28,7 @@ export default function EditVisitPlanPage() {
 
             const [cRes, pRes] = await Promise.all([
 
-                fetch(`${API_BASE_URL}/customers`, {
+                fetch(`${API_BASE_URL}/customers?status=ACTIVE`, {
                     headers: { Authorization: `Bearer ${token}` }
                 }),
 

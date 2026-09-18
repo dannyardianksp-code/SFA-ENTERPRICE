@@ -19,6 +19,7 @@ const {
 
 const {
     assertAreaChannelAccess,
+    USER_MANAGER_ROLES,
 } = require('../utils/access.util')
 
 const {
@@ -47,6 +48,18 @@ const CustomerGroup =
 
 const Class =
     require('../models/class.model')
+
+const Visit =
+    require('../models/visit.model')
+
+const VisitPlan =
+    require('../models/visitPlan.model')
+
+const SalesOrder =
+    require('../models/salesOrder.model')
+
+const CustomerProduct =
+    require('../models/customerProduct.model')
 
 /**
  * Relasi yang selalu disertakan pada respons satu customer.
@@ -148,6 +161,18 @@ exports.getAll =
 
                 }
 
+            }
+
+            // Opsional, default TIDAK memfilter -- Master Customer (web)
+            // butuh lihat semua (termasuk INACTIVE) buat bisa
+            // mengaktifkannya lagi. Pemanggil yang cuma mau pilihan toko
+            // yang masih aktif (dropdown Visit Plan, dst) kirim
+            // ?status=ACTIVE eksplisit.
+            if (
+                req.query.status === 'ACTIVE' ||
+                req.query.status === 'INACTIVE'
+            ) {
+                whereCondition.status = req.query.status
             }
 
             const data =
@@ -1153,3 +1178,118 @@ exports.validateUpdatePayload = validateUpdatePayload
 exports.validateLocationPayload = validateLocationPayload
 exports.LOCKED_FIELDS = LOCKED_FIELDS
 exports.MAX_LOCATION_ACCURACY_METERS = MAX_LOCATION_ACCURACY_METERS
+
+
+// ======================
+// TOGGLE STATUS (ACTIVE / INACTIVE)
+// ======================
+
+/**
+ * Nonaktifkan/aktifkan lagi -- admin-only, sama gerbangnya dengan
+ * delete. Customer INACTIVE tetap ada datanya (beda dengan delete),
+ * cuma disembunyikan dari pemanggil yang minta ?status=ACTIVE (lihat
+ * getAll) -- Master Customer sendiri tetap menampilkannya supaya bisa
+ * diaktifkan lagi.
+ */
+exports.toggleStatus = async (req, res) => {
+
+    try {
+
+        if (!USER_MANAGER_ROLES.includes(req.user.role)) {
+            return sendError(
+                res,
+                403,
+                'Hanya administrator yang boleh mengubah status customer.'
+            )
+        }
+
+        const customer = await Customer.findByPk(req.params.id)
+
+        if (!customer) {
+            return sendError(res, 404, 'Customer tidak ditemukan.')
+        }
+
+        const statusBaru =
+            customer.status === 'INACTIVE' ? 'ACTIVE' : 'INACTIVE'
+
+        await customer.update({ status: statusBaru })
+
+        res.json({
+            message: 'Status customer berhasil diupdate',
+            status: statusBaru,
+        })
+
+    } catch (err) {
+
+        return sendServerError(res, err, 'TOGGLE CUSTOMER STATUS')
+
+    }
+
+}
+
+
+// ======================
+// DELETE
+// ======================
+
+/**
+ * Hapus permanen -- cuma administrator, dan cuma kalau customer-nya
+ * belum punya riwayat apa pun (kunjungan, jadwal kunjungan, order).
+ * Gerbang role diperiksa DULU, sebelum baris customer-nya disentuh --
+ * pemanggil yang tidak berhak tidak perlu diberi tahu apakah id
+ * targetnya ada (sama prinsipnya dengan GET /api/users/:id).
+ *
+ * customers TIDAK PUNYA foreign key ke visits/visit_plans/sales_orders
+ * (sama seperti visit_plans, diverifikasi lewat pola yang sama di
+ * seluruh skema ini) -- kalau langsung dihapus tanpa gerbang ini,
+ * baris-baris riwayat itu jadi yatim, menunjuk customer_id yang tidak
+ * ada lagi, dan riwayat bisnis sungguhan (kunjungan/order yang sudah
+ * terjadi) hilang diam-diam. customer_products BUKAN riwayat -- cuma
+ * pemetaan "customer ini jual produk apa saja" -- jadi ikut dihapus,
+ * bukan jadi penghalang.
+ */
+exports.delete = async (req, res) => {
+
+    try {
+
+        if (!USER_MANAGER_ROLES.includes(req.user.role)) {
+            return sendError(
+                res,
+                403,
+                'Hanya administrator yang boleh menghapus customer.'
+            )
+        }
+
+        const customer = await Customer.findByPk(req.params.id)
+
+        if (!customer) {
+            return sendError(res, 404, 'Customer tidak ditemukan.')
+        }
+
+        const [visitCount, planCount, orderCount] = await Promise.all([
+            Visit.count({ where: { customer_id: customer.id } }),
+            VisitPlan.count({ where: { customer_id: customer.id } }),
+            SalesOrder.count({ where: { customer_id: customer.id } }),
+        ])
+
+        if (visitCount > 0 || planCount > 0 || orderCount > 0) {
+            return sendError(
+                res,
+                400,
+                'Customer ini sudah punya riwayat kunjungan/jadwal/order -- tidak bisa dihapus.'
+            )
+        }
+
+        await CustomerProduct.destroy({ where: { customer_id: customer.id } })
+
+        await customer.destroy()
+
+        res.json({ message: 'Customer berhasil dihapus' })
+
+    } catch (err) {
+
+        return sendServerError(res, err, 'DELETE CUSTOMER')
+
+    }
+
+}

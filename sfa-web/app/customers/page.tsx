@@ -21,7 +21,13 @@ export default function CustomersPage() {
     const [userLocation, setUserLocation] =
         useState<any>(null)
 
+    const [role, setRole] = useState('')
+
     const router = useRouter()
+
+    useEffect(() => {
+        setRole(localStorage.getItem('role') || '')
+    }, [])
 
     // ==================================================
     // GET USER GPS
@@ -283,6 +289,86 @@ export default function CustomersPage() {
     }
 
     // ==================================================
+    // TOGGLE STATUS (ACTIVE / INACTIVE)
+    // ==================================================
+    // Admin-only -- gerbang sungguhannya di backend. Nonaktifkan
+    // (bukan hapus) buat toko yang tutup/tidak aktif lagi: riwayat
+    // kunjungan/order-nya tetap utuh, dan otomatis hilang dari
+    // dropdown/picker toko di Visit Plan & Customer Products (lihat
+    // ?status=ACTIVE di sana) tanpa perlu dihapus permanen.
+    const handleToggleStatus = async (customer: any) => {
+
+        const mauNonaktifkan = customer.status !== 'INACTIVE'
+
+        const yes = confirm(
+            mauNonaktifkan
+                ? `Nonaktifkan ${customer.name}? Toko ini tidak akan muncul lagi di pilihan toko Visit Plan/Customer Products.`
+                : `Aktifkan lagi ${customer.name}?`
+        )
+
+        if (!yes) return
+
+        const token = localStorage.getItem('token')
+
+        const res = await fetch(`${API_BASE_URL}/customers/${customer.id}/status`, {
+            method: 'PUT',
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        })
+
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}))
+            alert(err.message || 'Gagal mengubah status customer')
+            return
+        }
+
+        const data = await res.json()
+
+        setCustomers((prev) =>
+            prev.map((c: any) =>
+                c.id === customer.id ? { ...c, status: data.status } : c
+            )
+        )
+
+    }
+
+    // ==================================================
+    // DELETE
+    // ==================================================
+    // Admin-only -- gerbang sungguhannya di backend (USER_MANAGER_ROLES
+    // di customer.controller.js). Tombolnya cuma disembunyikan di sini
+    // buat role lain, bukan satu-satunya penjaga.
+    const handleDelete = async (id: number) => {
+
+        const yes = confirm(
+            'Hapus customer ini? Cuma bisa kalau belum punya riwayat kunjungan/jadwal/order.'
+        )
+
+        if (!yes) return
+
+        const token = localStorage.getItem('token')
+
+        const res = await fetch(`${API_BASE_URL}/customers/${id}`, {
+            method: 'DELETE',
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        })
+
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}))
+            alert(err.message || 'Gagal menghapus customer')
+            return
+        }
+
+        alert('Customer berhasil dihapus')
+
+        setCustomers((prev) => prev.filter((c: any) => c.id !== id))
+
+    }
+
+    // ==================================================
     // UI
     // ==================================================
 
@@ -484,6 +570,7 @@ export default function CustomersPage() {
                             <th className="p-4 text-sm font-semibold text-slate-500">Channel</th>
                             <th className="p-4 text-sm font-semibold text-slate-500">Class</th>
                             <th className="p-4 text-sm font-semibold text-slate-500">Area</th>
+                            <th className="p-4 text-sm font-semibold text-slate-500">Status</th>
                             <th className="p-4 text-sm font-semibold text-slate-500">Aksi</th>
 
                         </tr>
@@ -524,6 +611,18 @@ export default function CustomersPage() {
                                 </td>
 
                                 <td className="p-4">
+                                    <span
+                                        className={`px-3 py-1.5 rounded-full text-xs font-semibold ${
+                                            c.status === 'INACTIVE'
+                                                ? 'bg-slate-100 text-slate-500'
+                                                : 'bg-green-100 text-green-700'
+                                        }`}
+                                    >
+                                        {c.status === 'INACTIVE' ? 'Inactive' : 'Active'}
+                                    </span>
+                                </td>
+
+                                <td className="p-4">
 
                                     <div className="flex gap-2">
 
@@ -548,6 +647,28 @@ export default function CustomersPage() {
                                         >
                                             ✏ Edit
                                         </button>
+
+                                        {role === 'ADMINISTRATOR' && (
+                                            <button
+                                                onClick={() => handleToggleStatus(c)}
+                                                className={`px-3 py-2 rounded-xl text-sm text-white ${
+                                                    c.status === 'INACTIVE'
+                                                        ? 'bg-green-600 hover:bg-green-700'
+                                                        : 'bg-slate-500 hover:bg-slate-600'
+                                                }`}
+                                            >
+                                                {c.status === 'INACTIVE' ? 'Aktifkan' : 'Nonaktifkan'}
+                                            </button>
+                                        )}
+
+                                        {role === 'ADMINISTRATOR' && (
+                                            <button
+                                                onClick={() => handleDelete(c.id)}
+                                                className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-xl text-sm"
+                                            >
+                                                Hapus
+                                            </button>
+                                        )}
 
                                     </div>
 

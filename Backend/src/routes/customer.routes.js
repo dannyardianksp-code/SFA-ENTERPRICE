@@ -35,6 +35,13 @@ router.put('/:id/location', auth, controller.updateLocation)
 // tidak bisa diubah — lihat LOCKED_FIELDS di controller.
 router.put('/:id', auth, controller.update)
 
+// Nonaktifkan/aktifkan lagi (protected, admin-only -- lihat gerbang
+// role di controller).
+router.put('/:id/status', auth, controller.toggleStatus)
+
+// DELETE (protected, admin-only -- lihat gerbang role di controller).
+router.delete('/:id', auth, controller.delete)
+
 
 
 module.exports = router

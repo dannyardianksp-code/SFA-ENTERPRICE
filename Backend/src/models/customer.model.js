@@ -18,6 +18,11 @@ const Customer = db.define('Customer', {
     channel: DataTypes.STRING,
     customer_group_id: DataTypes.INTEGER,
 
+    // ACTIVE (default) / INACTIVE -- toko yang tutup/tidak aktif lagi
+    // dinonaktifkan, bukan dihapus, supaya riwayat kunjungan/order-nya
+    // tetap utuh. Sama pola dengan users.status.
+    status: DataTypes.ENUM('ACTIVE', 'INACTIVE'),
+
     // Diisi manual oleh controller update, bukan oleh Sequelize.
     // `timestamps: false` dipertahankan: menyalakannya memaksa adanya
     // created_at juga, sedangkan customer lama tidak punya waktu
