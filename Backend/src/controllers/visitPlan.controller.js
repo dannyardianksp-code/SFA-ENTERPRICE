@@ -231,6 +231,24 @@ exports.create =
                 )
             }
 
+            // Jadwal baru cuma boleh hari ini atau ke depan -- tanggal
+            // yang sudah lewat cuma bisa diedit (lihat exports.update di
+            // bawah), bukan dibuatkan jadwal baru. Perbandingan string
+            // sah karena visit_date selalu "YYYY-MM-DD" (format yang
+            // sama dipakai localDateString dan seluruh filter tanggal di
+            // web) -- urutan leksikografis format itu SAMA dengan urutan
+            // tanggalnya. Web sudah mencegah ini di UI (min di input
+            // date, gerbang klik di kalender), tapi itu bisa dilewati
+            // lewat panggilan API langsung -- gerbang yang berlaku
+            // adalah yang di sini.
+            if (visit_date < localDateString(new Date())) {
+                return sendError(
+                    res,
+                    400,
+                    'Tidak bisa membuat jadwal untuk tanggal yang sudah lewat.'
+                )
+            }
+
             // Dinormalkan SEBELUM gerbang kepemilikan, bukan sesudah.
             // assertWithinSubtree mengembalikan "boleh" seketika saat
             // subordinateIds === null (ADMINISTRATOR) TANPA PERNAH

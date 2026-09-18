@@ -217,6 +217,15 @@ export default function VisitPlansPage() {
         // cepat masih bisa lolos sebelum re-render sempat jalan.
         if (savingForm) return
 
+        // Lapis kedua selain min={todayStr()} di input-nya -- date
+        // picker browser lain (terutama di HP) tidak semuanya menghormati
+        // atribut min dengan konsisten, jadi tanggal yang sudah lewat
+        // tetap harus ditolak di sini, bukan cuma dicegah di UI.
+        if (form.visit_date && form.visit_date < todayStr()) {
+            alert('Tanggal kunjungan tidak boleh tanggal yang sudah lewat.')
+            return
+        }
+
         setSavingForm(true)
 
         const token =
@@ -802,6 +811,8 @@ Failed : ${result.failed}`
                                         value={form.visit_date}
 
                                         onChange={handleChange}
+
+                                        min={todayStr()}
 
                                         className="w-full border rounded-xl p-3 mt-2"
 

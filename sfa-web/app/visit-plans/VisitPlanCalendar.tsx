@@ -257,6 +257,14 @@ export default function VisitPlanCalendar({
                     {week.map((cell, cIdx) => {
                         const isWeekend = cIdx === 5 || cIdx === 6
                         const isToday = cell.dateKey === todayKey
+                        // Tanggal yang sudah lewat cuma bisa dilihat riwayatnya
+                        // (chip tetap tampil), tapi TIDAK bisa ditambah visit
+                        // baru -- assign baru cuma boleh hari ini atau ke
+                        // depan. Bukan sekadar UI: server yang jadi sumber
+                        // kebenaran gerbang ini, ini cuma cegah usaha sia-sia
+                        // di klien.
+                        const isPast = !!cell.dateKey && cell.dateKey < todayKey
+                        const clickable = cell.inMonth && !isPast
                         const chips = cell.dateKey ? (plansByDate[cell.dateKey] || []) : []
                         const visibleChips = chips.slice(0, 2)
                         const extraCount = Math.max(0, chips.length - 2)
@@ -264,14 +272,14 @@ export default function VisitPlanCalendar({
                         return (
                             <div
                                 key={cIdx}
-                                onClick={() => cell.inMonth && cell.dateKey && openPanel(cell.dateKey)}
-                                className={`rounded-2xl p-2 min-h-[96px] flex flex-col gap-1.5 border-2 ${cell.inMonth ? 'cursor-pointer' : ''
+                                onClick={() => clickable && cell.dateKey && openPanel(cell.dateKey)}
+                                className={`rounded-2xl p-2 min-h-[96px] flex flex-col gap-1.5 border-2 ${clickable ? 'cursor-pointer' : ''
                                     } ${isToday
                                         ? 'border-blue-600'
-                                        : isWeekend && cell.inMonth
+                                        : isWeekend && cell.inMonth && !isPast
                                             ? 'border-rose-200'
                                             : 'border-slate-200'
-                                    } ${!cell.inMonth
+                                    } ${!cell.inMonth || isPast
                                         ? 'bg-slate-50'
                                         : isWeekend
                                             ? 'bg-rose-50'
@@ -279,7 +287,7 @@ export default function VisitPlanCalendar({
                                     }`}
                             >
                                 <div
-                                    className={`text-sm font-bold ${!cell.inMonth
+                                    className={`text-sm font-bold ${!cell.inMonth || isPast
                                             ? 'text-slate-300'
                                             : isWeekend
                                                 ? 'text-rose-600'
