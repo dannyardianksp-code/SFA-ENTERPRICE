@@ -69,6 +69,8 @@ export default function VisitPlansPage() {
     // buat yang lebih suka cara lama.
     const [mode, setMode] = useState<'calendar' | 'form' | 'excel'>('calendar')
 
+    const [savingForm, setSavingForm] = useState(false)
+
 
     const [uploadFile, setUploadFile] =
         useState<File | null>(null)
@@ -210,46 +212,61 @@ export default function VisitPlansPage() {
 
         e.preventDefault()
 
+        // Guard di baris pertama, bukan cuma disabled di tombol --
+        // disabled itu telat satu render tick, klik dobel yang sangat
+        // cepat masih bisa lolos sebelum re-render sempat jalan.
+        if (savingForm) return
+
+        setSavingForm(true)
+
         const token =
             localStorage.getItem('token')
 
-        await fetch(
-            `${API_BASE_URL}/visit-plans`,
-            {
+        try {
 
-                method: 'POST',
+            await fetch(
+                `${API_BASE_URL}/visit-plans`,
+                {
 
-                headers: {
+                    method: 'POST',
 
-                    'Content-Type':
-                        'application/json',
+                    headers: {
 
-                    Authorization:
-                        `Bearer ${token}`
+                        'Content-Type':
+                            'application/json',
 
-                },
+                        Authorization:
+                            `Bearer ${token}`
 
-                body: JSON.stringify(form)
+                    },
 
-            }
+                    body: JSON.stringify(form)
 
-        )
+                }
 
-        alert(
-            'Visit plan saved'
-        )
+            )
 
-        // RESET
+            alert(
+                'Visit plan saved'
+            )
 
-        setForm({
+            // RESET
 
-            user_id: '',
-            customer_id: '',
-            visit_date: ''
+            setForm({
 
-        })
+                user_id: '',
+                customer_id: '',
+                visit_date: ''
 
-        fetchData()
+            })
+
+            fetchData()
+
+        } finally {
+
+            setSavingForm(false)
+
+        }
 
     }
 
@@ -798,11 +815,13 @@ Failed : ${result.failed}`
 
                                 type="submit"
 
-                                className="mt-5 bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-xl"
+                                disabled={savingForm}
+
+                                className="mt-5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-5 py-3 rounded-xl"
 
                             >
 
-                                Save Plan
+                                {savingForm ? 'Menyimpan...' : 'Save Plan'}
 
                             </button>
 
