@@ -95,6 +95,14 @@ export default function VisitPlanCalendar({
 
     const [saving, setSaving] = useState(false)
 
+    // Ditampilkan di panel biar user tau apa aja yang udah kesimpan
+    // dalam sesi "buka panel" ini -- panel sengaja TIDAK ditutup abis
+    // Simpan (lihat handleSave), jadi tanpa daftar ini user gak ada
+    // sinyal visual kalau assignment sebelumnya beneran nyimpen.
+    const [addedThisSession, setAddedThisSession] = useState<
+        { tokoName: string; salesName: string }[]
+    >([])
+
     const todayKey = dateKeyOf(today.getFullYear(), today.getMonth(), today.getDate())
 
     // Plans dikelompokkan per tanggal sekali per render -- tiap sel
@@ -120,6 +128,7 @@ export default function VisitPlanCalendar({
         setSearchSales('')
         setSelectedToko(null)
         setSelectedSales(null)
+        setAddedThisSession([])
     }
 
     const closePanel = () => setPanelOpen(false)
@@ -183,8 +192,23 @@ export default function VisitPlanCalendar({
                 return
             }
 
-            alert('Visit plan saved')
-            setPanelOpen(false)
+            // Panel SENGAJA tidak ditutup -- balik ke step 1 supaya bisa
+            // langsung nambah toko+sales lain di tanggal yang sama tanpa
+            // klik ulang tanggalnya. alert() dihapus dari alur ini
+            // (beda dari form satu-satu): kalau tiap simpan munculin
+            // dialog blocking, nambah banyak toko berturut-turut jadi
+            // lebih lambat daripada isi form biasa -- kebalikan dari
+            // tujuan fitur ini. Daftar addedThisSession di bawah yang
+            // jadi sinyal visualnya.
+            setAddedThisSession((prev) => [
+                ...prev,
+                { tokoName: selectedToko.name, salesName: selectedSales.name },
+            ])
+            setStep(1)
+            setSelectedToko(null)
+            setSelectedSales(null)
+            setSearchToko('')
+            setSearchSales('')
             onCreated()
         } catch {
             alert('Gagal menyimpan visit plan')
@@ -344,6 +368,21 @@ export default function VisitPlanCalendar({
                                 )
                             })}
                         </div>
+
+                        {addedThisSession.length > 0 && (
+                            <div className="bg-green-50 border border-green-200 rounded-2xl p-3.5 flex flex-col gap-2">
+                                <div className="text-xs font-bold text-green-700">
+                                    ✅ Sudah ditambahkan ({addedThisSession.length})
+                                </div>
+                                <div className="flex flex-col gap-1">
+                                    {addedThisSession.map((a, idx) => (
+                                        <div key={idx} className="text-xs text-green-700">
+                                            🏪 {a.tokoName} · 👤 {a.salesName}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
 
                         {step === 1 && (
                             <div className="flex flex-col gap-3">
