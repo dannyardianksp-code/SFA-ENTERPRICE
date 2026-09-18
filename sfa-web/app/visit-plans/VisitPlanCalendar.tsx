@@ -151,6 +151,12 @@ export default function VisitPlanCalendar({
     )
 
     const handleSave = async () => {
+        // Guard di awal fungsi, bukan cuma disabled={saving} di tombol --
+        // disabled itu telat satu render tick, jadi klik dobel yang
+        // super cepat (sebelum re-render sempat jalan) masih bisa
+        // lolos dan ngirim 2 request. Cek state di sini langsung
+        // memblokirnya di eksekusi kedua, apa pun kecepatan kliknya.
+        if (saving) return
         if (!panelDate || !selectedToko || !selectedSales) return
 
         setSaving(true)
