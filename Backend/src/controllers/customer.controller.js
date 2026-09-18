@@ -724,10 +724,16 @@ async (req, res) => {
         const customers =
             await Customer.findAll({
 
+                // Nearby buat mencari kandidat check-in -- BEDA dengan
+                // getAll (yang defaultnya tidak memfilter supaya Master
+                // Customer bisa lihat semua). Di sini TIDAK ADA alasan
+                // sah buat nampilin toko INACTIVE sebagai kandidat
+                // check-in, jadi filternya wajib, bukan opsional.
                 where:{
                     area_id:{
                         [Op.in]: areaIds
-                    }
+                    },
+                    status: 'ACTIVE'
                 },
 
 
