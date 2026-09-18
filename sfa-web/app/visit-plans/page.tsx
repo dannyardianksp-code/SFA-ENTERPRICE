@@ -11,6 +11,7 @@ import { useRouter }
     from 'next/navigation'
 import { getDistanceFromLatLonInKm } from "../utils/distance"
 import { API_BASE_URL } from '@/app/utils/api-config'
+import VisitPlanCalendar from './VisitPlanCalendar'
 
 // "YYYY-MM-DD" hari ini di waktu lokal browser -- dipakai sebagai
 // default filter tanggal (halaman ini defaultnya tampil rencana HARI
@@ -62,6 +63,11 @@ export default function VisitPlansPage() {
     const [statusFilter, setStatusFilter] = useState('ALL')
     const [salesFilter, setSalesFilter] = useState('ALL')
     const [dateFilter, setDateFilter] = useState(todayStr())
+
+    // Kalender jadi default -- lebih cepat buat assign banyak toko
+    // sekaligus daripada isi form satu-satu, sambil form/Excel tetap ada
+    // buat yang lebih suka cara lama.
+    const [mode, setMode] = useState<'calendar' | 'form' | 'excel'>('calendar')
 
 
     const [uploadFile, setUploadFile] =
@@ -591,11 +597,66 @@ Failed : ${result.failed}`
 
             </div>
 
+            {/* MODE TABS */}
+
+            {role !== 'MD' && (
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => setMode('calendar')}
+                        className={`px-4 py-2.5 rounded-xl text-sm font-bold border ${mode === 'calendar'
+                            ? 'bg-blue-600 border-blue-600 text-white'
+                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                            }`}
+                    >
+                        📅 Kalender
+                    </button>
+                    <button
+                        onClick={() => setMode('form')}
+                        className={`px-4 py-2.5 rounded-xl text-sm font-bold border ${mode === 'form'
+                            ? 'bg-blue-600 border-blue-600 text-white'
+                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                            }`}
+                    >
+                        Satu-satu
+                    </button>
+                    <button
+                        onClick={() => setMode('excel')}
+                        className={`px-4 py-2.5 rounded-xl text-sm font-bold border ${mode === 'excel'
+                            ? 'bg-blue-600 border-blue-600 text-white'
+                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                            }`}
+                    >
+                        Upload Excel
+                    </button>
+                </div>
+            )}
+
+            {/* KALENDER */}
+
+            {
+                role !== 'MD'
+                &&
+                mode === 'calendar'
+                &&
+                (
+                    <VisitPlanCalendar
+                        customers={customers}
+                        users={users}
+                        plans={plans}
+                        onCreated={fetchData}
+                    />
+                )
+            }
+
             {/* FORM */}
 
             {
 
                 role !== 'MD'
+
+                &&
+
+                mode === 'form'
 
                 &&
 
@@ -757,7 +818,7 @@ Failed : ${result.failed}`
             {/* UPLOAD / DOWNLOAD */}
 
             {
-                role !== "MD" && (
+                role !== "MD" && mode === 'excel' && (
                     <div className="bg-white rounded-2xl shadow p-5 mb-6">
 
                         <h3 className="text-lg font-semibold mb-4">
