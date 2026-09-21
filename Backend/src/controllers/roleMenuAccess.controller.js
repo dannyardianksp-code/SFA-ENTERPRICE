@@ -9,11 +9,17 @@ const {
 
 const RoleMenuOverride = require('../models/roleMenuOverride.model')
 
-// Role yang bisa diatur lewat fitur ini. ADMINISTRATOR SENGAJA tidak
-// termasuk -- selalu lihat semua menu tanpa terkecuali, tidak boleh
-// dibatasi lewat sini sama sekali.
+// Role yang bisa diatur lewat fitur ini.
+// - ADMINISTRATOR SENGAJA tidak termasuk -- selalu lihat semua menu
+//   tanpa terkecuali, tidak boleh dibatasi lewat sini sama sekali.
+// - MD SENGAJA tidak termasuk juga -- role ini defaultnya TIDAK PUNYA
+//   akses web sama sekali (can_access_web default false, cuma dibuka
+//   manual per-user lewat form Edit User). Mengatur Menu Access buat
+//   role yang pada dasarnya tidak login ke web cuma bikin bingung.
+const EXCLUDED_ROLES = ['ADMINISTRATOR', 'MD']
+
 const CONFIGURABLE_ROLES = USER_ROLES.filter(
-    (role) => role !== 'ADMINISTRATOR'
+    (role) => !EXCLUDED_ROLES.includes(role)
 )
 
 

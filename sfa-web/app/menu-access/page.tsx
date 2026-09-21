@@ -5,13 +5,15 @@ import { useEffect, useState } from 'react'
 import { API_BASE_URL } from '@/app/utils/api-config'
 import { SIDEBAR_MENU_GROUPS, isMenuVisibleByDefault } from '@/app/utils/sidebar-menu'
 
-// ADMINISTRATOR sengaja tidak termasuk -- selalu lihat semua menu,
-// tidak bisa diatur di sini (sama dengan CONFIGURABLE_ROLES di backend,
-// roleMenuAccess.controller.js -- tidak ada tempat berbagi konstanta
+// Harus sama persis dengan CONFIGURABLE_ROLES di backend
+// (roleMenuAccess.controller.js) -- tidak ada tempat berbagi konstanta
 // role antara Backend dan sfa-web di codebase ini, jadi ditulis ulang
-// di sini mengikuti pola yang sudah ada di seluruh halaman admin lain).
+// di sini mengikuti pola yang sudah ada di seluruh halaman admin lain.
+// - ADMINISTRATOR tidak termasuk -- selalu lihat semua menu.
+// - MD tidak termasuk -- role ini defaultnya TIDAK PUNYA akses web
+//   sama sekali (can_access_web default false, cuma dibuka manual
+//   per-user lewat form Edit User), jadi percuma diatur Menu Access-nya.
 const CONFIGURABLE_ROLES = [
-    'MD',
     'SUPERVISOR',
     'MANAGER',
     'REGIONAL MANAGER',
@@ -40,7 +42,7 @@ export default function MenuAccessPage() {
 
     const [role, setRole] = useState('')
     const [loading, setLoading] = useState(true)
-    const [selectedRole, setSelectedRole] = useState(CONFIGURABLE_ROLES[1])
+    const [selectedRole, setSelectedRole] = useState('SUPERVISOR')
     const [access, setAccess] = useState<AccessByRole>(buildDefaultAccess())
     const [saving, setSaving] = useState(false)
     const [savedForRole, setSavedForRole] = useState<string | null>(null)
