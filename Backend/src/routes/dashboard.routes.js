@@ -25,8 +25,29 @@ const Customer =
 const User =
     require('../models/user.model')
 
-const { resolveSubordinateUserIds } =
+const Area =
+    require('../models/area.model')
+
+const Attendance =
+    require('../models/attendance.model')
+
+const SalesOrder =
+    require('../models/salesOrder.model')
+
+const UserLocation =
+    require('../models/userLocation.model')
+
+const { resolveSubordinateUserIds, RESTRICTED_ROLES } =
     require('../utils/access.util')
+
+const { resolveAccessibleAreaIds } =
+    require('../utils/area.util')
+
+// Sales lapangan ping lokasi tiap 2 menit (lihat useLocationPing di
+// mobile) -- 10 menit dipilih supaya "aktif" tetap benar walau ada 1-2
+// ping yang telat/gagal karena jaringan, tapi tidak sampai menghitung
+// orang yang HP-nya sudah mati/keluar aplikasi berjam-jam lalu.
+const ACTIVE_FIELD_WINDOW_MS = 10 * 60 * 1000
 
 
 
@@ -327,6 +348,11 @@ router.get(
             const TEAM_VIEW_ROLES = ['SUPERVISOR', 'MANAGER', 'REGIONAL MANAGER', 'GENERAL MANAGER']
 
             let team = []
+            let attendanceToday = null
+            let ordersToday = null
+            let ordersMonth = null
+            let activeInField = null
+            let customerSummary = null
 
             if (TEAM_VIEW_ROLES.includes(req.user.role)) {
 
@@ -340,6 +366,118 @@ router.get(
                     where: { id: timIds },
                     attributes: ['id', 'name'],
                 })
+
+                // ABSEN HARI INI -- siapa di tim yang sudah clock-in.
+                const attendanceRows = await Attendance.findAll({
+                    where: {
+                        user_id: { [Op.in]: timIds },
+                        tanggal: today,
+                    },
+                    attributes: ['user_id', 'clock_in_time'],
+                })
+
+                const hadirIds = new Set(
+                    attendanceRows
+                        .filter(a => a.clock_in_time)
+                        .map(a => a.user_id)
+                )
+
+                const belumAbsen =
+                    timUsers.filter(u => !hadirIds.has(u.id))
+
+                attendanceToday = {
+                    present: hadirIds.size,
+                    absent: belumAbsen.length,
+                    absentNames: belumAbsen.map(u => u.name),
+                }
+
+                // ORDERS -- tim yang sama (timIds), konsisten dengan
+                // cakupan "team" di atas.
+                const ordersTodayRows = await SalesOrder.findAll({
+                    where: {
+                        user_id: { [Op.in]: timIds },
+                        doc_date: {
+                            [Op.gte]: new Date(`${today} 00:00:00`),
+                            [Op.lte]: new Date(`${today} 23:59:59`),
+                        },
+                    },
+                    attributes: ['total'],
+                })
+
+                const ordersMonthRows = await SalesOrder.findAll({
+                    where: {
+                        user_id: { [Op.in]: timIds },
+                        doc_date: { [Op.between]: [firstDay, lastDay] },
+                    },
+                    attributes: ['total'],
+                })
+
+                ordersToday = {
+                    count: ordersTodayRows.length,
+                    total: ordersTodayRows.reduce(
+                        (sum, o) => sum + Number(o.total || 0), 0
+                    ),
+                }
+
+                ordersMonth = {
+                    count: ordersMonthRows.length,
+                    total: ordersMonthRows.reduce(
+                        (sum, o) => sum + Number(o.total || 0), 0
+                    ),
+                }
+
+                // AKTIF DI LAPANGAN -- ping lokasi dalam 10 menit
+                // terakhir.
+                activeInField = await UserLocation.count({
+                    where: {
+                        user_id: { [Op.in]: timIds },
+                        updated_at: {
+                            [Op.gte]: new Date(Date.now() - ACTIVE_FIELD_WINDOW_MS),
+                        },
+                    },
+                })
+
+                // CUSTOMER -- dibatasi area/channel SAMA PERSIS dengan
+                // customer.controller.js getAll, karena customer dimiliki
+                // area+channel, bukan hirarki user seperti metrik di
+                // atas. RESTRICTED_ROLES di sini cuma MD/SUPERVISOR;
+                // SUPERVISOR adalah satu-satunya TEAM_VIEW_ROLES yang
+                // kena batasan ini.
+                let customerWhere = {}
+
+                if (RESTRICTED_ROLES.includes(req.user.role)) {
+
+                    const userWithAreas = await User.findByPk(userId, {
+                        include: [
+                            {
+                                model: Area,
+                                as: 'AssignedAreas',
+                                attributes: ['id'],
+                                through: { attributes: [] },
+                            },
+                        ],
+                    })
+
+                    const areaIds = resolveAccessibleAreaIds(userWithAreas)
+
+                    customerWhere = areaIds.length === 0
+                        ? { id: -1 }
+                        : {
+                            area_id: { [Op.in]: areaIds },
+                            channel_id: req.user.channel_id,
+                        }
+
+                }
+
+                const [activeCustomers, inactiveCustomers] = await Promise.all([
+                    Customer.count({ where: { ...customerWhere, status: 'ACTIVE' } }),
+                    Customer.count({ where: { ...customerWhere, status: 'INACTIVE' } }),
+                ])
+
+                customerSummary = {
+                    active: activeCustomers,
+                    inactive: inactiveCustomers,
+                }
 
                 team = await Promise.all(
                     timUsers.map(async (u) => {
@@ -418,8 +556,17 @@ router.get(
 
                 pendingStores,
 
-                team
+                team,
 
+                attendanceToday,
+
+                ordersToday,
+
+                ordersMonth,
+
+                activeInField,
+
+                customerSummary
 
             })
 
