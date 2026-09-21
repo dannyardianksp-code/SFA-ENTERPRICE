@@ -7,23 +7,13 @@ import { useRouter } from 'next/navigation'
 
 
 import {
-    Home,
-    CalendarDays,
-    Users,
-    ShoppingCart,
-    BarChart3,
-    MapPin,
-    Navigation,
-    Tag,
-    Layers,
-    Package,
-    UserCog,
-    Settings,
     LogOut,
     ChevronLeft,
     ChevronRight,
     X
 } from 'lucide-react'
+
+import { SIDEBAR_MENU_GROUPS } from '@/app/utils/sidebar-menu'
 
 export default function Sidebar({
 
@@ -109,6 +99,14 @@ export default function Sidebar({
             ? 'bg-blue-600 text-white shadow-lg'
             : 'text-slate-700 hover:bg-slate-800 hover:text-white'
         }`
+
+    // Grup ADMIN masih digerbang di sini (bukan per-item) -- sama
+    // persis perilaku sebelum daftar menunya dipindah ke
+    // sidebar-menu.ts, cuma sekarang datanya tidak lagi ditulis
+    // berulang per <Link>.
+    const visibleMenuGroups = SIDEBAR_MENU_GROUPS.filter(
+        (group) => group.key !== 'ADMIN' || role === 'ADMINISTRATOR'
+    )
 
     return (
 
@@ -266,155 +264,38 @@ export default function Sidebar({
 
             <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
 
-                {/* MAIN */}
+                {visibleMenuGroups.map((group, groupIndex) => (
 
-                {!collapsedVisual && (
-                    <p className="text-xs ext-slate-700 mb-3">
-                        MAIN
-                    </p>
-                )}
-
-                <div className="space-y-2">
-
-                    <Link href="/" className={menuClass('/')} onClick={onCloseMobile}>
-                        <Home size={18} />
-                        {!collapsedVisual && 'Dashboard'}
-                    </Link>
-
-                    <Link
-                        href="/visit-plans"
-                        className={menuClass('/visit-plans')}
-                        onClick={onCloseMobile}
-                    >
-                        <CalendarDays size={18} />
-                        {!collapsedVisual && 'Visit Plan'}
-                    </Link>
-
-                    <Link
-                        href="/customers"
-                        className={menuClass('/customers')}
-                        onClick={onCloseMobile}
-                    >
-                        <Users size={18} />
-                        {!collapsedVisual && 'Customer'}
-                    </Link>
-
-                </div>
-
-                {/* SALES */}
-
-                {!collapsedVisual && (
-                    <p className="text-xs ext-slate-700 mt-8 mb-3">
-                        SALES
-                    </p>
-                )}
-
-                <div className="space-y-2">
-
-                    <Link
-                        href="/orders"
-                        className={menuClass('/orders')}
-                        onClick={onCloseMobile}
-                    >
-                        <ShoppingCart size={18} />
-                        {!collapsedVisual && 'Orders'}
-                    </Link>
-
-                    <Link
-                        href="/report"
-                        className={menuClass('/report')}
-                        onClick={onCloseMobile}
-                    >
-                        <BarChart3 size={18} />
-                        {!collapsedVisual && 'Report'}
-                    </Link>
-
-                    <Link
-                        href="/live-tracking"
-                        className={menuClass('/live-tracking')}
-                        onClick={onCloseMobile}
-                    >
-                        <Navigation size={18} />
-                        {!collapsedVisual && 'Live Tracking'}
-                    </Link>
-
-                </div>
-
-                {/* ADMIN */}
-
-                {
-
-                    role === 'ADMINISTRATOR' &&
-
-                    <>
+                    <div key={group.key}>
 
                         {!collapsedVisual && (
-                            <p className="text-xs ext-slate-700 mt-8 mb-3">
-                                ADMIN
+                            <p className={`text-xs ext-slate-700 mb-3 ${groupIndex === 0 ? '' : 'mt-8'}`}>
+                                {group.label}
                             </p>
                         )}
 
                         <div className="space-y-2">
 
-                            <Link
-                                href="/products"
-                                className={menuClass('/products')}
-                                onClick={onCloseMobile}
-                            >
-                                <Package size={18} />
-                                {!collapsedVisual && 'Products'}
-                            </Link>
-
-                            <Link
-                                href="/users"
-                                className={menuClass('/users')}
-                                onClick={onCloseMobile}
-                            >
-                                <UserCog size={18} />
-                                {!collapsedVisual && 'Users'}
-                            </Link>
-
-                            <Link
-                                href="/activity/create"
-                                className={menuClass('/activity/create')}
-                                onClick={onCloseMobile}
-                            >
-                                <Settings size={18} />
-                                {!collapsedVisual && 'Activity Master'}
-                            </Link>
-
-                            <Link
-                                href="/areas"
-                                className={menuClass('/areas')}
-                                onClick={onCloseMobile}
-                            >
-                                <MapPin size={18} />
-                                {!collapsedVisual && 'Areas'}
-                            </Link>
-
-                            <Link
-                                href="/classes"
-                                className={menuClass('/classes')}
-                                onClick={onCloseMobile}
-                            >
-                                <Tag size={18} />
-                                {!collapsedVisual && 'Classes'}
-                            </Link>
-
-                            <Link
-                                href="/customer-groups"
-                                className={menuClass('/customer-groups')}
-                                onClick={onCloseMobile}
-                            >
-                                <Layers size={18} />
-                                {!collapsedVisual && 'Customer Groups'}
-                            </Link>
+                            {group.items.map((item) => {
+                                const Icon = item.icon
+                                return (
+                                    <Link
+                                        key={item.key}
+                                        href={item.href}
+                                        className={menuClass(item.href)}
+                                        onClick={onCloseMobile}
+                                    >
+                                        <Icon size={18} />
+                                        {!collapsedVisual && item.label}
+                                    </Link>
+                                )
+                            })}
 
                         </div>
 
-                    </>
+                    </div>
 
-                }
+                ))}
 
             </div>
 
