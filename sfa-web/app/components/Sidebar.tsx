@@ -13,7 +13,8 @@ import {
     X
 } from 'lucide-react'
 
-import { SIDEBAR_MENU_GROUPS } from '@/app/utils/sidebar-menu'
+import { SIDEBAR_MENU_GROUPS, isMenuVisibleByDefault } from '@/app/utils/sidebar-menu'
+import { API_BASE_URL } from '@/app/utils/api-config'
 
 export default function Sidebar({
 
@@ -87,6 +88,44 @@ export default function Sidebar({
         // nyangkut dari user sebelumnya sampai tab di-refresh manual.
     }, [pathname])
 
+    // Override Menu Access buat role pemanggil -- {} sampai fetch
+    // selesai (atau gagal), yang berarti fallback ke default per grup
+    // (isMenuVisibleByDefault) apa adanya, BUKAN sidebar kosong.
+    // ADMINISTRATOR sengaja dilewati sama sekali -- tidak pernah
+    // dibatasi, tidak perlu fetch apa pun.
+    const [menuOverrides, setMenuOverrides] = useState<Record<string, boolean>>({})
+
+    useEffect(() => {
+
+        if (!role || role === 'ADMINISTRATOR') {
+            setMenuOverrides({})
+            return
+        }
+
+        const token = localStorage.getItem('token')
+
+        fetch(`${API_BASE_URL}/role-menu-access/mine`, {
+            headers: { Authorization: `Bearer ${token}` },
+        })
+            .then((res) => (res.ok ? res.json() : []))
+            .then((rows: { menu_key: string; visible: boolean }[]) => {
+
+                const map: Record<string, boolean> = {}
+
+                rows.forEach((row) => {
+                    map[row.menu_key] = !!row.visible
+                })
+
+                setMenuOverrides(map)
+
+            })
+            .catch(() => {
+                // Diam -- fallback ke default per grup, bukan sidebar
+                // kosong gara-gara satu request gagal.
+            })
+
+    }, [role])
+
     const hasAccess = (
         roles: string[]
     ) => roles.includes(role)
@@ -100,13 +139,25 @@ export default function Sidebar({
             : 'text-slate-700 hover:bg-slate-800 hover:text-white'
         }`
 
-    // Grup ADMIN masih digerbang di sini (bukan per-item) -- sama
-    // persis perilaku sebelum daftar menunya dipindah ke
-    // sidebar-menu.ts, cuma sekarang datanya tidak lagi ditulis
-    // berulang per <Link>.
-    const visibleMenuGroups = SIDEBAR_MENU_GROUPS.filter(
-        (group) => group.key !== 'ADMIN' || role === 'ADMINISTRATOR'
-    )
+    // ADMINISTRATOR selalu lihat semua menu, tidak pernah disaring.
+    // Role lain: override eksplisit menang, kalau belum ada override
+    // pakai default per grup (MAIN/SALES keliatan, ADMIN disembunyikan).
+    // Grup yang ujung-ujungnya kosong (semua itemnya tersembunyi) ikut
+    // disembunyikan headernya, bukan cuma item-nya.
+    const visibleMenuGroups = SIDEBAR_MENU_GROUPS
+        .map((group) => ({
+            ...group,
+            items: group.items.filter((item) => {
+                if (role === 'ADMINISTRATOR') return true
+
+                if (Object.prototype.hasOwnProperty.call(menuOverrides, item.key)) {
+                    return menuOverrides[item.key]
+                }
+
+                return isMenuVisibleByDefault(group.key)
+            }),
+        }))
+        .filter((group) => group.items.length > 0)
 
     return (
 

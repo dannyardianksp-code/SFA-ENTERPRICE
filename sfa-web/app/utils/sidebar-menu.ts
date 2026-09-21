@@ -13,6 +13,7 @@ import {
     UserCog,
     Settings,
     MapPin,
+    Lock,
 } from 'lucide-react'
 
 // Dipisah dari LucideIcon (tidak konsisten diekspor tiap versi paket) --
@@ -35,13 +36,14 @@ export interface SidebarMenuGroup {
 
 /**
  * Satu sumber daftar menu sidebar. Sidebar.tsx (tampilan) dan halaman
- * Menu Access (siapa boleh lihat apa, belum dibuat) sama-sama baca
+ * Menu Access (/menu-access, siapa boleh lihat apa) sama-sama baca
  * dari sini -- nambah/ubah/hapus menu cukup di satu tempat, tidak ada
  * risiko dua daftar terpisah jadi beda-beda (drift).
  *
- * Urutan array = urutan tampil di sidebar. Grup ADMIN saat ini masih
- * digerbang langsung di Sidebar.tsx (`role === 'ADMINISTRATOR'`) --
- * belum dinamis per role, itu langkah berikutnya (halaman Menu Access).
+ * Urutan array = urutan tampil di sidebar. Visibility SEBENARNYA per
+ * role ada di role_menu_overrides (backend) -- lihat
+ * isMenuVisibleByDefault di bawah buat aturan defaultnya kalau belum
+ * ada override eksplisit.
  */
 export const SIDEBAR_MENU_GROUPS: SidebarMenuGroup[] = [
     {
@@ -72,6 +74,18 @@ export const SIDEBAR_MENU_GROUPS: SidebarMenuGroup[] = [
             { key: 'areas', href: '/areas', label: 'Areas', icon: MapPin },
             { key: 'classes', href: '/classes', label: 'Classes', icon: Tag },
             { key: 'customerGroups', href: '/customer-groups', label: 'Customer Groups', icon: Layers },
+            { key: 'menuAccess', href: '/menu-access', label: 'Menu Access', icon: Lock },
         ],
     },
 ]
+
+/**
+ * Default kalau belum ada override eksplisit di role_menu_overrides --
+ * MAIN/SALES keliatan semua role (perilaku sekarang), ADMIN
+ * disembunyikan sampai admin buka manual per role. ADMINISTRATOR TIDAK
+ * lewat fungsi ini sama sekali -- selalu lihat semua menu tanpa
+ * terkecuali (lihat Sidebar.tsx).
+ */
+export const isMenuVisibleByDefault = (
+    groupKey: SidebarMenuGroup['key']
+) => groupKey !== 'ADMIN'
