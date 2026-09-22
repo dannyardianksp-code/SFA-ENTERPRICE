@@ -23,6 +23,12 @@ export default function CustomersPage() {
 
     const [role, setRole] = useState('')
 
+    const [selectedAreaIds, setSelectedAreaIds] =
+        useState<number[]>([])
+
+    const [areaFilterOpen, setAreaFilterOpen] =
+        useState(false)
+
     const router = useRouter()
 
     useEffect(() => {
@@ -375,8 +381,40 @@ export default function CustomersPage() {
     const PAGE_SIZE = 10
     const [page, setPage] = useState(1)
 
+    // Daftar area buat checklist filter -- diambil dari customer yang
+    // sudah ke-load (sudah otomatis dibatasi backend sesuai hak akses
+    // user), jadi tidak perlu endpoint /areas terpisah dan tidak akan
+    // pernah menampilkan area yang usernya sendiri tidak boleh lihat.
+    const uniqueAreas = Array.from(
+        new Map(
+            customers
+                .filter((c) => c.Area?.id)
+                .map((c) => [c.Area.id, c.Area])
+        ).values()
+    ).sort((a: any, b: any) =>
+        (a.code || '').localeCompare(b.code || '')
+    )
+
+    const toggleAreaFilter = (areaId: number) => {
+
+        setSelectedAreaIds((prev) =>
+            prev.includes(areaId)
+                ? prev.filter((id) => id !== areaId)
+                : [...prev, areaId]
+        )
+
+        setPage(1)
+
+    }
+
     const filteredCustomers = customers.filter((c) =>
         c.name.toLowerCase().includes(search.toLowerCase())
+        &&
+        (
+            selectedAreaIds.length === 0
+            ||
+            selectedAreaIds.includes(c.Area?.id ?? c.area_id)
+        )
     )
 
     const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / PAGE_SIZE))
@@ -519,6 +557,70 @@ export default function CustomersPage() {
       "
 
                 />
+
+                <div className="relative">
+
+                    <button
+                        onClick={() => setAreaFilterOpen((v) => !v)}
+                        className={`px-4 py-4 rounded-2xl shadow text-sm font-semibold ${
+                            selectedAreaIds.length > 0
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-white text-slate-700'
+                        }`}
+                    >
+                        📍 Area{selectedAreaIds.length > 0 ? ` (${selectedAreaIds.length})` : ''}
+                    </button>
+
+                    {areaFilterOpen && (
+
+                        <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl shadow-lg border border-slate-200 p-3 z-20">
+
+                            <div className="flex items-center justify-between mb-2">
+
+                                <span className="text-xs font-bold text-slate-400 uppercase">
+                                    Filter Area
+                                </span>
+
+                                {selectedAreaIds.length > 0 && (
+                                    <button
+                                        onClick={() => { setSelectedAreaIds([]); setPage(1) }}
+                                        className="text-xs text-blue-600 font-semibold"
+                                    >
+                                        Hapus semua
+                                    </button>
+                                )}
+
+                            </div>
+
+                            <div className="max-h-64 overflow-y-auto flex flex-col gap-1">
+
+                                {uniqueAreas.length === 0 && (
+                                    <p className="text-sm text-slate-400 px-1 py-2">
+                                        Belum ada data area.
+                                    </p>
+                                )}
+
+                                {uniqueAreas.map((area: any) => (
+                                    <label
+                                        key={area.id}
+                                        className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer text-sm text-slate-700"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedAreaIds.includes(area.id)}
+                                            onChange={() => toggleAreaFilter(area.id)}
+                                        />
+                                        {area.code} -- {area.name}
+                                    </label>
+                                ))}
+
+                            </div>
+
+                        </div>
+
+                    )}
+
+                </div>
 
                 <button
 
