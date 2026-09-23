@@ -20,6 +20,7 @@ const {
 const {
     assertAreaChannelAccess,
     USER_MANAGER_ROLES,
+    RESTRICTED_ROLES,
 } = require('../utils/access.util')
 
 const {
@@ -122,22 +123,9 @@ exports.getAll =
 
             let whereCondition = {}
 
-            // ROLE YANG DIBATASI
-            const restrictedRoles = [
-
-                'MD',
-
-                'SPG',
-
-                'SALES',
-
-                'SUPERVISOR'
-
-            ]
-
             if (
 
-                restrictedRoles.includes(
+                RESTRICTED_ROLES.includes(
                     user.role
                 )
 
@@ -850,7 +838,7 @@ async (req, res) => {
 
 
         const isRestricted =
-            ['MD', 'SPG', 'SALES', 'SUPERVISOR'].includes(user.role);
+            RESTRICTED_ROLES.includes(user.role);
 
 
         const areaWhere =

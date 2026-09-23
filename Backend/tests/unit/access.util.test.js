@@ -45,14 +45,30 @@ describe('assertAreaChannelAccess', () => {
 
     // Nilai role yang sah di kolom users.role adalah versi panjang.
     // Model User masih menulis ADMIN/SPV dan itu usang.
-    test('ADMINISTRATOR dan MANAGER tidak dibatasi', () => {
-        for (const role of ['ADMINISTRATOR', 'MANAGER']) {
+    test('ADMINISTRATOR dan GENERAL MANAGER tidak dibatasi', () => {
+        for (const role of ['ADMINISTRATOR', 'GENERAL MANAGER']) {
             const user = { role, channel_id: 99, AssignedAreas: [] }
 
             assert.strictEqual(
                 assertAreaChannelAccess(user, 12345, 54321),
                 null,
                 `${role} seharusnya tidak dibatasi`
+            )
+        }
+    })
+
+    // MANAGER dan REGIONAL MANAGER SENGAJA ikut dibatasi ke area+channel
+    // sendiri -- customer tidak dimiliki hierarki user, jadi area tetap
+    // satu-satunya cara membatasi data yang mereka lihat.
+    test('MANAGER dan REGIONAL MANAGER juga dibatasi', () => {
+        for (const role of ['MANAGER', 'REGIONAL MANAGER']) {
+            const user = { ...spg, role }
+
+            assert.strictEqual(assertAreaChannelAccess(user, 1, 2), null)
+            assert.strictEqual(
+                assertAreaChannelAccess(user, 9, 2).status,
+                403,
+                `${role} seharusnya dibatasi di luar area`
             )
         }
     })

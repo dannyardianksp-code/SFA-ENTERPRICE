@@ -5,7 +5,8 @@ const { Op } = require('sequelize')
 const User = require('../models/user.model')
 
 /**
- * Role yang aksesnya dibatasi ke area dan channel miliknya sendiri.
+ * Role yang aksesnya dibatasi ke area dan channel miliknya sendiri
+ * (lewat resolveAccessibleAreaIds / AssignedAreas).
  *
  * Nilai ini harus cocok dengan kolom users.role yang sebenarnya —
  * enum('MD','SPG','SALES','ADMINISTRATOR','MANAGER','SUPERVISOR', ...).
@@ -15,8 +16,26 @@ const User = require('../models/user.model')
  * MD, SPG, SALES diperlakukan identik -- ketiganya role lapangan daun
  * (tidak punya bawahan), dibatasi ke area+channel sendiri, dan default
  * tidak ada akses web (lihat can_access_web di user.routes.js).
+ *
+ * MANAGER dan REGIONAL MANAGER SENGAJA ikut dibatasi juga -- meski
+ * bukan role daun (punya bawahan lewat supervisor_id), data customer
+ * tidak dimiliki oleh hierarki user (tidak ada user_id di tabel
+ * customers), jadi satu-satunya cara membatasi customer yang mereka
+ * lihat adalah lewat area+channel, sama seperti role di bawahnya.
+ * GENERAL MANAGER SENGAJA TIDAK termasuk -- tetap unrestricted
+ * (melihat semua customer apa pun areanya), atas permintaan eksplisit.
+ * Sebelum menambah role manapun ke sini, pastikan dulu akunnya sudah
+ * di-assign area lewat user_areas -- role restricted tanpa area sama
+ * sekali akan melihat nol customer (fail-closed), bukan semuanya.
  */
-const RESTRICTED_ROLES = ['MD', 'SPG', 'SALES', 'SUPERVISOR']
+const RESTRICTED_ROLES = ['MD', 'SPG', 'SALES', 'SUPERVISOR', 'MANAGER', 'REGIONAL MANAGER']
+
+/**
+ * Role lapangan daun -- MD, SPG, SALES diperlakukan identik di seluruh
+ * sistem (lihat komentar RESTRICTED_ROLES di atas). Dipakai payroll
+ * (gaji harian berbasis absen cuma berlaku buat role lapangan).
+ */
+const FIELD_ROLES = ['MD', 'SPG', 'SALES']
 
 /**
  * Memeriksa apakah user berhak menyentuh customer di area dan channel
@@ -365,6 +384,7 @@ const assertWithinSubtree = (subordinateIds, ownerId) => {
 module.exports = {
     assertAreaChannelAccess,
     RESTRICTED_ROLES,
+    FIELD_ROLES,
     PLAN_WRITER_ROLES,
     USER_MANAGER_ROLES,
     USER_ROLES,
