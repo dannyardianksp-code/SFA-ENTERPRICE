@@ -16,9 +16,17 @@ const IncentiveRule = db.define('IncentiveRule', {
         allowNull: false
     },
 
+    // get() manual: driver mysql2 yang dipakai di sini mengembalikan
+    // kolom JSON sebagai STRING mentah, bukan otomatis di-parse Sequelize
+    // seperti pada dialect lain -- tanpa ini setiap pemanggil menerima
+    // "[1,2]" (string) dan Op.in/.map di controller meledak diam-diam.
     criteria_ids: {
         type: DataTypes.JSON,
-        allowNull: false
+        allowNull: false,
+        get() {
+            const raw = this.getDataValue('criteria_ids')
+            return typeof raw === 'string' ? JSON.parse(raw) : raw
+        }
     },
 
     target: {
@@ -44,7 +52,11 @@ const IncentiveRule = db.define('IncentiveRule', {
 
     roles: {
         type: DataTypes.JSON,
-        allowNull: false
+        allowNull: false,
+        get() {
+            const raw = this.getDataValue('roles')
+            return typeof raw === 'string' ? JSON.parse(raw) : raw
+        }
     },
 
     aktif: {

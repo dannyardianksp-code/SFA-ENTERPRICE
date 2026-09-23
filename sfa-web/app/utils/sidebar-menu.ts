@@ -14,6 +14,7 @@ import {
     Settings,
     MapPin,
     Lock,
+    Wallet,
 } from 'lucide-react'
 
 // Dipisah dari LucideIcon (tidak konsisten diekspor tiap versi paket) --
@@ -75,6 +76,7 @@ export const SIDEBAR_MENU_GROUPS: SidebarMenuGroup[] = [
             { key: 'classes', href: '/classes', label: 'Classes', icon: Tag },
             { key: 'customerGroups', href: '/customer-groups', label: 'Customer Groups', icon: Layers },
             { key: 'menuAccess', href: '/menu-access', label: 'Menu Access', icon: Lock },
+            { key: 'payroll', href: '/payroll', label: 'Payroll & Insentif', icon: Wallet },
         ],
     },
 ]

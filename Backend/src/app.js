@@ -57,6 +57,8 @@ app.use('/api/user-locations', require('./routes/userLocation.routes'))
 app.use('/api/dashboard', dashboardRoutes)
 app.use('/api/users',userAreaRoutes)
 app.use('/api/role-menu-access', require('./routes/roleMenuAccess.routes'))
+app.use('/api/payroll', require('./routes/payroll.routes'))
+app.use('/api/incentive-rules', require('./routes/incentiveRule.routes'))
 app.use('/deploy-webhook', require('./routes/deploy.routes'))
 
 // APK release didistribusikan langsung dari sini (bukan Play Store) --

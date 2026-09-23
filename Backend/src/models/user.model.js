@@ -34,6 +34,9 @@ const User = db.define('User', {
     area_id: DataTypes.INTEGER,
     channel_id: DataTypes.INTEGER,
     supervisor_id: DataTypes.INTEGER,
+    // Tarif gaji harian -- NULL berarti belum diset (bukan Rp 0). Lihat
+    // payroll.controller.js.
+    daily_rate: DataTypes.DECIMAL(10, 2),
     // Kolomnya varchar(20) di database, bukan ENUM, jadi tipenya STRING.
     // defaultValue dipasang di sini supaya user yang dibuat lewat
     // POST /api/users tidak dikembalikan dengan status: undefined.
