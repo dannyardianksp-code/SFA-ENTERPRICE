@@ -8,10 +8,15 @@ const User = require('../models/user.model')
  * Role yang aksesnya dibatasi ke area dan channel miliknya sendiri.
  *
  * Nilai ini harus cocok dengan kolom users.role yang sebenarnya —
- * enum('MD','ADMINISTRATOR','MANAGER','SUPERVISOR'). Model User masih
- * menulis ADMIN/SPV dan itu usang; jangan dijadikan acuan.
+ * enum('MD','SPG','SALES','ADMINISTRATOR','MANAGER','SUPERVISOR', ...).
+ * Model User masih menulis ADMIN/SPV dan itu usang; jangan dijadikan
+ * acuan.
+ *
+ * MD, SPG, SALES diperlakukan identik -- ketiganya role lapangan daun
+ * (tidak punya bawahan), dibatasi ke area+channel sendiri, dan default
+ * tidak ada akses web (lihat can_access_web di user.routes.js).
  */
-const RESTRICTED_ROLES = ['MD', 'SUPERVISOR']
+const RESTRICTED_ROLES = ['MD', 'SPG', 'SALES', 'SUPERVISOR']
 
 /**
  * Memeriksa apakah user berhak menyentuh customer di area dan channel
@@ -85,6 +90,8 @@ const USER_MANAGER_ROLES = ['ADMINISTRATOR']
  */
 const USER_ROLES = [
     'MD',
+    'SPG',
+    'SALES',
     'SUPERVISOR',
     'MANAGER',
     'REGIONAL MANAGER',

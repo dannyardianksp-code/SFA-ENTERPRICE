@@ -127,6 +127,10 @@ exports.getAll =
 
                 'MD',
 
+                'SPG',
+
+                'SALES',
+
                 'SUPERVISOR'
 
             ]
@@ -846,7 +850,7 @@ async (req, res) => {
 
 
         const isRestricted =
-            ['MD', 'SUPERVISOR'].includes(user.role);
+            ['MD', 'SPG', 'SALES', 'SUPERVISOR'].includes(user.role);
 
 
         const areaWhere =

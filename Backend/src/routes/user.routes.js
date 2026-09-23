@@ -370,7 +370,7 @@ router.post(
                     can_access_web:
                         can_access_web !== undefined
                             ? can_access_web
-                            : role !== 'MD'
+                            : !['MD', 'SPG', 'SALES'].includes(role)
 
                 })
 

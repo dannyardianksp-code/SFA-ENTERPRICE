@@ -13,6 +13,10 @@ import { getDistanceFromLatLonInKm } from "../utils/distance"
 import { API_BASE_URL } from '@/app/utils/api-config'
 import VisitPlanCalendar from './VisitPlanCalendar'
 
+// Role lapangan daun -- lihat hanya jadwalnya sendiri (bukan dasbor tim
+// lintas tanggal), sama seperti MD.
+const FIELD_ROLES = ['MD', 'SPG', 'SALES']
+
 // "YYYY-MM-DD" hari ini di waktu lokal browser -- dipakai sebagai
 // default filter tanggal (halaman ini defaultnya tampil rencana HARI
 // INI, bukan lintas tanggal seperti sebelumnya).
@@ -628,7 +632,7 @@ Failed : ${result.failed}`
 
             {/* MODE TABS */}
 
-            {role !== 'MD' && (
+            {!FIELD_ROLES.includes(role) && (
                 <div className="flex gap-2">
                     <button
                         onClick={() => setMode('calendar')}
@@ -663,7 +667,7 @@ Failed : ${result.failed}`
             {/* KALENDER */}
 
             {
-                role !== 'MD'
+                !FIELD_ROLES.includes(role)
                 &&
                 mode === 'calendar'
                 &&
@@ -681,7 +685,7 @@ Failed : ${result.failed}`
 
             {
 
-                role !== 'MD'
+                !FIELD_ROLES.includes(role)
 
                 &&
 
@@ -1404,7 +1408,7 @@ Failed : ${result.failed}`
 
                                                     {
 
-                                                        role !== 'MD'
+                                                        !FIELD_ROLES.includes(role)
 
                                                         &&
 

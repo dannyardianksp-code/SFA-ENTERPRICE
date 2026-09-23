@@ -16,6 +16,8 @@ import { API_BASE_URL } from '@/app/utils/api-config'
 // GENERAL MANAGER tidak punya entry (puncak rantai, tidak butuh atasan).
 const ROLE_ABOVE: Record<string, string> = {
     MD: 'SUPERVISOR',
+    SPG: 'SUPERVISOR',
+    SALES: 'SUPERVISOR',
     SUPERVISOR: 'MANAGER',
     MANAGER: 'REGIONAL MANAGER',
     'REGIONAL MANAGER': 'GENERAL MANAGER',
@@ -334,7 +336,7 @@ export default function CreateUserPage() {
                 // terkunci, role lain terbuka). Admin masih bisa
                 // override lewat checkbox sesudahnya.
                 ...(e.target.name === 'role' && {
-                    can_access_web: e.target.value !== 'MD'
+                    can_access_web: !['MD', 'SPG', 'SALES'].includes(e.target.value)
                 })
 
             })
@@ -553,6 +555,8 @@ export default function CreateUserPage() {
                             <option value="MANAGER">MANAGER</option>
                             <option value="SUPERVISOR">SUPERVISOR</option>
                             <option value="MD">MD</option>
+                            <option value="SPG">SPG</option>
+                            <option value="SALES">SALES</option>
                         </select>
                     </div>
 

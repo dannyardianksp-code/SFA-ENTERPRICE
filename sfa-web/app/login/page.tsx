@@ -74,8 +74,9 @@ export default function LoginPage() {
 
             else if (
 
-                data.user.role ===
-                'MD'
+                ['MD', 'SPG', 'SALES'].includes(
+                    data.user.role
+                )
 
             ) {
 
