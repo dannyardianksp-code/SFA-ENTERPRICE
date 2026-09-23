@@ -8,9 +8,13 @@ const { localDateString } = require('../../src/utils/date.util')
 
 const BASE = process.env.TEST_BASE_URL || 'http://localhost:1000'
 
-// Id ini mengikuti struktur organisasi di database dev:
+// Id user tetap (dev database tidak dihapus/dibuat ulang antar sesi).
+// Struktur organisasi YANG DIASUMSIKAN berkas ini:
 //   MANAGER 1 (30) -> SUPERVISOR JAKARTA (3) -> Danny (1), Tino (37), SUBUR (38)
 //                  -> SUPERVISOR BANDUNG (31) -> Tria (32)
+// supervisor_id JAKARTA dan BANDUNG DIPAKSA cocok dengan ini di
+// before()/after() di bawah (lalu dikembalikan) -- reorganisasi nyata
+// lewat halaman Users tidak akan lagi membuat berkas ini gagal.
 const DANNY = 1
 const JAKARTA = 3
 const TINO = 37
@@ -62,6 +66,11 @@ const db = async () => {
 const dibuat = []
 let customerId = null
 
+// supervisor_id ASLI JAKARTA(3) dan BANDUNG(31) sebelum berkas ini
+// menimpanya sementara -- lihat before()/after() di bawah.
+let supervisorIdAsliJakarta = null
+let supervisorIdAsliBandung = null
+
 before(async () => {
     try {
         const res = await fetch(BASE + '/')
@@ -73,6 +82,31 @@ before(async () => {
         )
     }
 
+    // Topologi yang diasumsikan seluruh berkas ini (lihat komentar di
+    // atas MANAGER/JAKARTA/dst) adalah struktur ORGANISASI DEV YANG
+    // BISA DIREORGANISASI KAPAN SAJA lewat halaman Users -- JAKARTA dan
+    // BANDUNG bisa saja sudah dipindah ke manager lain sejak berkas ini
+    // ditulis. Supaya tes ini tidak rapuh terhadap reorganisasi nyata
+    // di database dev, supervisor_id keduanya DIPAKSA ke MANAGER (30)
+    // di sini, dan DIKEMBALIKAN ke nilai aslinya di after() di bawah --
+    // efeknya cuma berlaku selama proses tes ini jalan.
+    const c = await db()
+
+    const [[jakartaRow]] = await c.query(
+        'SELECT supervisor_id FROM users WHERE id = ?', [JAKARTA]
+    )
+    const [[bandungRow]] = await c.query(
+        'SELECT supervisor_id FROM users WHERE id = ?', [31]
+    )
+
+    supervisorIdAsliJakarta = jakartaRow.supervisor_id
+    supervisorIdAsliBandung = bandungRow.supervisor_id
+
+    await c.query('UPDATE users SET supervisor_id = ? WHERE id = ?', [MANAGER, JAKARTA])
+    await c.query('UPDATE users SET supervisor_id = ? WHERE id = ?', [MANAGER, 31])
+
+    await c.end()
+
     const customers = await get('/api/customers', DANNY, 'MD')
 
     assert.strictEqual(customers.status, 200)
@@ -82,13 +116,19 @@ before(async () => {
 })
 
 after(async () => {
-    if (dibuat.length === 0) return
 
     const c = await db()
-    await c.query('DELETE FROM visit_plans WHERE id IN (?)', [dibuat])
+
+    await c.query('UPDATE users SET supervisor_id = ? WHERE id = ?', [supervisorIdAsliJakarta, JAKARTA])
+    await c.query('UPDATE users SET supervisor_id = ? WHERE id = ?', [supervisorIdAsliBandung, 31])
+
+    if (dibuat.length > 0) {
+        await c.query('DELETE FROM visit_plans WHERE id IN (?)', [dibuat])
+    }
+
     await c.end()
 
-    console.log(`  (bersih-bersih: ${dibuat.length} visit plan tes dihapus)`)
+    console.log(`  (bersih-bersih: supervisor_id JAKARTA/BANDUNG dikembalikan, ${dibuat.length} visit plan tes dihapus)`)
 })
 
 /**
@@ -953,7 +993,19 @@ describe('GET /api/attendances -- cakupan hierarki dan filter tanggal', () => {
     // ketercemar tes serupa sebelumnya (lihat commit "fix: dashboard
     // spg" di sesi yang sama). Insert langsung ke tanggal lampau
     // menghindari itu sepenuhnya.
-    const tanggalLampau = '2020-01-15'
+    //
+    // Satu tanggal BERBEDA per tes (bukan satu tanggalLampau dipakai
+    // ulang) -- (user_id, tanggal) UNIQUE di tabel ini, dan
+    // pembersihan cuma jalan di after() (bukan antar tes, lihat
+    // deskripsi block "POST /api/attendances/checkin" di bawah yang
+    // sudah menghindari ini dengan pola sama), jadi dua tes yang
+    // insert user yang sama di tanggal yang sama akan tabrakan
+    // constraint uniq_user_tanggal.
+    const tanggal1 = '2020-01-15'
+    const tanggal2 = '2020-02-20'
+    const tanggal3 = '2020-03-25'
+    const tanggal3LuarRentang = '2021-06-01'
+    const tanggal4 = '2020-04-30'
 
     const buatAbsen = async (userId, tanggal) => {
         const conn = await db()
@@ -976,8 +1028,8 @@ describe('GET /api/attendances -- cakupan hierarki dan filter tanggal', () => {
     })
 
     test('SUPERVISOR melihat absen bawahan dan dirinya sendiri', async () => {
-        const idBawahan = await buatAbsen(DANNY, tanggalLampau)
-        const idAtasan = await buatAbsen(JAKARTA, tanggalLampau)
+        const idBawahan = await buatAbsen(DANNY, tanggal1)
+        const idAtasan = await buatAbsen(JAKARTA, tanggal1)
 
         const res = await get('/api/attendances', JAKARTA, 'SUPERVISOR')
 
@@ -989,8 +1041,8 @@ describe('GET /api/attendances -- cakupan hierarki dan filter tanggal', () => {
     })
 
     test('MD cuma melihat absennya sendiri, bukan rekan setingkat', async () => {
-        const idSendiri = await buatAbsen(DANNY, tanggalLampau)
-        const idRekan = await buatAbsen(TINO, tanggalLampau)
+        const idSendiri = await buatAbsen(DANNY, tanggal2)
+        const idRekan = await buatAbsen(TINO, tanggal2)
 
         const res = await get('/api/attendances', DANNY, 'MD')
 
@@ -1002,11 +1054,11 @@ describe('GET /api/attendances -- cakupan hierarki dan filter tanggal', () => {
     })
 
     test('from/to memfilter berdasarkan tanggal', async () => {
-        const idDalamRentang = await buatAbsen(DANNY, tanggalLampau)
-        const idLuarRentang = await buatAbsen(DANNY, '2021-06-01')
+        const idDalamRentang = await buatAbsen(DANNY, tanggal3)
+        const idLuarRentang = await buatAbsen(DANNY, tanggal3LuarRentang)
 
         const res = await get(
-            `/api/attendances?from=${tanggalLampau}&to=${tanggalLampau}`,
+            `/api/attendances?from=${tanggal3}&to=${tanggal3}`,
             DANNY,
             'MD'
         )
@@ -1019,8 +1071,8 @@ describe('GET /api/attendances -- cakupan hierarki dan filter tanggal', () => {
     })
 
     test('?mine=1: SUPERVISOR cuma melihat absennya sendiri, bukan bawahan', async () => {
-        const idBawahan = await buatAbsen(DANNY, tanggalLampau)
-        const idAtasan = await buatAbsen(JAKARTA, tanggalLampau)
+        const idBawahan = await buatAbsen(DANNY, tanggal4)
+        const idAtasan = await buatAbsen(JAKARTA, tanggal4)
 
         const res = await get('/api/attendances?mine=1', JAKARTA, 'SUPERVISOR')
 
