@@ -25,6 +25,9 @@ export default function VisitDetailPage() {
     const [visit, setVisit] =
         useState<any>(null)
 
+    const [role, setRole] =
+        useState('')
+
     useEffect(() => {
 
         if (params.id) {
@@ -35,6 +38,10 @@ export default function VisitDetailPage() {
         }
 
     }, [params.id])
+
+    useEffect(() => {
+        setRole(localStorage.getItem('role') || '')
+    }, [])
 
     const fetchActivities =
         async () => {
@@ -224,14 +231,16 @@ export default function VisitDetailPage() {
                 !visit.checkout_time && (
                     <div className="bg-white rounded-3xl p-5 shadow-lg flex gap-3">
 
-                        <button
-                            onClick={() =>
-                                router.push(`/visits/activity?visit_id=${visit.id}`)
-                            }
-                            className="flex-1 bg-blue-600 text-white px-4 py-3 rounded-xl font-semibold"
-                        >
-                            ➕ Add Activity
-                        </button>
+                        {role === 'ADMINISTRATOR' && (
+                            <button
+                                onClick={() =>
+                                    router.push(`/visits/activity?visit_id=${visit.id}`)
+                                }
+                                className="flex-1 bg-blue-600 text-white px-4 py-3 rounded-xl font-semibold"
+                            >
+                                ➕ Add Activity
+                            </button>
+                        )}
 
                         <button
                             onClick={handleCheckout}
