@@ -15,6 +15,7 @@ import {
     MapPin,
     Lock,
     Wallet,
+    Clock,
 } from 'lucide-react'
 
 // Dipisah dari LucideIcon (tidak konsisten diekspor tiap versi paket) --
@@ -63,6 +64,7 @@ export const SIDEBAR_MENU_GROUPS: SidebarMenuGroup[] = [
             { key: 'orders', href: '/orders', label: 'Orders', icon: ShoppingCart },
             { key: 'report', href: '/report', label: 'Report', icon: BarChart3 },
             { key: 'liveTracking', href: '/live-tracking', label: 'Live Tracking', icon: Navigation },
+            { key: 'attendance', href: '/attendance', label: 'Attendance', icon: Clock },
         ],
     },
     {

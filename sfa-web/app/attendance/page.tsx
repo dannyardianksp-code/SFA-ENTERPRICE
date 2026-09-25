@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { API_BASE_URL } from '@/app/utils/api-config'
+import { API_BASE_URL, UPLOADS_ORIGIN } from '@/app/utils/api-config'
 import { exportToExcel } from '@/app/utils/export-excel'
 
 const pad2 = (n: number) => String(n).padStart(2, '0')
@@ -129,7 +129,9 @@ export default function AttendanceReportPage() {
             'Latitude Masuk': a.clock_in_latitude ?? '-',
             'Longitude Masuk': a.clock_in_longitude ?? '-',
             'Latitude Pulang': a.clock_out_latitude ?? '-',
-            'Longitude Pulang': a.clock_out_longitude ?? '-'
+            'Longitude Pulang': a.clock_out_longitude ?? '-',
+            'Foto Masuk': a.clock_in_photo_url ? `${UPLOADS_ORIGIN}${a.clock_in_photo_url}` : '-',
+            'Foto Pulang': a.clock_out_photo_url ? `${UPLOADS_ORIGIN}${a.clock_out_photo_url}` : '-'
         }))
 
         exportToExcel(
@@ -270,7 +272,9 @@ export default function AttendanceReportPage() {
                                 'Tanggal Out',
                                 'Clock Out',
                                 'Map Masuk',
-                                'Map Pulang'
+                                'Map Pulang',
+                                'Foto Masuk',
+                                'Foto Pulang'
                             ].map((h) => (
                                 <th
                                     key={h}
@@ -291,7 +295,7 @@ export default function AttendanceReportPage() {
 
                         {filtered.length === 0 && (
                             <tr>
-                                <td colSpan={8} style={{
+                                <td colSpan={10} style={{
                                     padding: 20,
                                     textAlign: 'center',
                                     color: '#9ca3af'
@@ -381,6 +385,30 @@ export default function AttendanceReportPage() {
                                         >
                                             Map
                                         </button>
+                                    ) : '-'}
+                                </td>
+
+                                <td style={{ padding: 12 }}>
+                                    {a.clock_in_photo_url ? (
+                                        <a href={`${UPLOADS_ORIGIN}${a.clock_in_photo_url}`} target="_blank" rel="noopener noreferrer">
+                                            <img
+                                                src={`${UPLOADS_ORIGIN}${a.clock_in_photo_url}`}
+                                                alt="Foto absen masuk"
+                                                style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 8 }}
+                                            />
+                                        </a>
+                                    ) : '-'}
+                                </td>
+
+                                <td style={{ padding: 12 }}>
+                                    {a.clock_out_photo_url ? (
+                                        <a href={`${UPLOADS_ORIGIN}${a.clock_out_photo_url}`} target="_blank" rel="noopener noreferrer">
+                                            <img
+                                                src={`${UPLOADS_ORIGIN}${a.clock_out_photo_url}`}
+                                                alt="Foto absen pulang"
+                                                style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 8 }}
+                                            />
+                                        </a>
                                     ) : '-'}
                                 </td>
 
