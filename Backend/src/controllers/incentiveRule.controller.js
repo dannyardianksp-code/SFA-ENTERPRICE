@@ -2,11 +2,11 @@ const { Op } = require('sequelize')
 
 const { sendError, sendServerError } = require('../utils/response.util')
 
-const { USER_MANAGER_ROLES, USER_ROLES } = require('../utils/access.util')
+const { USER_MANAGER_ROLES, USER_ROLES, resolveSubordinateUserIds } = require('../utils/access.util')
 
 const { hitungBonus } = require('../utils/incentive.util')
 
-const { periodRange, isValidPeriod } = require('./payroll.controller')
+const { periodRange, isValidPeriod, PAYROLL_VIEW_ROLES } = require('./payroll.controller')
 
 const IncentiveRule = require('../models/incentiveRule.model')
 const User = require('../models/user.model')
@@ -244,8 +244,8 @@ exports.getProgress = async (req, res) => {
 
     try {
 
-        if (!USER_MANAGER_ROLES.includes(req.user.role)) {
-            return sendError(res, 403, 'Hanya administrator yang boleh melihat progress insentif.')
+        if (!PAYROLL_VIEW_ROLES.includes(req.user.role)) {
+            return sendError(res, 403, 'Anda tidak berhak melihat progress insentif.')
         }
 
         const period = req.query.period
@@ -256,6 +256,11 @@ exports.getProgress = async (req, res) => {
 
         const { firstDay, lastDay } = periodRange(period)
 
+        // null (ADMINISTRATOR) = tanpa batas. SUPERVISOR/MANAGER cuma
+        // lihat progress tim di subtree-nya sendiri, sama seperti
+        // payroll.controller.js getAll.
+        const subtreeIds = await resolveSubordinateUserIds(req.user)
+
         const rules = await IncentiveRule.findAll({
             where: { frekuensi: 'BULANAN', aktif: true },
             order: [['created_at', 'ASC']],
@@ -265,8 +270,14 @@ exports.getProgress = async (req, res) => {
 
         for (const rule of rules) {
 
+            const roleWhere = { role: { [Op.in]: rule.roles } }
+
+            if (subtreeIds !== null) {
+                roleWhere.id = { [Op.in]: subtreeIds }
+            }
+
             const users = await User.findAll({
-                where: { role: { [Op.in]: rule.roles } },
+                where: roleWhere,
                 attributes: ['id', 'name'],
                 order: [['name', 'ASC']],
             })

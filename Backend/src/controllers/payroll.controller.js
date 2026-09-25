@@ -2,7 +2,13 @@ const { Op } = require('sequelize')
 
 const { sendError, sendServerError } = require('../utils/response.util')
 
-const { USER_MANAGER_ROLES, FIELD_ROLES } = require('../utils/access.util')
+const { USER_MANAGER_ROLES, FIELD_ROLES, resolveSubordinateUserIds } = require('../utils/access.util')
+
+// Lihat laporan payroll (read-only) -- SUPERVISOR/MANAGER cuma lihat
+// tim di subtree-nya sendiri (lihat scoping di getAll di bawah).
+// Ubah tarif/hari kerja TETAP admin-only (lihat setDailyRate/
+// setHariKerja) -- ini sengaja dipisah dari role yang boleh melihat.
+const PAYROLL_VIEW_ROLES = [...USER_MANAGER_ROLES, 'SUPERVISOR', 'MANAGER']
 
 const User = require('../models/user.model')
 const Area = require('../models/area.model')
@@ -40,8 +46,8 @@ exports.getAll = async (req, res) => {
 
     try {
 
-        if (!USER_MANAGER_ROLES.includes(req.user.role)) {
-            return sendError(res, 403, 'Hanya administrator yang boleh melihat payroll.')
+        if (!PAYROLL_VIEW_ROLES.includes(req.user.role)) {
+            return sendError(res, 403, 'Anda tidak berhak melihat payroll.')
         }
 
         const period = req.query.period || currentPeriod()
@@ -52,8 +58,19 @@ exports.getAll = async (req, res) => {
 
         const { firstDay, lastDay } = periodRange(period)
 
+        // null (ADMINISTRATOR) = tanpa batas. Selain itu, dibatasi ke
+        // subtree sendiri -- SUPERVISOR/MANAGER cuma lihat gaji tim
+        // mereka, bukan seluruh perusahaan.
+        const subtreeIds = await resolveSubordinateUserIds(req.user)
+
+        const userWhere = { role: { [Op.in]: FIELD_ROLES } }
+
+        if (subtreeIds !== null) {
+            userWhere.id = { [Op.in]: subtreeIds }
+        }
+
         const users = await User.findAll({
-            where: { role: { [Op.in]: FIELD_ROLES } },
+            where: userWhere,
             attributes: ['id', 'name', 'role', 'daily_rate'],
             include: [{ model: Area, attributes: ['id', 'code', 'name'] }],
             order: [['name', 'ASC']],
@@ -203,3 +220,4 @@ exports.setHariKerja = async (req, res) => {
 
 module.exports.periodRange = periodRange
 module.exports.isValidPeriod = isValidPeriod
+module.exports.PAYROLL_VIEW_ROLES = PAYROLL_VIEW_ROLES

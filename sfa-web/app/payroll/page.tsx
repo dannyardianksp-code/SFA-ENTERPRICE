@@ -146,7 +146,19 @@ export default function PayrollPage() {
 
         const load = async () => {
             setLoading(true)
-            await Promise.all([fetchPayroll(), fetchIncentiveProgress(), fetchRules(), fetchOptions()])
+
+            const isAdminNow = localStorage.getItem('role') === 'ADMINISTRATOR'
+
+            const tasks = [fetchPayroll(), fetchIncentiveProgress()]
+
+            // fetchRules/fetchOptions cuma buat tab Pengaturan (config
+            // skema) -- endpoint-nya sendiri admin-only di backend,
+            // jadi non-admin tidak perlu (dan bakal 403) memanggilnya.
+            if (isAdminNow) {
+                tasks.push(fetchRules(), fetchOptions())
+            }
+
+            await Promise.all(tasks)
             setLoading(false)
         }
 
@@ -314,11 +326,14 @@ export default function PayrollPage() {
     // UI
     // ======================
 
-    if (role && role !== 'ADMINISTRATOR') {
+    const isAdmin = role === 'ADMINISTRATOR'
+    const canViewReport = isAdmin || role === 'SUPERVISOR' || role === 'MANAGER'
+
+    if (role && !canViewReport) {
         return (
             <div className="p-6">
                 <div className="bg-white rounded-3xl p-6 shadow-lg">
-                    <p className="text-slate-600">Hanya administrator yang boleh mengakses Payroll & Insentif.</p>
+                    <p className="text-slate-600">Anda tidak berhak mengakses Payroll & Insentif.</p>
                 </div>
             </div>
         )
@@ -358,7 +373,7 @@ export default function PayrollPage() {
                 {tabBtn('payroll', '🗓️ Payroll Harian')}
                 {tabBtn('insentif', '🎯 Insentif')}
                 {tabBtn('ringkasan', '📊 Ringkasan Pendapatan')}
-                {tabBtn('pengaturan', '⚙️ Pengaturan')}
+                {isAdmin && tabBtn('pengaturan', '⚙️ Pengaturan')}
             </div>
 
             {loading && <p className="text-slate-400 text-sm mb-4">Memuat...</p>}
@@ -385,32 +400,44 @@ export default function PayrollPage() {
                                         <td className="p-4 text-slate-600">{p.role}</td>
                                         <td className="p-4 text-slate-600">{p.area?.code || '-'}</td>
                                         <td className="p-4 text-right">
-                                            <input
-                                                type="number"
-                                                defaultValue={p.hariKerja}
-                                                key={`hari-${p.id}-${p.hariKerja}`}
-                                                onBlur={(e) => {
-                                                    const v = Number(e.target.value)
-                                                    if (v !== p.hariKerja) saveHariKerja(p.id, v)
-                                                }}
-                                                className="w-20 border border-slate-200 rounded-lg px-2 py-1 text-right"
-                                            />
-                                            {savingCell === `hari-${p.id}` && <span className="text-xs text-slate-400 ml-1">...</span>}
+                                            {isAdmin ? (
+                                                <>
+                                                    <input
+                                                        type="number"
+                                                        defaultValue={p.hariKerja}
+                                                        key={`hari-${p.id}-${p.hariKerja}`}
+                                                        onBlur={(e) => {
+                                                            const v = Number(e.target.value)
+                                                            if (v !== p.hariKerja) saveHariKerja(p.id, v)
+                                                        }}
+                                                        className="w-20 border border-slate-200 rounded-lg px-2 py-1 text-right"
+                                                    />
+                                                    {savingCell === `hari-${p.id}` && <span className="text-xs text-slate-400 ml-1">...</span>}
+                                                </>
+                                            ) : (
+                                                <span className="text-slate-600">{p.hariKerja}</span>
+                                            )}
                                         </td>
                                         <td className="p-4 text-right text-slate-600">{p.hariHadir}</td>
                                         <td className="p-4 text-right">
-                                            <input
-                                                type="number"
-                                                defaultValue={p.dailyRate ?? ''}
-                                                key={`rate-${p.id}-${p.dailyRate}`}
-                                                placeholder="belum diset"
-                                                onBlur={(e) => {
-                                                    const v = Number(e.target.value)
-                                                    if (e.target.value !== '' && v !== p.dailyRate) saveDailyRate(p.id, v)
-                                                }}
-                                                className="w-28 border border-slate-200 rounded-lg px-2 py-1 text-right"
-                                            />
-                                            {savingCell === `rate-${p.id}` && <span className="text-xs text-slate-400 ml-1">...</span>}
+                                            {isAdmin ? (
+                                                <>
+                                                    <input
+                                                        type="number"
+                                                        defaultValue={p.dailyRate ?? ''}
+                                                        key={`rate-${p.id}-${p.dailyRate}`}
+                                                        placeholder="belum diset"
+                                                        onBlur={(e) => {
+                                                            const v = Number(e.target.value)
+                                                            if (e.target.value !== '' && v !== p.dailyRate) saveDailyRate(p.id, v)
+                                                        }}
+                                                        className="w-28 border border-slate-200 rounded-lg px-2 py-1 text-right"
+                                                    />
+                                                    {savingCell === `rate-${p.id}` && <span className="text-xs text-slate-400 ml-1">...</span>}
+                                                </>
+                                            ) : (
+                                                <span className="text-slate-600">{p.dailyRate !== null ? rupiah(p.dailyRate) : 'belum diset'}</span>
+                                            )}
                                         </td>
                                         <td className="p-4 text-right font-bold text-slate-900">{rupiah(p.total)}</td>
                                     </tr>
@@ -519,7 +546,7 @@ export default function PayrollPage() {
                 </div>
             )}
 
-            {tab === 'pengaturan' && (
+            {tab === 'pengaturan' && isAdmin && (
                 <div className="flex flex-col gap-6">
 
                     <div className="bg-white rounded-3xl shadow-lg overflow-hidden">
