@@ -10,6 +10,13 @@ import { Menu } from 'lucide-react'
 
 import { getToken } from '../utils/auth'
 
+// Halaman publik -- tidak butuh login sama sekali, jadi dikecualikan
+// dari redirect paksa ke /login di bawah, sama seperti /login sendiri.
+// /download-apk sengaja publik: sales lapangan (MD/SPG/SALES) yang
+// belum tentu punya akun web justru butuh unduh APK ini SEBELUM bisa
+// login ke mana pun.
+const PUBLIC_PATHS = ['/login', '/download-apk']
+
 const Sidebar = dynamic(
 
     () => import('./Sidebar'),
@@ -61,7 +68,7 @@ export default function AppShell({
         // mengarahkan balik ke /login. Beberapa halaman (mis. app/page.tsx)
         // punya pengecekan token sendiri juga -- dibiarkan, jadi lapis
         // kedua yang sekarang redundan tapi tidak berbahaya.
-        if (!sudahLogin && pathname !== '/login') {
+        if (!sudahLogin && !PUBLIC_PATHS.includes(pathname)) {
 
             router.replace('/login')
 
@@ -71,12 +78,12 @@ export default function AppShell({
 
     if (!loggedIn) {
 
-        // Selagi belum login: halaman /login sendiri tetap dirender
-        // apa adanya, tapi halaman lain mana pun dikosongkan (bukan
-        // ikut dirender lalu buru-buru dialihkan) supaya kontennya
-        // tidak sempat kelihatan sama sekali sebelum redirect di atas
-        // selesai.
-        return pathname === '/login' ? <>{children}</> : null
+        // Selagi belum login: halaman publik (lihat PUBLIC_PATHS) tetap
+        // dirender apa adanya, tapi halaman lain mana pun dikosongkan
+        // (bukan ikut dirender lalu buru-buru dialihkan) supaya
+        // kontennya tidak sempat kelihatan sama sekali sebelum redirect
+        // di atas selesai.
+        return PUBLIC_PATHS.includes(pathname) ? <>{children}</> : null
 
     }
 

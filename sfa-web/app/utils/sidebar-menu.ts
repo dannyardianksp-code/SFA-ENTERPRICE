@@ -16,6 +16,7 @@ import {
     Lock,
     Wallet,
     Clock,
+    Smartphone,
 } from 'lucide-react'
 
 // Dipisah dari LucideIcon (tidak konsisten diekspor tiap versi paket) --
@@ -79,6 +80,7 @@ export const SIDEBAR_MENU_GROUPS: SidebarMenuGroup[] = [
             { key: 'customerGroups', href: '/customer-groups', label: 'Customer Groups', icon: Layers },
             { key: 'menuAccess', href: '/menu-access', label: 'Menu Access', icon: Lock },
             { key: 'payroll', href: '/payroll', label: 'Payroll & Insentif', icon: Wallet },
+            { key: 'downloadApk', href: '/download-apk', label: 'Download APK', icon: Smartphone },
         ],
     },
 ]
