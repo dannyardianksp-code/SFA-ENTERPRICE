@@ -6,16 +6,15 @@ import { exportToExcel } from '@/app/utils/export-excel'
 
 const pad2 = (n: number) => String(n).padStart(2, '0')
 
-const awalBulanIni = () => {
+// Default halaman ini HARI INI saja, bukan sebulan penuh -- kalau mau
+// rentang lebih lebar (mis. sebulan), tinggal ganti lewat filter
+// tanggal di bawah.
+const hariIni = () => {
     const d = new Date()
-    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-01`
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
 }
 
-const akhirBulanIni = () => {
-    const d = new Date()
-    const akhir = new Date(d.getFullYear(), d.getMonth() + 1, 0)
-    return `${akhir.getFullYear()}-${pad2(akhir.getMonth() + 1)}-${pad2(akhir.getDate())}`
-}
+const PAGE_SIZE = 10
 
 export default function AttendanceReportPage() {
 
@@ -23,12 +22,13 @@ export default function AttendanceReportPage() {
     const [users, setUsers] = useState<any[]>([])
     const [areas, setAreas] = useState<any[]>([])
 
-    const [dateFrom, setDateFrom] = useState(awalBulanIni())
-    const [dateTo, setDateTo] = useState(akhirBulanIni())
+    const [dateFrom, setDateFrom] = useState(hariIni())
+    const [dateTo, setDateTo] = useState(hariIni())
     const [areaFilter, setAreaFilter] = useState('ALL')
     const [salesFilter, setSalesFilter] = useState('ALL')
 
     const [loading, setLoading] = useState(false)
+    const [page, setPage] = useState(1)
 
     // ======================
     // FETCH
@@ -67,6 +67,7 @@ export default function AttendanceReportPage() {
         setUsers(Array.isArray(uData) ? uData : [])
         setAreas(Array.isArray(arData) ? arData : [])
 
+        setPage(1)
         setLoading(false)
     }
 
@@ -89,6 +90,13 @@ export default function AttendanceReportPage() {
         return matchSales && matchArea
 
     })
+
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+    const halamanAman = Math.min(page, totalPages)
+    const attendancesHalamanIni = filtered.slice(
+        (halamanAman - 1) * PAGE_SIZE,
+        halamanAman * PAGE_SIZE
+    )
 
     // ======================
     // UI HELPERS
@@ -198,7 +206,7 @@ export default function AttendanceReportPage() {
                     <label style={{ fontSize: 12, color: '#6b7280', display: 'block' }}>
                         Area
                     </label>
-                    <select value={areaFilter} onChange={e => setAreaFilter(e.target.value)}>
+                    <select value={areaFilter} onChange={e => { setAreaFilter(e.target.value); setPage(1) }}>
                         <option value="ALL">Semua Area</option>
                         {areas.map((a: any) => (
                             <option key={a.id} value={a.id}>{a.name}</option>
@@ -210,7 +218,7 @@ export default function AttendanceReportPage() {
                     <label style={{ fontSize: 12, color: '#6b7280', display: 'block' }}>
                         Nama Sales
                     </label>
-                    <select value={salesFilter} onChange={e => setSalesFilter(e.target.value)}>
+                    <select value={salesFilter} onChange={e => { setSalesFilter(e.target.value); setPage(1) }}>
                         <option value="ALL">Semua Sales</option>
                         {users.map((u: any) => (
                             <option key={u.id} value={u.id}>{u.name}</option>
@@ -293,7 +301,7 @@ export default function AttendanceReportPage() {
 
                     <tbody>
 
-                        {filtered.length === 0 && (
+                        {attendancesHalamanIni.length === 0 && (
                             <tr>
                                 <td colSpan={10} style={{
                                     padding: 20,
@@ -305,7 +313,7 @@ export default function AttendanceReportPage() {
                             </tr>
                         )}
 
-                        {filtered.map((a: any, i: number) => (
+                        {attendancesHalamanIni.map((a: any, i: number) => (
 
                             <tr
                                 key={a.id}
@@ -419,6 +427,52 @@ export default function AttendanceReportPage() {
                     </tbody>
 
                 </table>
+
+                {totalPages > 1 && (
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: 15,
+                        borderTop: '1px solid #eee'
+                    }}>
+                        <span style={{ fontSize: 13, color: '#6b7280' }}>
+                            Halaman {halamanAman} dari {totalPages} ({filtered.length} data)
+                        </span>
+
+                        <div style={{ display: 'flex', gap: 8 }}>
+                            <button
+                                onClick={() => setPage(halamanAman - 1)}
+                                disabled={halamanAman <= 1}
+                                style={{
+                                    padding: '8px 16px',
+                                    borderRadius: 8,
+                                    border: '1px solid #d1d5db',
+                                    background: 'white',
+                                    opacity: halamanAman <= 1 ? 0.4 : 1,
+                                    cursor: halamanAman <= 1 ? 'default' : 'pointer'
+                                }}
+                            >
+                                ‹ Sebelumnya
+                            </button>
+
+                            <button
+                                onClick={() => setPage(halamanAman + 1)}
+                                disabled={halamanAman >= totalPages}
+                                style={{
+                                    padding: '8px 16px',
+                                    borderRadius: 8,
+                                    border: '1px solid #d1d5db',
+                                    background: 'white',
+                                    opacity: halamanAman >= totalPages ? 0.4 : 1,
+                                    cursor: halamanAman >= totalPages ? 'default' : 'pointer'
+                                }}
+                            >
+                                Berikutnya ›
+                            </button>
+                        </div>
+                    </div>
+                )}
 
             </div>
 
