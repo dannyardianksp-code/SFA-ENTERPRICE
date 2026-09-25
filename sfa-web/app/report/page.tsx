@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { MapPinned, Activity, ShoppingCart, Clock, ChevronRight } from 'lucide-react'
+import { MapPinned, Activity, ShoppingCart, ChevronRight } from 'lucide-react'
 
 const KATEGORI = [
 
@@ -27,14 +27,6 @@ const KATEGORI = [
         desc: 'Riwayat order tim',
         icon: ShoppingCart,
         href: '/orders'
-    },
-
-    {
-        key: 'attendance',
-        title: 'Report Absen',
-        desc: 'Riwayat absen masuk/pulang tim',
-        icon: Clock,
-        href: '/attendance'
     }
 
 ]
