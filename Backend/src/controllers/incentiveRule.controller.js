@@ -25,7 +25,7 @@ const FREKUENSI_VALUES = ['HARIAN', 'BULANAN']
  */
 const validatePayload = (body) => {
 
-    const { nama, jenis, criteria_ids, target, frekuensi, bonus, ambang_minimal, roles } = body
+    const { nama, jenis, criteria_ids, channel_ids, target, frekuensi, bonus, ambang_minimal, roles } = body
 
     if (!nama || typeof nama !== 'string') {
         return 'nama wajib diisi.'
@@ -37,6 +37,14 @@ const validatePayload = (body) => {
 
     if (!Array.isArray(criteria_ids) || criteria_ids.length === 0 || !criteria_ids.every(id => Number.isInteger(id))) {
         return 'criteria_ids wajib array angka, minimal 1.'
+    }
+
+    // Opsional -- kosong/tidak dikirim berarti berlaku SEMUA channel,
+    // beda dengan criteria_ids/roles yang wajib diisi.
+    if (channel_ids !== undefined && channel_ids !== null) {
+        if (!Array.isArray(channel_ids) || !channel_ids.every(id => Number.isInteger(id))) {
+            return 'channel_ids wajib array angka kalau diisi.'
+        }
     }
 
     if (!Number.isInteger(target) || target <= 0) {
@@ -105,12 +113,13 @@ exports.create = async (req, res) => {
             return sendError(res, 400, pesanError)
         }
 
-        const { nama, jenis, criteria_ids, target, frekuensi, bonus, ambang_minimal, roles, aktif } = req.body
+        const { nama, jenis, criteria_ids, channel_ids, target, frekuensi, bonus, ambang_minimal, roles, aktif } = req.body
 
         const rule = await IncentiveRule.create({
             nama,
             jenis,
             criteria_ids,
+            channel_ids: channel_ids && channel_ids.length > 0 ? channel_ids : null,
             target,
             frekuensi,
             bonus,
@@ -151,12 +160,13 @@ exports.update = async (req, res) => {
             return sendError(res, 400, pesanError)
         }
 
-        const { nama, jenis, criteria_ids, target, frekuensi, bonus, ambang_minimal, roles, aktif } = req.body
+        const { nama, jenis, criteria_ids, channel_ids, target, frekuensi, bonus, ambang_minimal, roles, aktif } = req.body
 
         await rule.update({
             nama,
             jenis,
             criteria_ids,
+            channel_ids: channel_ids && channel_ids.length > 0 ? channel_ids : null,
             target,
             frekuensi,
             bonus,
@@ -274,6 +284,12 @@ exports.getProgress = async (req, res) => {
 
             if (subtreeIds !== null) {
                 roleWhere.id = { [Op.in]: subtreeIds }
+            }
+
+            // channel_ids kosong = berlaku semua channel (tidak
+            // menambah filter apa pun).
+            if (rule.channel_ids.length > 0) {
+                roleWhere.channel_id = { [Op.in]: rule.channel_ids }
             }
 
             const users = await User.findAll({

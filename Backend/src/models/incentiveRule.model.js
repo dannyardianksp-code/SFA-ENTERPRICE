@@ -29,6 +29,18 @@ const IncentiveRule = db.define('IncentiveRule', {
         }
     },
 
+    // NULL/[] = berlaku semua channel (opsional, beda dengan roles yang
+    // wajib diisi). get() manual sama alasan dengan criteria_ids di atas.
+    channel_ids: {
+        type: DataTypes.JSON,
+        allowNull: true,
+        get() {
+            const raw = this.getDataValue('channel_ids')
+            if (raw === null || raw === undefined) return []
+            return typeof raw === 'string' ? JSON.parse(raw) : raw
+        }
+    },
+
     target: {
         type: DataTypes.INTEGER,
         allowNull: false

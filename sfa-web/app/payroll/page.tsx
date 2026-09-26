@@ -43,6 +43,7 @@ type IncentiveRule = {
     nama: string
     jenis: 'CUSTOMER_GROUP_VISIT' | 'ACTIVITY'
     criteria_ids: number[]
+    channel_ids: number[]
     target: number
     frekuensi: 'HARIAN' | 'BULANAN'
     bonus: number
@@ -79,6 +80,7 @@ const emptyForm = () => ({
     nama: '',
     jenis: 'CUSTOMER_GROUP_VISIT' as 'CUSTOMER_GROUP_VISIT' | 'ACTIVITY',
     criteriaIds: [] as number[],
+    channelIds: [] as number[],
     target: 1,
     frekuensi: 'BULANAN' as 'HARIAN' | 'BULANAN',
     bonus: 0,
@@ -98,6 +100,7 @@ export default function PayrollPage() {
     const [rules, setRules] = useState<IncentiveRule[]>([])
     const [customerGroups, setCustomerGroups] = useState<Option[]>([])
     const [activities, setActivities] = useState<Option[]>([])
+    const [channels, setChannels] = useState<Option[]>([])
 
     const [savingCell, setSavingCell] = useState<string | null>(null)
     const [modalOpen, setModalOpen] = useState(false)
@@ -134,12 +137,14 @@ export default function PayrollPage() {
     }
 
     const fetchOptions = async () => {
-        const [groupsRes, activitiesRes] = await Promise.all([
+        const [groupsRes, activitiesRes, channelsRes] = await Promise.all([
             fetch(`${API_BASE_URL}/customer-groups`, { headers: authHeaders() }),
             fetch(`${API_BASE_URL}/activities`, { headers: authHeaders() }),
+            fetch(`${API_BASE_URL}/channels`, { headers: authHeaders() }),
         ])
         if (groupsRes.ok) setCustomerGroups(await groupsRes.json())
         if (activitiesRes.ok) setActivities(await activitiesRes.json())
+        if (channelsRes.ok) setChannels(await channelsRes.json())
     }
 
     useEffect(() => {
@@ -239,6 +244,7 @@ export default function PayrollPage() {
             nama: rule.nama,
             jenis: rule.jenis,
             criteriaIds: rule.criteria_ids,
+            channelIds: rule.channel_ids || [],
             target: rule.target,
             frekuensi: rule.frekuensi,
             bonus: rule.bonus,
@@ -255,6 +261,15 @@ export default function PayrollPage() {
             criteriaIds: prev.criteriaIds.includes(id)
                 ? prev.criteriaIds.filter(x => x !== id)
                 : [...prev.criteriaIds, id],
+        }))
+    }
+
+    const toggleChannel = (id: number) => {
+        setForm(prev => ({
+            ...prev,
+            channelIds: prev.channelIds.includes(id)
+                ? prev.channelIds.filter(x => x !== id)
+                : [...prev.channelIds, id],
         }))
     }
 
@@ -278,6 +293,7 @@ export default function PayrollPage() {
             nama: form.nama,
             jenis: form.jenis,
             criteria_ids: form.criteriaIds,
+            channel_ids: form.channelIds,
             target: Number(form.target),
             frekuensi: form.frekuensi,
             bonus: Number(form.bonus),
@@ -578,10 +594,21 @@ export default function PayrollPage() {
                                         <tr key={r.id} className="hover:bg-slate-50">
                                             <td className="p-4 font-semibold text-slate-900">{r.nama}</td>
                                             <td className="p-4">
-                                                <div className="flex flex-wrap gap-1">
+                                                <div className="flex flex-wrap gap-1 mb-1">
                                                     {r.roles.map(rl => (
                                                         <span key={rl} className="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700">{rl}</span>
                                                     ))}
+                                                </div>
+                                                <div className="flex flex-wrap gap-1">
+                                                    {(!r.channel_ids || r.channel_ids.length === 0) ? (
+                                                        <span className="text-xs text-slate-400">Semua channel</span>
+                                                    ) : (
+                                                        r.channel_ids.map(cid => (
+                                                            <span key={cid} className="px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-50 text-purple-700">
+                                                                {channels.find(c => c.id === cid)?.code || cid}
+                                                            </span>
+                                                        ))
+                                                    )}
                                                 </div>
                                             </td>
                                             <td className="p-4 text-slate-600 text-sm">
@@ -671,6 +698,20 @@ export default function PayrollPage() {
                                         </label>
                                     ))}
                                 </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-600 mb-1.5">Berlaku untuk Channel</label>
+                                <div className="flex flex-wrap gap-2">
+                                    {channels.map(c => (
+                                        <label key={c.id} className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm cursor-pointer">
+                                            <input type="checkbox" checked={form.channelIds.includes(c.id)} onChange={() => toggleChannel(c.id)} /> {c.code || c.name}
+                                        </label>
+                                    ))}
+                                </div>
+                                <p className="text-xs text-slate-400 mt-1.5">
+                                    Tidak dicentang sama sekali = berlaku semua channel.
+                                </p>
                             </div>
 
                             <div className="bg-slate-50 rounded-2xl p-4 flex flex-col gap-3">
