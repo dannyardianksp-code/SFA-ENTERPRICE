@@ -959,10 +959,11 @@ exports.downloadTemplate = async (req, res) => {
         instruksi.value =
             'Petunjuk: pilih Sales & Customer dari dropdown (klik sel, muncul panah di kanan) -- ' +
             'cari berdasarkan NAMA, kode di dalam kurung cuma buat mastiin tokonya benar kalau ada nama mirip. ' +
-            'Kolom Kode & Area terisi otomatis. Isi Tanggal Kunjungan di kolom terakhir.'
+            'Kolom Kode & Area terisi otomatis. Kolom Tanggal Kunjungan TIDAK ada kalender popup -- ' +
+            'ketik langsung formatnya tanggal/bulan/tahun (contoh: 10/10/2026), selnya sudah otomatis kebaca sebagai tanggal.'
         instruksi.alignment = { wrapText: true, vertical: 'middle' }
         instruksi.font = { italic: true, color: { argb: 'FF555555' } }
-        sheet.getRow(1).height = 40
+        sheet.getRow(1).height = 55
 
         const headerRow = sheet.getRow(2)
         headerRow.values = ['Sales', 'Kode Sales', 'Customer', 'Kode Customer', 'Area', 'Tanggal Kunjungan']
