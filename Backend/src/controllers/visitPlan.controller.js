@@ -4,6 +4,8 @@ const { Op } =
 
 const XLSX = require('xlsx')
 
+const ExcelJS = require('exceljs')
+
 const fs = require('fs')
 
 const VisitPlan =
@@ -14,6 +16,9 @@ const User =
 
 const Customer =
     require('../models/customer.model')
+
+const Area =
+    require('../models/area.model')
 
 const Visit =
     require('../models/visit.model')
@@ -30,9 +35,14 @@ const {
     resolveSubordinateUserIds,
     PLAN_WRITER_ROLES,
     USER_MANAGER_ROLES,
+    RESTRICTED_ROLES,
+    FIELD_ROLES,
     ownerWhere,
     assertWithinSubtree,
 } = require('../utils/access.util')
+
+const { resolveAccessibleAreaIds } =
+    require('../utils/area.util')
 
 const { parseId } =
     require('../utils/id.util')
@@ -564,15 +574,23 @@ exports.uploadExcel = async (req, res) => {
         const workbook =
             XLSX.readFile(req.file.path)
 
+        // Cari berdasarkan NAMA, bukan asumsi sheet pertama -- sheet
+        // "Referensi" (dropdown/lookup) SENGAJA di-hide tapi tetap ada
+        // di workbook, dan urutan sheet bisa berubah kalau user
+        // mengutak-atik filenya. Fallback ke sheet pertama tetap ada
+        // buat file lama/berbeda yang tidak punya sheet bernama ini.
         const sheet =
-            workbook.Sheets[
-            workbook.SheetNames[0]
-            ]
+            workbook.Sheets['Input Kunjungan'] ||
+            workbook.Sheets[workbook.SheetNames[0]]
 
+        // range: 1 -- baris pertama sheet ini berisi teks petunjuk (satu
+        // sel digabung), BUKAN header kolom. Header sebenarnya ada di
+        // baris kedua. Tanpa range: 1, sheet_to_json menganggap baris
+        // petunjuk itu sebagai header dan seluruh data bergeser satu
+        // baris, membuat setiap kolom (termasuk Tanggal Kunjungan)
+        // terbaca undefined.
         const rows =
-            XLSX.utils.sheet_to_json(sheet)
-
-        console.log(rows[0])
+            XLSX.utils.sheet_to_json(sheet, { range: 1 })
 
         let inserted = 0
         let duplicate = 0
@@ -594,14 +612,25 @@ exports.uploadExcel = async (req, res) => {
             // Ambil data dari Excel
             //--------------------------------
 
+            // Header ini HARUS cocok persis dengan header sheet "Input
+            // Kunjungan" yang digenerate downloadTemplate() di bawah --
+            // "Kode Sales"/"Kode Customer" adalah kolom hasil VLOOKUP
+            // (terisi otomatis begitu user pilih dari dropdown "Sales"/
+            // "Customer"), bukan kolom dropdown itu sendiri. Dulu
+            // headernya "Sales Code"/"Customer Code"/"Visit Date" while
+            // template resmi menulis "salesCode"/"customerCode"/
+            // "visitDate" -- tidak pernah cocok sama sekali, jadi
+            // template resmi yang diunduh lalu diunggah tanpa diubah
+            // selalu gagal 100%. Sekarang keduanya satu sumber (fungsi
+            // ini menulis apa yang downloadTemplate() baca).
             const salesCode =
-                row["Sales Code"]
+                row["Kode Sales"]
 
             const customerCode =
-                row["Customer Code"]
+                row["Kode Customer"]
 
             const excelDate =
-                row["Visit Date"]
+                row["Tanggal Kunjungan"]
 
             //--------------------------------
             // Convert Excel Date
@@ -803,25 +832,215 @@ exports.uploadExcel = async (req, res) => {
 // DOWNLOAD TEMPLATE
 // ======================
 
-const path = require('path')
-exports.downloadTemplate = (req, res) => {
+/**
+ * Template Excel DIGENERATE PER USER, bukan file statis lagi --
+ * sheet "Referensi" cuma berisi sales dan customer yang boleh dilihat
+ * pemanggil (subtree + area/channel, PERSIS aturan yang sama dipakai
+ * di tempat lain), jadi customer baru otomatis ikut muncul tanpa perlu
+ * update template manual, dan sales/customer di luar jangkauan
+ * pemanggil tidak pernah bocor ke filenya.
+ *
+ * Header kolom "Kode Sales"/"Kode Customer"/"Tanggal Kunjungan" di
+ * sheet "Input Kunjungan" HARUS cocok persis dengan yang dibaca
+ * uploadExcel() di atas -- satu sumber kebenaran, ditulis di sini,
+ * dibaca di sana.
+ */
+exports.downloadTemplate = async (req, res) => {
 
+    try {
 
-    const filePath = path.join(
+        if (!PLAN_WRITER_ROLES.includes(req.user.role)) {
+            return sendError(
+                res,
+                403,
+                'Hanya supervisor ke atas yang boleh mengunduh template.'
+            )
+        }
 
-        process.cwd(),
+        // SALES -- subtree pemanggil, dipersempit ke role lapangan
+        // (MD/SPG/SALES) karena merekalah yang benar-benar dijadwalkan
+        // lewat file ini.
+        const subtreeIds =
+            await resolveSubordinateUserIds(req.user)
 
-        'templates',
+        const salesWhere = {
+            role: { [Op.in]: FIELD_ROLES },
+        }
 
-        'visit-plan-template.xlsx'
+        if (subtreeIds !== null) {
+            salesWhere.id = { [Op.in]: subtreeIds }
+        }
 
-    )
+        const salesList = await User.findAll({
+            where: salesWhere,
+            attributes: ['code', 'name'],
+            order: [['name', 'ASC']],
+        })
 
-    console.log(filePath)
+        // CUSTOMER -- pola SAMA PERSIS dengan customer.controller.js
+        // getAll, supaya customer yang muncul di template ini tidak
+        // pernah berbeda dari yang terlihat di Master Customer.
+        let customerWhere = { status: 'ACTIVE' }
 
-    console.log(fs.existsSync(filePath))
+        if (RESTRICTED_ROLES.includes(req.user.role)) {
 
-    res.download(filePath)
+            const userWithAreas = await User.findByPk(req.user.id, {
+                include: [{
+                    model: Area,
+                    as: 'AssignedAreas',
+                    attributes: ['id'],
+                    through: { attributes: [] },
+                }],
+            })
+
+            const areaIds = resolveAccessibleAreaIds(userWithAreas)
+
+            customerWhere = {
+                ...customerWhere,
+                ...(areaIds.length === 0
+                    ? { id: -1 }
+                    : {
+                        area_id: { [Op.in]: areaIds },
+                        channel_id: req.user.channel_id,
+                    }),
+            }
+
+        }
+
+        const customerList = await Customer.findAll({
+            where: customerWhere,
+            attributes: ['code', 'name'],
+            include: [{ model: Area, attributes: ['name'] }],
+            order: [['name', 'ASC']],
+        })
+
+        const wb = new ExcelJS.Workbook()
+
+        // ---- SHEET REFERENSI (sumber dropdown + VLOOKUP) ----
+        const ref = wb.addWorksheet('Referensi')
+
+        ref.columns = [
+            { header: 'Pilihan Sales', key: 'salesPilihan', width: 32 },
+            { header: 'Kode Sales', key: 'salesCode', width: 14 },
+            { header: 'Nama Sales', key: 'salesName', width: 22 },
+            { header: '', key: 'gap', width: 3 },
+            { header: 'Pilihan Customer', key: 'custPilihan', width: 40 },
+            { header: 'Kode Customer', key: 'custCode', width: 14 },
+            { header: 'Nama Customer', key: 'custName', width: 28 },
+            { header: 'Area', key: 'area', width: 16 },
+        ]
+
+        salesList.forEach((u, i) => {
+            const row = ref.getRow(i + 2)
+            row.getCell('salesPilihan').value = `${u.name} (${u.code})`
+            row.getCell('salesCode').value = u.code
+            row.getCell('salesName').value = u.name
+        })
+
+        customerList.forEach((c, i) => {
+            const row = ref.getRow(i + 2)
+            row.getCell('custPilihan').value = `${c.name} (${c.code})`
+            row.getCell('custCode').value = c.code
+            row.getCell('custName').value = c.name
+            row.getCell('area').value = c.Area?.name || ''
+        })
+
+        ref.getRow(1).font = { bold: true }
+        ref.state = 'hidden'
+
+        const salesCount = salesList.length
+        const custCount = customerList.length
+
+        // ---- SHEET INPUT (yang diisi user) ----
+        const sheet = wb.addWorksheet('Input Kunjungan')
+
+        sheet.mergeCells('A1:F1')
+        const instruksi = sheet.getCell('A1')
+        instruksi.value =
+            'Petunjuk: pilih Sales & Customer dari dropdown (klik sel, muncul panah di kanan) -- ' +
+            'cari berdasarkan NAMA, kode di dalam kurung cuma buat mastiin tokonya benar kalau ada nama mirip. ' +
+            'Kolom Kode & Area terisi otomatis. Isi Tanggal Kunjungan di kolom terakhir.'
+        instruksi.alignment = { wrapText: true, vertical: 'middle' }
+        instruksi.font = { italic: true, color: { argb: 'FF555555' } }
+        sheet.getRow(1).height = 40
+
+        const headerRow = sheet.getRow(2)
+        headerRow.values = ['Sales', 'Kode Sales', 'Customer', 'Kode Customer', 'Area', 'Tanggal Kunjungan']
+        headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+        headerRow.eachCell((cell) => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2563EB' } }
+            cell.alignment = { horizontal: 'center' }
+        })
+
+        sheet.columns = [
+            { key: 'salesPilihan', width: 26 },
+            { key: 'salesCode', width: 13 },
+            { key: 'custPilihan', width: 32 },
+            { key: 'custCode', width: 14 },
+            { key: 'area', width: 14 },
+            { key: 'visitDate', width: 18 },
+        ]
+
+        const TOTAL_BARIS_DISIAPKAN = 200
+
+        for (let i = 0; i < TOTAL_BARIS_DISIAPKAN; i++) {
+
+            const r = sheet.getRow(3 + i)
+
+            if (salesCount > 0) {
+                r.getCell(1).dataValidation = {
+                    type: 'list',
+                    allowBlank: true,
+                    formulae: [`Referensi!$A$2:$A$${1 + salesCount}`],
+                    showErrorMessage: true,
+                    errorTitle: 'Pilihan tidak valid',
+                    error: 'Pilih Sales dari daftar dropdown, jangan ketik manual.',
+                }
+            }
+
+            if (custCount > 0) {
+                r.getCell(3).dataValidation = {
+                    type: 'list',
+                    allowBlank: true,
+                    formulae: [`Referensi!$E$2:$E$${1 + custCount}`],
+                    showErrorMessage: true,
+                    errorTitle: 'Pilihan tidak valid',
+                    error: 'Pilih Customer dari daftar dropdown, jangan ketik manual.',
+                }
+            }
+
+            r.getCell(2).value = { formula: `IFERROR(VLOOKUP(A${3 + i},Referensi!$A:$C,2,0),"")` }
+            r.getCell(4).value = { formula: `IFERROR(VLOOKUP(C${3 + i},Referensi!$E:$H,2,0),"")` }
+            r.getCell(5).value = { formula: `IFERROR(VLOOKUP(C${3 + i},Referensi!$E:$H,4,0),"")` }
+
+            ;[2, 4, 5].forEach((col) => {
+                const cell = r.getCell(col)
+                cell.protection = { locked: true }
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } }
+                cell.font = { color: { argb: 'FF6B7280' } }
+            })
+
+            r.getCell(6).numFmt = 'dd/mm/yyyy'
+
+        }
+
+        sheet.views = [{ state: 'frozen', ySplit: 2 }]
+
+        res.setHeader(
+            'Content-Type',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        res.setHeader(
+            'Content-Disposition',
+            'attachment; filename="visit-plan-template.xlsx"'
+        )
+
+        await wb.xlsx.write(res)
+        res.end()
+
+    } catch (err) {
+        return sendServerError(res, err, 'DOWNLOAD VISIT PLAN TEMPLATE')
+    }
 
 }
 
