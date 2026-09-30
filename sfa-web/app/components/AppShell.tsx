@@ -79,11 +79,32 @@ export default function AppShell({
     if (!loggedIn) {
 
         // Selagi belum login: halaman publik (lihat PUBLIC_PATHS) tetap
-        // dirender apa adanya, tapi halaman lain mana pun dikosongkan
-        // (bukan ikut dirender lalu buru-buru dialihkan) supaya
-        // kontennya tidak sempat kelihatan sama sekali sebelum redirect
-        // di atas selesai.
-        return PUBLIC_PATHS.includes(pathname) ? <>{children}</> : null
+        // dirender apa adanya. Halaman lain mana pun TIDAK ikut
+        // dirender (supaya kontennya tidak sempat kelihatan sama sekali
+        // sebelum redirect di atas selesai) -- tapi tetap tampilkan
+        // teks "Memuat..." di sini, bukan blank putih polos. Jeda ini
+        // nyata (nunggu JS jalan + baca localStorage + redirect), dan
+        // kalau koneksi ke server lagi lambat, layar kosong kelihatan
+        // seperti macet padahal cuma nunggu.
+        if (PUBLIC_PATHS.includes(pathname)) {
+            return <>{children}</>
+        }
+
+        return (
+            <div
+                style={{
+                    minHeight: '100vh',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#94a3b8',
+                    fontFamily: 'sans-serif',
+                    fontSize: 14,
+                }}
+            >
+                Memuat...
+            </div>
+        )
 
     }
 
