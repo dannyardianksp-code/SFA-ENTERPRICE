@@ -16,6 +16,7 @@ describe('validateDanSusunFieldValues', () => {
     const fieldQty = { id: 4, label: 'Qty', field_type: 'NUMBER', required: true }
     const fieldTanggal = { id: 5, label: 'Tanggal Kadaluarsa', field_type: 'DATE', required: true }
     const fieldPromo = { id: 6, label: 'Jenis Promo', field_type: 'DROPDOWN', required: false, options: ['Diskon', 'Bundling'] }
+    const fieldProduk = { id: 7, label: 'Nama Produk', field_type: 'PRODUCT', required: true }
 
     const fileFoto = (fieldId) => [{ fieldname: `photo_${fieldId}`, filename: 'abc-uji.jpg' }]
 
@@ -127,6 +128,24 @@ describe('validateDanSusunFieldValues', () => {
 
         assert.strictEqual(hasil.error, undefined)
         assert.strictEqual(hasil.fieldValues[6], 'Diskon')
+    })
+
+    test('PRODUCT disimpan apa adanya tanpa validasi balik ke tabel products', () => {
+        const hasil = validateDanSusunFieldValues(
+            [fieldProduk],
+            { values: JSON.stringify({ 7: 'Indomie Goreng' }) },
+            []
+        )
+
+        assert.strictEqual(hasil.error, undefined)
+        assert.strictEqual(hasil.fieldValues[7], 'Indomie Goreng')
+    })
+
+    test('PRODUCT wajib tanpa nilai: ditolak', () => {
+        const hasil = validateDanSusunFieldValues([fieldProduk], {}, [])
+
+        assert.ok(hasil.error)
+        assert.match(hasil.error, /nama produk/i)
     })
 
     test('DROPDOWN dengan pilihan di luar options: ditolak', () => {

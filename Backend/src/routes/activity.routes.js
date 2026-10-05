@@ -23,7 +23,7 @@ const { RESTRICTED_ROLES, USER_MANAGER_ROLES } =
 const db =
     require('../config/database')
 
-const FIELD_TYPE_VALUES = ['TEXT', 'NUMBER', 'DATE', 'DROPDOWN', 'PHOTO']
+const FIELD_TYPE_VALUES = ['TEXT', 'NUMBER', 'DATE', 'DROPDOWN', 'PRODUCT', 'PHOTO']
 
 
 // GET -- role dibatasi (SPG/SUPERVISOR) hanya melihat activity

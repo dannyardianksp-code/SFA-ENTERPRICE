@@ -112,7 +112,10 @@ const validateDanSusunFieldValues = (fieldDefs, body, files) => {
             continue
         }
 
-        // TEXT, DATE -- disimpan apa adanya (string).
+        // TEXT, DATE, PRODUCT -- disimpan apa adanya (string). PRODUCT
+        // tidak divalidasi balik ke tabel products di sini: pilihannya
+        // sudah dibatasi di UI (dropdown diisi dari GET /products),
+        // sama seperti DROPDOWN mempercayai pilihan yang dikirim client.
         fieldValues[def.id] = String(nilai)
 
     }
