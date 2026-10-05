@@ -8,6 +8,9 @@ const Activity =
 const VisitActivity =
     require('../models/visitActivity.model')
 
+const ActivityFieldDefinition =
+    require('../models/activityFieldDefinition.model')
+
 const auth =
     require('../middleware/auth.middleware')
 
@@ -16,6 +19,11 @@ const { sendError, sendServerError } =
 
 const { RESTRICTED_ROLES, USER_MANAGER_ROLES } =
     require('../utils/access.util')
+
+const db =
+    require('../config/database')
+
+const FIELD_TYPE_VALUES = ['TEXT', 'NUMBER', 'DATE', 'DROPDOWN', 'PHOTO']
 
 
 // GET -- role dibatasi (SPG/SUPERVISOR) hanya melihat activity
@@ -177,6 +185,124 @@ router.delete(
 
         } catch (err) {
             return sendServerError(res, err, 'DELETE ACTIVITY')
+        }
+
+    }
+)
+
+// ======================
+// FIELD DEFINITIONS -- form dinamis per activity
+// ======================
+
+// GET -- dibaca mobile (generate form) dan web (panel Atur Field).
+// Tidak perlu gerbang tambahan: siapa pun yang sudah bisa lihat
+// activity-nya lewat GET / boleh lihat field-nya.
+router.get(
+    '/:id/fields',
+    auth,
+    async (req, res) => {
+
+        try {
+
+            const fields = await ActivityFieldDefinition.findAll({
+                where: { activity_id: req.params.id },
+                order: [['display_order', 'ASC']],
+            })
+
+            res.json(fields)
+
+        } catch (err) {
+            return sendServerError(res, err, 'GET ACTIVITY FIELDS')
+        }
+
+    }
+)
+
+// PUT -- ADMINISTRATOR saja. Ganti SELURUH daftar field activity ini
+// sekaligus (hapus-lalu-tulis-ulang dalam satu transaksi) -- sama pola
+// dengan roleMenuAccess.controller.js saveForRole, karena panel Atur
+// Field di web selalu mengirim daftar lengkap, bukan delta.
+router.put(
+    '/:id/fields',
+    auth,
+    async (req, res) => {
+
+        try {
+
+            if (!req.user || !USER_MANAGER_ROLES.includes(req.user.role)) {
+                return sendError(
+                    res,
+                    403,
+                    'Hanya administrator yang boleh mengatur field activity.'
+                )
+            }
+
+            const activity = await Activity.findByPk(req.params.id)
+
+            if (!activity) {
+                return sendError(res, 404, 'Activity tidak ditemukan.')
+            }
+
+            const { fields } = req.body
+
+            if (!Array.isArray(fields)) {
+                return sendError(res, 400, 'fields wajib berupa array.')
+            }
+
+            for (const f of fields) {
+
+                if (!f.label || typeof f.label !== 'string') {
+                    return sendError(res, 400, 'Setiap field wajib punya label.')
+                }
+
+                if (!FIELD_TYPE_VALUES.includes(f.field_type)) {
+                    return sendError(
+                        res,
+                        400,
+                        `field_type wajib salah satu dari ${FIELD_TYPE_VALUES.join(', ')}.`
+                    )
+                }
+
+                if (f.field_type === 'DROPDOWN') {
+                    if (!Array.isArray(f.options) || f.options.length === 0 || !f.options.every(o => typeof o === 'string' && o.trim())) {
+                        return sendError(res, 400, 'Field DROPDOWN wajib punya minimal 1 pilihan.')
+                    }
+                }
+
+            }
+
+            await db.transaction(async (t) => {
+
+                await ActivityFieldDefinition.destroy({
+                    where: { activity_id: activity.id },
+                    transaction: t,
+                })
+
+                if (fields.length > 0) {
+                    await ActivityFieldDefinition.bulkCreate(
+                        fields.map((f, i) => ({
+                            activity_id: activity.id,
+                            label: f.label,
+                            field_type: f.field_type,
+                            options: f.field_type === 'DROPDOWN' ? f.options : null,
+                            required: !!f.required,
+                            display_order: i,
+                        })),
+                        { transaction: t }
+                    )
+                }
+
+            })
+
+            const hasil = await ActivityFieldDefinition.findAll({
+                where: { activity_id: activity.id },
+                order: [['display_order', 'ASC']],
+            })
+
+            res.json(hasil)
+
+        } catch (err) {
+            return sendServerError(res, err, 'SAVE ACTIVITY FIELDS')
         }
 
     }

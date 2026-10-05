@@ -1,0 +1,11 @@
+-- Jawaban dinamis -- {field_definition_id: value}. value untuk field
+-- bertipe PHOTO adalah path "/uploads/..." (pola sama dengan photo_url
+-- lama), bukan file itu sendiri.
+--
+-- Kolom lama (product_name, qty, expired_date, normal_price,
+-- promo_price, notes, photo_url) SENGAJA TIDAK dihapus -- tetap berisi
+-- data historis apa adanya buat baris sebelum migrasi ini, tapi tidak
+-- pernah ditulis lagi oleh kode baru. Baris lama di-backfill ke
+-- field_values juga (lihat script migrasi data), jadi satu sistem baca
+-- tetap cukup untuk SEMUA baris, lama maupun baru.
+ALTER TABLE visit_activities ADD COLUMN field_values JSON NULL AFTER photo_url;

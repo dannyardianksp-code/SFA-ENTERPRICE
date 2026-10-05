@@ -45,6 +45,19 @@ const VisitActivity =
             photo_url:
                 DataTypes.TEXT,
 
+            // {field_definition_id: value} -- lihat migration 023.
+            // Kolom lama di atas (product_name..photo_url) tidak pernah
+            // ditulis lagi oleh kode baru, cuma dibaca buat data
+            // historis sebelum migrasi ke field dinamis.
+            field_values: {
+                type: DataTypes.JSON,
+                get() {
+                    const raw = this.getDataValue('field_values')
+                    if (raw === null || raw === undefined) return {}
+                    return typeof raw === 'string' ? JSON.parse(raw) : raw
+                }
+            },
+
             // ID unik dibikin di HP (bukan auto-increment DB) -- dipakai
             // buat mencegah duplikat kalau mobile ngirim ulang activity
             // yang sama (antrian offline: gagal kirim, disimpan lokal,

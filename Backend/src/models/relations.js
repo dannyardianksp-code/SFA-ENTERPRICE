@@ -252,6 +252,20 @@ Activity.hasMany(VisitActivity, {
     foreignKey: 'activity_id'
 })
 
+const ActivityFieldDefinition = require('./activityFieldDefinition.model')
+
+// Field dinamis per activity -- disertakan di include Activity supaya
+// konsumen (web/mobile) bisa menerjemahkan field_values (id -> label)
+// tanpa request kedua.
+Activity.hasMany(ActivityFieldDefinition, {
+    foreignKey: 'activity_id',
+    as: 'FieldDefinitions',
+})
+
+ActivityFieldDefinition.belongsTo(Activity, {
+    foreignKey: 'activity_id',
+})
+
 
 User.belongsToMany(
 

@@ -15,14 +15,27 @@ const MD = 1
 const MD_LUAR = 34
 const SUPERVISOR = 3
 
+// activity_id tetap (Activity Master) -- field-nya sendiri sekarang
+// dinamis (activity_field_definitions), jadi diambil lewat API di
+// before() di bawah, bukan di-hardcode di sini.
+const ACTIVITY_FOTO = 11
+const ACTIVITY_STOCK = 4
+
 let db
+let fieldsFoto
+let fieldsStock
 const visitIdsDibuat = []
 const activityIdsDibuat = []
-const berkasDibuat = []
 const mulaiUji = Date.now()
 
 const tokenUntuk = (id) =>
     jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '15m' })
+
+const cariField = (fields, label) => {
+    const f = fields.find(f => f.label === label)
+    if (!f) throw new Error(`Field "${label}" tidak ditemukan di field definitions`)
+    return f
+}
 
 /** Kirim JSON biasa (tanpa file). */
 const kirim = async (method, path, userId, body) => {
@@ -53,17 +66,31 @@ const kirim = async (method, path, userId, body) => {
  * Kirim multipart/form-data lewat fetch bawaan Node -- FormData dan
  * Blob sudah tersedia global di Node 18+, tidak perlu library
  * tambahan.
+ *
+ * `values` -- object {field_definition_id: value}, dikirim sebagai
+ * SATU field "values" berisi JSON string (lihat
+ * validateDanSusunFieldValues di visitActivity.controller.js).
+ * `photoFieldId` -- kalau diisi, lampirkan foto di field
+ * "photo_<photoFieldId>" (nama field foto sekarang per field
+ * definition, bukan "photo" tetap).
  */
-const kirimDenganFoto = async (userId, fields, sertakanFoto) => {
+const kirimActivity = async (userId, { visitId, activityId, values, photoFieldId, photoNama, photoTipe, photoIsi }) => {
     const form = new FormData()
 
-    for (const [key, value] of Object.entries(fields)) {
-        if (value !== undefined) form.append(key, String(value))
+    form.append('visit_id', String(visitId))
+    form.append('activity_id', String(activityId))
+
+    if (values !== undefined) {
+        form.append('values', JSON.stringify(values))
     }
 
-    if (sertakanFoto) {
-        const buffer = Buffer.from([0xff, 0xd8, 0xff, 0xd9]) // JPEG minimal
-        form.append('photo', new Blob([buffer], { type: 'image/jpeg' }), 'uji.jpg')
+    if (photoFieldId !== undefined && photoFieldId !== null) {
+        const buffer = photoIsi || Buffer.from([0xff, 0xd8, 0xff, 0xd9]) // JPEG minimal
+        form.append(
+            `photo_${photoFieldId}`,
+            new Blob([buffer], { type: photoTipe || 'image/jpeg' }),
+            photoNama || 'uji.jpg'
+        )
     }
 
     const headers = {}
@@ -104,21 +131,31 @@ before(async () => {
         password: process.env.DB_PASS,
         database: process.env.DB_NAME,
     })
+
+    const { data: fotoRes } = await kirim('GET', `/api/activities/${ACTIVITY_FOTO}/fields`, MD)
+    fieldsFoto = fotoRes
+
+    const { data: stockRes } = await kirim('GET', `/api/activities/${ACTIVITY_STOCK}/fields`, MD)
+    fieldsStock = stockRes
 })
 
 after(async () => {
     if (db) {
         for (const id of activityIdsDibuat) {
             const [rows] = await db.query(
-                'SELECT photo_url FROM visit_activities WHERE id = ?',
+                'SELECT field_values FROM visit_activities WHERE id = ?',
                 [id]
             )
 
-            if (rows[0]?.photo_url) {
-                const nama = rows[0].photo_url.replace('/uploads/', '')
-                const lokasi = path.join(__dirname, '..', '..', 'uploads', nama)
+            const fieldValues = rows[0]?.field_values
+                ? (typeof rows[0].field_values === 'string' ? JSON.parse(rows[0].field_values) : rows[0].field_values)
+                : {}
 
-                if (fs.existsSync(lokasi)) fs.unlinkSync(lokasi)
+            for (const nilai of Object.values(fieldValues)) {
+                if (typeof nilai === 'string' && nilai.startsWith('/uploads/')) {
+                    const lokasi = path.join(__dirname, '..', '..', 'uploads', nilai.replace('/uploads/', ''))
+                    if (fs.existsSync(lokasi)) fs.unlinkSync(lokasi)
+                }
             }
 
             await db.query('DELETE FROM visit_activities WHERE id = ?', [id])
@@ -179,33 +216,39 @@ describe('POST /api/visit-activities', () => {
     })
 
     test('MD mencatat activity tipe FOTO untuk kunjungannya sendiri', async () => {
-        const { status, data } = await kirimDenganFoto(
-            MD,
-            { visit_id: visitMilikSPG, activity_id: 11 },
-            true
-        )
+        const fotoField = cariField(fieldsFoto, 'Foto')
 
-        assert.strictEqual(status, 200)
-        assert.strictEqual(data.activity_id, 11)
+        const { status, data } = await kirimActivity(MD, {
+            visitId: visitMilikSPG,
+            activityId: ACTIVITY_FOTO,
+            photoFieldId: fotoField.id,
+        })
+
+        assert.strictEqual(status, 200, JSON.stringify(data))
+        assert.strictEqual(data.activity_id, ACTIVITY_FOTO)
 
         activityIdsDibuat.push(data.id)
 
         const [rows] = await db.query(
-            'SELECT visit_id, activity_id, photo_url FROM visit_activities WHERE id = ?',
+            'SELECT visit_id, activity_id, field_values FROM visit_activities WHERE id = ?',
             [data.id]
         )
 
         assert.strictEqual(rows[0].visit_id, visitMilikSPG)
-        assert.strictEqual(rows[0].activity_id, 11)
-        assert.ok(rows[0].photo_url)
+        assert.strictEqual(rows[0].activity_id, ACTIVITY_FOTO)
+
+        const fieldValues = typeof rows[0].field_values === 'string' ? JSON.parse(rows[0].field_values) : rows[0].field_values
+        assert.ok(fieldValues[fotoField.id], 'field_values tidak berisi foto')
     })
 
     test('MD mencoba mencatat activity untuk kunjungan MD lain: ditolak 403', async () => {
-        const { status } = await kirimDenganFoto(
-            MD,
-            { visit_id: visitMilikSPGLuar, activity_id: 11 },
-            true
-        )
+        const fotoField = cariField(fieldsFoto, 'Foto')
+
+        const { status } = await kirimActivity(MD, {
+            visitId: visitMilikSPGLuar,
+            activityId: ACTIVITY_FOTO,
+            photoFieldId: fotoField.id,
+        })
 
         assert.strictEqual(status, 403)
 
@@ -225,14 +268,16 @@ describe('POST /api/visit-activities', () => {
         // tidak pernah tercipta. Nama berkasnya tidak bisa diketahui di
         // muka karena multer menamainya `Date.now()-originalname`, jadi
         // dibuktikan lewat pembanding isi direktori sebelum/sesudah.
+        const fotoField = cariField(fieldsFoto, 'Foto')
+
         const dirUpload = path.join(__dirname, '..', '..', 'uploads')
         const sebelum = new Set(fs.readdirSync(dirUpload))
 
-        const { status } = await kirimDenganFoto(
-            MD,
-            { visit_id: visitMilikSPGLuar, activity_id: 11 },
-            true
-        )
+        const { status } = await kirimActivity(MD, {
+            visitId: visitMilikSPGLuar,
+            activityId: ACTIVITY_FOTO,
+            photoFieldId: fotoField.id,
+        })
 
         assert.strictEqual(status, 403)
 
@@ -247,65 +292,89 @@ describe('POST /api/visit-activities', () => {
     })
 
     test('tipe STOCK tanpa qty: ditolak 400, tidak ada baris tersimpan', async () => {
-        const { status } = await kirimDenganFoto(
-            MD,
-            {
-                visit_id: visitMilikSPG,
-                activity_id: 4,
-                product_name: 'Kara 65ml',
-                expired_date: '2026-12-01',
+        const namaField = cariField(fieldsStock, 'Nama Produk')
+        const expField = cariField(fieldsStock, 'Tanggal Kadaluarsa')
+
+        const { status } = await kirimActivity(MD, {
+            visitId: visitMilikSPG,
+            activityId: ACTIVITY_STOCK,
+            values: {
+                [namaField.id]: 'Kara 65ml',
+                [expField.id]: '2026-12-01',
             },
-            false
-        )
+        })
 
         assert.strictEqual(status, 400)
     })
 
     test('tipe FOTO tanpa berkas foto: ditolak 400', async () => {
-        const { status } = await kirimDenganFoto(
-            MD,
-            { visit_id: visitMilikSPG, activity_id: 11 },
-            false
-        )
+        const { status } = await kirimActivity(MD, {
+            visitId: visitMilikSPG,
+            activityId: ACTIVITY_FOTO,
+        })
 
         assert.strictEqual(status, 400)
     })
 
     test('visit_id yang tidak ada: 404', async () => {
-        const { status } = await kirimDenganFoto(
-            MD,
-            { visit_id: 99999999, activity_id: 11 },
-            true
-        )
+        const fotoField = cariField(fieldsFoto, 'Foto')
+
+        const { status } = await kirimActivity(MD, {
+            visitId: 99999999,
+            activityId: ACTIVITY_FOTO,
+            photoFieldId: fotoField.id,
+        })
 
         assert.strictEqual(status, 404)
     })
 
-    test('activity_id di luar 1-11: ditolak 400, bukan 500 dari FK constraint', async () => {
-        const { status } = await kirimDenganFoto(
-            MD,
-            { visit_id: visitMilikSPG, activity_id: 999 },
-            true
-        )
+    test('activity_id yang tidak ada: ditolak 400, bukan 500 dari FK constraint', async () => {
+        const fotoField = cariField(fieldsFoto, 'Foto')
+
+        const { status } = await kirimActivity(MD, {
+            visitId: visitMilikSPG,
+            activityId: 999,
+            photoFieldId: fotoField.id,
+        })
 
         assert.strictEqual(status, 400)
     })
 
     test('tipe STOCK lengkap dengan qty valid: berhasil', async () => {
-        const { status, data } = await kirimDenganFoto(
-            MD,
-            {
-                visit_id: visitMilikSPG,
-                activity_id: 4,
-                product_name: 'Kara 65ml',
-                qty: 10,
-                expired_date: '2026-12-01',
-            },
-            false
-        )
+        const namaField = cariField(fieldsStock, 'Nama Produk')
+        const qtyField = cariField(fieldsStock, 'Qty')
+        const expField = cariField(fieldsStock, 'Tanggal Kadaluarsa')
 
-        assert.strictEqual(status, 200)
+        const { status, data } = await kirimActivity(MD, {
+            visitId: visitMilikSPG,
+            activityId: ACTIVITY_STOCK,
+            values: {
+                [namaField.id]: 'Kara 65ml',
+                [qtyField.id]: 10,
+                [expField.id]: '2026-12-01',
+            },
+        })
+
+        assert.strictEqual(status, 200, JSON.stringify(data))
         activityIdsDibuat.push(data.id)
+    })
+
+    test('tipe STOCK dengan qty bukan angka: ditolak 400', async () => {
+        const namaField = cariField(fieldsStock, 'Nama Produk')
+        const qtyField = cariField(fieldsStock, 'Qty')
+        const expField = cariField(fieldsStock, 'Tanggal Kadaluarsa')
+
+        const { status } = await kirimActivity(MD, {
+            visitId: visitMilikSPG,
+            activityId: ACTIVITY_STOCK,
+            values: {
+                [namaField.id]: 'Kara 65ml',
+                [qtyField.id]: 'abc',
+                [expField.id]: '2026-12-01',
+            },
+        })
+
+        assert.strictEqual(status, 400)
     })
 
 })
@@ -330,31 +399,24 @@ describe('POST /api/visit-activities -- batas upload', () => {
     })
 
     test('berkas bukan gambar ditolak', async () => {
-        const form = new FormData()
+        const fotoField = cariField(fieldsFoto, 'Foto')
 
-        // activity_id 11 mewajibkan foto (lihat activity-field-rules.util) --
-        // fileFilter field-aware sekarang meloloskan request ini ke multer
-        // dengan req.file KOSONG (cb(null, false), bukan melempar Error),
-        // dan validateActivityFields yang menolaknya bersih 400.
-        form.append('visit_id', String(visitMilikSPG))
-        form.append('activity_id', '11')
-        form.append(
-            'photo',
-            new Blob([Buffer.from('bukan gambar')], { type: 'text/plain' }),
-            'uji.txt'
-        )
-
-        const res = await fetch(BASE + '/api/visit-activities', {
-            method: 'POST',
-            headers: { Authorization: 'Bearer ' + tokenUntuk(MD) },
-            body: form,
+        // fileFilter field-aware (cocok "photo_<id>") meloloskan request
+        // ini ke multer dengan file KOSONG (cb(null, false), bukan
+        // melempar Error), dan validateDanSusunFieldValues yang
+        // menolaknya bersih 400.
+        const { status, data } = await kirimActivity(MD, {
+            visitId: visitMilikSPG,
+            activityId: ACTIVITY_FOTO,
+            photoFieldId: fotoField.id,
+            photoNama: 'uji.txt',
+            photoTipe: 'text/plain',
+            photoIsi: Buffer.from('bukan gambar'),
         })
 
-        const data = await res.json()
-
-        // 400 bersih dari validateActivityFields, BUKAN html/stack trace
-        // default Express -- itulah yang dibuktikan fix fileFilter.
-        assert.strictEqual(res.status, 400)
+        // 400 bersih dari validateDanSusunFieldValues, BUKAN html/stack
+        // trace default Express -- itulah yang dibuktikan fix fileFilter.
+        assert.strictEqual(status, 400)
         assert.match(data.message, /foto/i)
 
         const [rows] = await db.query(
@@ -366,20 +428,22 @@ describe('POST /api/visit-activities -- batas upload', () => {
     })
 
     test('berkas gambar biasa tetap diterima', async () => {
-        const { status, data } = await kirimDenganFoto(
-            MD,
-            { visit_id: visitMilikSPG, activity_id: 11 },
-            true
-        )
+        const fotoField = cariField(fieldsFoto, 'Foto')
 
-        assert.strictEqual(status, 200)
+        const { status, data } = await kirimActivity(MD, {
+            visitId: visitMilikSPG,
+            activityId: ACTIVITY_FOTO,
+            photoFieldId: fotoField.id,
+        })
+
+        assert.strictEqual(status, 200, JSON.stringify(data))
         activityIdsDibuat.push(data.id)
     })
 
     test('fileFilter tidak merusak endpoint upload Excel (multer instance sama, field berbeda)', async () => {
         // upload.middleware.js dipakai bersama oleh POST /api/visit-plans/upload
-        // (field 'file', bukan 'photo') -- fileFilter field-aware HARUS tetap
-        // meloloskan file non-image di jalur ini.
+        // (field 'file', bukan 'photo'/'photo_<id>') -- fileFilter
+        // field-aware HARUS tetap meloloskan file non-image di jalur ini.
         const XLSX = require('xlsx')
 
         const sheet = XLSX.utils.json_to_sheet([

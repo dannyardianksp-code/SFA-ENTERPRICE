@@ -27,7 +27,12 @@ const upload = multer({
         // klien lewat error handler default Express. Handler yang butuh
         // foto (lihat validateActivityFields) sudah menolak 400 yang
         // bersih kalau req.file kosong.
-        if (file.fieldname === 'photo' && !file.mimetype.startsWith('image/')) {
+        // "photo" dipakai attendance/product; "photo_<field_definition_id>"
+        // dipakai visit-activity dinamis (bisa lebih dari satu field foto
+        // per activity, lihat visitactivity.routes.js).
+        const isFotoField = file.fieldname === 'photo' || file.fieldname.startsWith('photo_')
+
+        if (isFotoField && !file.mimetype.startsWith('image/')) {
             return cb(null, false)
         }
         // Untuk visit-plans, terima segala tipe (excel, dll)
