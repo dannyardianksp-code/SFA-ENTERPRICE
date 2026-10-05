@@ -17,7 +17,7 @@ import { API_BASE_URL } from '@/app/utils/api-config'
 type FieldDef = {
     id: number
     label: string
-    field_type: 'TEXT' | 'NUMBER' | 'DATE' | 'DROPDOWN' | 'PHOTO'
+    field_type: 'TEXT' | 'NUMBER' | 'DATE' | 'DROPDOWN' | 'PRODUCT' | 'PHOTO'
     options: string[] | null
     required: boolean
     display_order: number
@@ -38,6 +38,7 @@ function VisitActivityContent() {
     const visit_id = params.get('visit_id')
 
     const [activities, setActivities] = useState<any[]>([])
+    const [products, setProducts] = useState<any[]>([])
     const [activityId, setActivityId] = useState('')
     const [fields, setFields] = useState<FieldDef[]>([])
     const [loadingFields, setLoadingFields] = useState(false)
@@ -72,6 +73,14 @@ function VisitActivityContent() {
 
     useEffect(() => {
         fetchActivities()
+
+        const token = localStorage.getItem('token')
+        fetch(`${API_BASE_URL}/products`, {
+            headers: { Authorization: `Bearer ${token}` }
+        })
+            .then(res => res.json())
+            .then(data => setProducts(Array.isArray(data) ? data : []))
+            .catch((err) => console.log(err))
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
@@ -295,6 +304,21 @@ function VisitActivityContent() {
                                 <option value="">Pilih {f.label}</option>
                                 {(f.options || []).map((opt) => (
                                     <option key={opt} value={opt}>{opt}</option>
+                                ))}
+                            </select>
+                        )}
+
+                        {f.field_type === 'PRODUCT' && (
+                            <select
+                                value={values[f.id] || ''}
+                                onChange={(e) => setValue(f.id, e.target.value)}
+                                className="w-full mt-2 border rounded-xl p-3"
+                            >
+                                <option value="">Pilih {f.label}</option>
+                                {products.map((p: any) => (
+                                    <option key={p.id} value={p.name}>
+                                        {p.name} ({p.code})
+                                    </option>
                                 ))}
                             </select>
                         )}

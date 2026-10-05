@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { API_BASE_URL } from '@/app/utils/api-config'
 
-type FieldType = 'TEXT' | 'NUMBER' | 'DATE' | 'DROPDOWN' | 'PHOTO'
+type FieldType = 'TEXT' | 'NUMBER' | 'DATE' | 'DROPDOWN' | 'PRODUCT' | 'PHOTO'
 
 type FieldDef = {
     id?: number
@@ -18,6 +18,7 @@ const FIELD_TYPE_LABEL: Record<FieldType, string> = {
     NUMBER: 'Angka',
     DATE: 'Tanggal',
     DROPDOWN: 'Dropdown',
+    PRODUCT: 'Produk (dari master produk)',
     PHOTO: 'Foto',
 }
 
