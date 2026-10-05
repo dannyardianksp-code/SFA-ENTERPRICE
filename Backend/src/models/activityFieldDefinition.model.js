@@ -2,9 +2,10 @@ const { DataTypes } = require('sequelize')
 const db = require('../config/database')
 
 // Field dinamis per Activity -- lihat migration 022+024 buat penjelasan
-// lengkap. field_type dibatasi 6 nilai TETAP; options cuma dipakai
-// DROPDOWN (PRODUCT ambil pilihan live dari tabel products, bukan dari
-// kolom ini).
+// lengkap. field_type dibatasi 6 nilai TETAP. options dipakai DROPDOWN
+// (array string pilihan tetap) DAN PRODUCT (array berisi SATU kategori
+// produk buat membatasi dropdown-nya -- mis. ["COMPETITOR"] -- atau
+// null buat semua kategori); TEXT/NUMBER/DATE/PHOTO selalu null.
 const ActivityFieldDefinition = db.define('ActivityFieldDefinition', {
 
     activity_id: {

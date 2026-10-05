@@ -25,6 +25,12 @@ const db =
 
 const FIELD_TYPE_VALUES = ['TEXT', 'NUMBER', 'DATE', 'DROPDOWN', 'PRODUCT', 'PHOTO']
 
+// Kategori produk tetap (lihat product.model.js) -- field PRODUCT boleh
+// dibatasi ke SATU kategori ini (mis. activity Competitor cuma ambil
+// item kategori COMPETITOR), atau tidak dibatasi (options null = semua
+// kategori).
+const PRODUCT_CATEGORY_VALUES = ['JUAL', 'PROMOSI', 'COMPETITOR']
+
 
 // GET -- role dibatasi (SPG/SUPERVISOR) hanya melihat activity
 // universal (channel_id NULL) atau yang cocok dengan channel_id
@@ -269,6 +275,26 @@ router.put(
                     }
                 }
 
+                // PRODUCT: options OPSIONAL -- null/tidak ada berarti
+                // ambil dari semua kategori produk, atau array berisi
+                // TEPAT SATU kategori ("JUAL"/"PROMOSI"/"COMPETITOR")
+                // buat membatasi activity ini cuma ambil item kategori
+                // itu (mis. activity Competitor cuma ambil item
+                // COMPETITOR).
+                if (f.field_type === 'PRODUCT' && f.options !== null && f.options !== undefined) {
+                    if (
+                        !Array.isArray(f.options) ||
+                        f.options.length !== 1 ||
+                        !PRODUCT_CATEGORY_VALUES.includes(f.options[0])
+                    ) {
+                        return sendError(
+                            res,
+                            400,
+                            `Field PRODUCT: options wajib null atau array berisi satu dari ${PRODUCT_CATEGORY_VALUES.join(', ')}.`
+                        )
+                    }
+                }
+
             }
 
             await db.transaction(async (t) => {
@@ -284,7 +310,10 @@ router.put(
                             activity_id: activity.id,
                             label: f.label,
                             field_type: f.field_type,
-                            options: f.field_type === 'DROPDOWN' ? f.options : null,
+                            options:
+                                f.field_type === 'DROPDOWN' ? f.options :
+                                f.field_type === 'PRODUCT' ? (f.options || null) :
+                                null,
                             required: !!f.required,
                             display_order: i,
                         })),
