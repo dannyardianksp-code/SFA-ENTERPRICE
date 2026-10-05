@@ -307,99 +307,61 @@ export default function VisitDetailPage() {
                                     {index + 1}
                                 </div>
 
-                                <div>
-                                    <h3 className="font-bold text-slate-900">
-                                        {a.Activity?.name || "-"}
-                                    </h3>
-
-                                    <p className="text-slate-500 text-sm">
-                                        {a.product_name}
-                                    </p>
-                                </div>
+                                <h3 className="font-bold text-slate-900">
+                                    {a.Activity?.name || "-"}
+                                </h3>
 
                             </div>
 
-                            <div className="text-right">
-                                <p className="text-slate-400 text-xs">Qty</p>
-                                <p className="font-bold text-slate-900">{a.qty}</p>
-                            </div>
-
-                        </div>
-
-                        {/* PRICE SECTION (MAIN VALUE) */}
-                        <div className="grid grid-cols-2 gap-3 mt-4">
-
-                            <div className="bg-slate-50 rounded-2xl p-3">
-                                <p className="text-slate-400 text-xs">Normal Price</p>
-                                <p className="font-semibold text-slate-900">
-                                    {Number(a.normal_price).toLocaleString("id-ID", {
-                                        style: "currency",
-                                        currency: "IDR",
-                                        minimumFractionDigits: 0
-                                    })}
-                                </p>
-                            </div>
-
-                            <div className="bg-green-50 rounded-2xl p-3">
-                                <p className="text-slate-400 text-xs">Promo Price</p>
-                                <p className="font-semibold text-green-600">
-                                    {Number(a.promo_price).toLocaleString("id-ID", {
-                                        style: "currency",
-                                        currency: "IDR",
-                                        minimumFractionDigits: 0
-                                    })}
-                                </p>
-                            </div>
-
-                        </div>
-
-                        {/* META INFO */}
-                        <div className="mt-4 space-y-2 text-sm">
-
-                            {/* expiry */}
-                            {a.expired_date && (
-                                <div className="flex justify-between">
-                                    <span className="text-slate-400">Expired Date</span>
-                                    <span className="font-medium text-slate-900">
-                                        {new Date(a.expired_date).toLocaleDateString()}
-                                    </span>
-                                </div>
-                            )}
-
-                            {/* notes */}
-                            <div className="flex justify-between">
-                                <span className="text-slate-400">Notes</span>
-                                <span className="font-medium text-slate-900 text-right max-w-[60%]">
-                                    {a.notes || "-"}
-                                </span>
-                            </div>
-
-                        </div>
-
-                        {/* FOOTER ACTION */}
-                        <div className="flex justify-between items-center mt-4">
-
-                            {/* photo */}
-                            <div>
-                                {a.photo_url ? (
-                                    <a
-                                        href={`${UPLOADS_ORIGIN}${a.photo_url}`}
-                                        target="_blank"
-                                        className="text-blue-600 font-semibold text-sm"
-                                    >
-                                        📷 View Photo
-                                    </a>
-                                ) : (
-                                    <span className="text-slate-400 text-sm">
-                                        No Photo
-                                    </span>
-                                )}
-                            </div>
-
-                            {/* optional badge (can extend later) */}
                             <span className="text-xs text-slate-400">
                                 Activity #{index + 1}
                             </span>
+
+                        </div>
+
+                        {/* FIELD DINAMIS -- label & tipe dari Activity.FieldDefinitions,
+                            nilai dari field_values (dikunci sebagai string oleh JSON,
+                            jadi dicocokkan via String(def.id)). Baris lama (sebelum fitur
+                            ini) sudah di-backfill ke field_values juga lewat migrasi,
+                            jadi satu jalur render ini cukup buat data lama maupun baru. */}
+                        <div className="mt-4 space-y-2 text-sm">
+
+                            {(a.Activity?.FieldDefinitions || [])
+                                .slice()
+                                .sort((x: any, y: any) => x.display_order - y.display_order)
+                                .map((def: any) => {
+
+                                    const nilai = a.field_values?.[def.id] ?? a.field_values?.[String(def.id)]
+
+                                    if (def.field_type === 'PHOTO') {
+                                        return (
+                                            <div key={def.id} className="flex justify-between items-center">
+                                                <span className="text-slate-400">{def.label}</span>
+                                                {nilai ? (
+                                                    <a
+                                                        href={`${UPLOADS_ORIGIN}${nilai}`}
+                                                        target="_blank"
+                                                        className="text-blue-600 font-semibold text-sm"
+                                                    >
+                                                        📷 View Photo
+                                                    </a>
+                                                ) : (
+                                                    <span className="text-slate-400 text-sm">No Photo</span>
+                                                )}
+                                            </div>
+                                        )
+                                    }
+
+                                    return (
+                                        <div key={def.id} className="flex justify-between">
+                                            <span className="text-slate-400">{def.label}</span>
+                                            <span className="font-medium text-slate-900 text-right max-w-[60%]">
+                                                {nilai !== undefined && nilai !== null && nilai !== '' ? String(nilai) : '-'}
+                                            </span>
+                                        </div>
+                                    )
+
+                                })}
 
                         </div>
 

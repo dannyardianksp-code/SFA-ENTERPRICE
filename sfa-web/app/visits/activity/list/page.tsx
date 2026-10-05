@@ -107,9 +107,17 @@ export default function ActivityListPage() {
         const matchActivity =
             activityFilter === 'ALL' || String(a.activity_id) === activityFilter
 
+        // Field activity sekarang dinamis (lihat field_values +
+        // Activity.FieldDefinitions) -- cari di SEMUA nilai field baris
+        // ini, bukan cuma product_name yang sudah tidak mewakili semua
+        // tipe activity lagi.
+        const nilaiField = fieldValuesArray(a)
         const matchProduct =
             !product ||
-            a.product_name?.toLowerCase().includes(product.toLowerCase())
+            nilaiField.some(({ label, value }: any) =>
+                label.toLowerCase().includes(product.toLowerCase()) ||
+                String(value).toLowerCase().includes(product.toLowerCase())
+            )
 
         return matchDateFrom && matchDateTo && matchSales && matchArea && matchActivity && matchProduct
 
@@ -118,35 +126,71 @@ export default function ActivityListPage() {
     // ======================
     // UI HELPERS
     // ======================
-    const money = (val: any) =>
-        Number(val || 0).toLocaleString('id-ID', {
-            style: 'currency',
-            currency: 'IDR',
-            minimumFractionDigits: 0
-        })
+
+    /**
+     * [{label, type, value}] untuk satu baris activity -- dipasangkan
+     * dari Activity.FieldDefinitions (label/tipe) dengan field_values
+     * (nilai, dikunci angka ATAU string tergantung sumbernya JS atau
+     * JSON.parse). Dipakai bersama oleh filter pencarian, kolom Detail,
+     * dan export Excel supaya ketiganya tidak pernah membaca field
+     * dengan cara berbeda.
+     */
+    const fieldValuesArray = (a: any) => {
+
+        const defs = a.Activity?.FieldDefinitions || []
+        const values = a.field_values || {}
+
+        return defs
+            .slice()
+            .sort((x: any, y: any) => x.display_order - y.display_order)
+            .map((def: any) => ({
+                label: def.label,
+                type: def.field_type,
+                value: values[def.id] ?? values[String(def.id)],
+            }))
+            .filter((f: any) => f.value !== undefined && f.value !== null && f.value !== '')
+
+    }
 
     // ======================
     // EXPORT EXCEL
     // ======================
     // Sama pola dengan Report Visit -- ekspor `filtered` (yang lagi
-    // kelihatan di tabel), bukan `activities` mentah. Harga & Qty
-    // diekspor sebagai angka mentah (bukan string "Rp ..." yang sudah
-    // diformat `money()`) supaya masih bisa dijumlah langsung di Excel.
+    // kelihatan di tabel), bukan `activities` mentah. Kolom field
+    // sekarang dinamis: satu kolom per LABEL field yang benar-benar
+    // muncul di baris yang diekspor (union semua activity yang
+    // tercampur dalam satu laporan), bukan kolom tetap Qty/Harga/dst
+    // yang cuma cocok buat sebagian activity.
     const handleExport = () => {
 
-        const rows = filtered.map((a: any) => ({
-            'ID': a.id,
-            'Tanggal': new Date(a.created_at).toLocaleDateString('id-ID'),
-            'Sales': a.Visit?.User?.name || '-',
-            'Customer': a.Visit?.Customer?.name || '-',
-            'Activity': a.Activity?.name || '-',
-            'Catatan': a.notes || '-',
-            'Produk': a.product_name || '-',
-            'Qty': a.qty ?? '-',
-            'Expired': a.expired_date || '-',
-            'Harga Normal': Number(a.normal_price || 0),
-            'Harga Promo': Number(a.promo_price || 0)
+        const semuaBaris = filtered.map((a: any) => ({
+            activity: a,
+            fields: fieldValuesArray(a).filter((f: any) => f.type !== 'PHOTO'),
         }))
+
+        const labelUnik = Array.from(
+            new Set(semuaBaris.flatMap(({ fields }) => fields.map((f: any) => f.label)))
+        )
+
+        const rows = semuaBaris.map(({ activity: a, fields }) => {
+
+            const nilaiPerLabel = Object.fromEntries(fields.map((f: any) => [f.label, f.value]))
+
+            const baris: Record<string, any> = {
+                'ID': a.id,
+                'Tanggal': new Date(a.created_at).toLocaleDateString('id-ID'),
+                'Sales': a.Visit?.User?.name || '-',
+                'Customer': a.Visit?.Customer?.name || '-',
+                'Activity': a.Activity?.name || '-',
+            }
+
+            for (const label of labelUnik) {
+                baris[label] = nilaiPerLabel[label] ?? ''
+            }
+
+            return baris
+
+        })
 
         exportToExcel(
             `report-activity_${dateFrom}_${dateTo}`,
@@ -258,10 +302,10 @@ export default function ActivityListPage() {
 
                 <div>
                     <label style={{ fontSize: 12, color: '#6b7280', display: 'block' }}>
-                        Produk
+                        Cari Isi Field
                     </label>
                     <input
-                        placeholder="Search product..."
+                        placeholder="Cari di field apa saja..."
                         value={product}
                         onChange={e => setProduct(e.target.value)}
                     />
@@ -329,12 +373,7 @@ export default function ActivityListPage() {
                                     'Sales',
                                     'Customer',
                                     'Activity',
-                                    'Notes',
-                                    'Product',
-                                    'Qty',
-                                    'Expired',
-                                    'Normal Price',
-                                    'Promo Price',
+                                    'Detail',
                                     'Photo'
                                 ].map((h) => (
                                     <th
@@ -356,7 +395,7 @@ export default function ActivityListPage() {
 
                             {filtered.length === 0 && (
                                 <tr>
-                                    <td colSpan={12} style={{
+                                    <td colSpan={7} style={{
                                         padding: 20,
                                         textAlign: 'center',
                                         color: '#9ca3af'
@@ -393,32 +432,36 @@ export default function ActivityListPage() {
                                         {badge(a.Activity?.name || '-')}
                                     </td>
 
-                                    <td style={{ padding: 12 }}>{a.notes}</td>
-
-                                    <td style={{ padding: 12 }}>
-                                        {a.product_name}
+                                    <td style={{ padding: 12, minWidth: 260 }}>
+                                        {fieldValuesArray(a)
+                                            .filter((f: any) => f.type !== 'PHOTO')
+                                            .map((f: any) => (
+                                                <div key={f.label} style={{ fontSize: 12.5 }}>
+                                                    <span style={{ color: '#9ca3af' }}>{f.label}: </span>
+                                                    <span>{String(f.value)}</span>
+                                                </div>
+                                            ))}
                                     </td>
 
-                                    <td style={{ padding: 12 }}>{a.qty}</td>
-
-                                    <td style={{ padding: 12 }}>{a.expired_date}</td>
-
-                                    <td style={{ padding: 12 }}>{money(a.normal_price)}</td>
-
-                                    <td style={{ padding: 12 }}>{money(a.promo_price)}</td>
-
                                     <td style={{ padding: 12 }}>
-                                        {a.photo_url ? (
-                                            <img
-                                                src={`${UPLOADS_ORIGIN}${a.photo_url}`}
-                                                style={{
-                                                    width: 40,
-                                                    height: 40,
-                                                    objectFit: 'cover',
-                                                    borderRadius: 8
-                                                }}
-                                            />
-                                        ) : '-'}
+                                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                            {fieldValuesArray(a)
+                                                .filter((f: any) => f.type === 'PHOTO')
+                                                .map((f: any) => (
+                                                    <a key={f.label} href={`${UPLOADS_ORIGIN}${f.value}`} target="_blank" rel="noopener noreferrer">
+                                                        <img
+                                                            src={`${UPLOADS_ORIGIN}${f.value}`}
+                                                            style={{
+                                                                width: 40,
+                                                                height: 40,
+                                                                objectFit: 'cover',
+                                                                borderRadius: 8
+                                                            }}
+                                                        />
+                                                    </a>
+                                                ))}
+                                            {fieldValuesArray(a).filter((f: any) => f.type === 'PHOTO').length === 0 && '-'}
+                                        </div>
                                     </td>
 
                                 </tr>

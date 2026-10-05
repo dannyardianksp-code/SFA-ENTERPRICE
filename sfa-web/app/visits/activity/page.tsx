@@ -3,6 +3,7 @@
 import {
     Suspense,
     useEffect,
+    useRef,
     useState
 } from 'react'
 
@@ -11,11 +12,16 @@ import {
     useSearchParams
 } from 'next/navigation'
 
-import { useRef } from "react";
-
 import { API_BASE_URL } from '@/app/utils/api-config'
 
-
+type FieldDef = {
+    id: number
+    label: string
+    field_type: 'TEXT' | 'NUMBER' | 'DATE' | 'DROPDOWN' | 'PHOTO'
+    options: string[] | null
+    required: boolean
+    display_order: number
+}
 
 export default function VisitActivityPage() {
     return (
@@ -27,302 +33,152 @@ export default function VisitActivityPage() {
 
 function VisitActivityContent() {
 
-    const router =
-        useRouter()
+    const router = useRouter()
+    const params = useSearchParams()
+    const visit_id = params.get('visit_id')
 
-    const params =
-        useSearchParams()
+    const [activities, setActivities] = useState<any[]>([])
+    const [activityId, setActivityId] = useState('')
+    const [fields, setFields] = useState<FieldDef[]>([])
+    const [loadingFields, setLoadingFields] = useState(false)
 
-    const visit_id =
-        params.get('visit_id')
+    // Field dinamis: {[field_definition_id]: string} buat TEXT/NUMBER/
+    // DATE/DROPDOWN, dan {[field_definition_id]: File} terpisah buat PHOTO.
+    const [values, setValues] = useState<Record<number, string>>({})
+    const [photos, setPhotos] = useState<Record<number, File>>({})
+    const [saving, setSaving] = useState(false)
 
-    // ======================
-    // STATE
-    // ======================
+    const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({})
 
-    const [activities, setActivities] =
-        useState<any[]>([])
+    const fetchActivities = async () => {
 
-    const [products, setProducts] =
-        useState<any[]>([])
+        try {
 
-    const [photo, setPhoto] =
-        useState<any>(null)
+            const token = localStorage.getItem('token')
 
-    const cameraRef = useRef<HTMLInputElement | null>(null);
+            const res = await fetch(`${API_BASE_URL}/activities`, {
+                headers: { Authorization: `Bearer ${token}` }
+            })
 
-    const [form, setForm] =
-        useState({
+            const data = await res.json()
 
-            visit_id:
-                visit_id || '',
+            setActivities(Array.isArray(data) ? data : [])
 
-            activity_id: '',
+        } catch (err) {
+            console.log(err)
+        }
 
-            product_name: '',
+    }
 
-            qty: '',
-
-            expired_date: '',
-
-            normal_price: '',
-
-            promo_price: '',
-
-            notes: ''
-
-        })
-
-    // ======================
-    // LOAD MASTER DATA
-    // ======================
+    useEffect(() => {
+        fetchActivities()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
 
     useEffect(() => {
 
-        if (!visit_id) return
+        setValues({})
+        setPhotos({})
 
-        fetchProducts()
-
-        fetchActivities()
-
-    }, [visit_id])
-
-    // ======================
-    // FETCH PRODUCTS
-    // ======================
-
-    const fetchProducts =
-        async () => {
-
-            try {
-
-                const token =
-                    localStorage.getItem(
-                        'token'
-                    )
-
-                const res =
-                    await fetch(
-
-                        `${API_BASE_URL}/visits/${visit_id}/products`,
-
-                        {
-
-                            headers: {
-
-                                Authorization:
-                                    `Bearer ${token}`
-
-                            }
-
-                        }
-
-                    )
-
-                const data =
-                    await res.json()
-
-
-                setProducts(
-
-                    Array.isArray(data)
-                        ? data
-                        : []
-
-                )
-
-            } catch (err) {
-
-                console.log(err)
-
-            }
-
+        if (!activityId) {
+            setFields([])
+            return
         }
 
-    // ======================
-    // FETCH ACTIVITIES
-    // ======================
+        const fetchFields = async () => {
 
-    const fetchActivities =
-        async () => {
+            setLoadingFields(true)
 
-            try {
+            const token = localStorage.getItem('token')
 
-                const token =
-                    localStorage.getItem(
-                        'token'
-                    )
-
-                const res =
-                    await fetch(
-
-                        `${API_BASE_URL}/activities`,
-
-                        {
-
-                            headers: {
-
-                                Authorization:
-                                    `Bearer ${token}`
-
-                            }
-
-                        }
-
-                    )
-
-                const data =
-                    await res.json()
-
-
-
-                setActivities(
-
-                    Array.isArray(data)
-                        ? data
-                        : []
-
-                )
-
-            } catch (err) {
-
-                console.log(err)
-
-            }
-
-        }
-
-
-
-
-    // ======================
-    // HANDLE CHANGE
-    // ======================
-
-    const handleChange =
-        (e: any) => {
-
-            setForm({
-
-                ...form,
-
-                [e.target.name]:
-                    e.target.value
-
+            const res = await fetch(`${API_BASE_URL}/activities/${activityId}/fields`, {
+                headers: { Authorization: `Bearer ${token}` }
             })
 
+            const data = await res.json()
+
+            setFields(Array.isArray(data) ? data : [])
+            setLoadingFields(false)
+
         }
 
-    // ======================
-    // SUBMIT
-    // ======================
+        fetchFields()
 
-    const handleSubmit =
-        async (e: any) => {
+    }, [activityId])
 
-            e.preventDefault()
+    const setValue = (fieldId: number, value: string) => {
+        setValues(prev => ({ ...prev, [fieldId]: value }))
+    }
 
-            try {
+    const handleSubmit = async (e: any) => {
 
-                const token =
-                    localStorage.getItem(
-                        'token'
-                    )
+        e.preventDefault()
 
-                const formData =
-                    new FormData()
+        if (!activityId) {
+            alert('Pilih Activity dulu')
+            return
+        }
 
-                Object.entries(form).forEach(
-
-                    ([key, value]) => {
-
-                        formData.append(
-                            key,
-                            value as string
-                        )
-
-                    }
-
-                )
-
-                if (photo) {
-
-                    formData.append(
-                        'photo',
-                        photo
-                    )
-
-                }
-
-                const res =
-                    await fetch(
-
-                        `${API_BASE_URL}/visit-activities`,
-
-                        {
-
-                            method: 'POST',
-
-                            headers: {
-
-                                Authorization:
-                                    `Bearer ${token}`
-
-                            },
-
-                            body: formData
-
-                        }
-
-                    )
-
-                const data =
-                    await res.json()
-
-                // ERROR
-                if (!res.ok) {
-
-                    alert(
-
-                        data.message ||
-
-                        'Gagal save activity'
-
-                    )
-
+        for (const f of fields) {
+            if (!f.required) continue
+            if (f.field_type === 'PHOTO') {
+                if (!photos[f.id]) {
+                    alert(`Foto "${f.label}" wajib diisi`)
                     return
-
                 }
+            } else if (!values[f.id] || !String(values[f.id]).trim()) {
+                alert(`Field "${f.label}" wajib diisi`)
+                return
+            }
+        }
 
-                // SUCCESS
-                alert(
-                    'Activity berhasil disimpan'
-                )
+        setSaving(true)
 
-                router.replace(
-                    `/visit-detail/${visit_id}`
-                )
+        try {
 
-            } catch (err) {
+            const token = localStorage.getItem('token')
 
-                console.log(err)
+            const formData = new FormData()
+            formData.append('visit_id', visit_id || '')
+            formData.append('activity_id', activityId)
+            formData.append('values', JSON.stringify(values))
 
-                alert(
-                    'Terjadi kesalahan'
-                )
+            Object.entries(photos).forEach(([fieldId, file]) => {
+                formData.append(`photo_${fieldId}`, file)
+            })
 
+            const res = await fetch(`${API_BASE_URL}/visit-activities`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+                body: formData
+            })
+
+            const data = await res.json()
+
+            if (!res.ok) {
+                alert(data.message || 'Gagal save activity')
+                return
             }
 
+            alert('Activity berhasil disimpan')
+            router.replace(`/visit-detail/${visit_id}`)
+
+        } catch (err) {
+
+            console.log(err)
+            alert('Terjadi kesalahan')
+
+        } finally {
+            setSaving(false)
         }
 
-    // ======================
-    // UI
-    // ======================
+    }
+
+    const sortedFields = [...fields].sort((a, b) => a.display_order - b.display_order)
 
     return (
         <div className="space-y-6 max-w-3xl mx-auto p-6">
 
-            {/* HEADER (same system as other pages) */}
             <div className="bg-white rounded-3xl p-6 shadow-lg">
                 <h1 className="text-3xl font-bold text-slate-900">
                     📸 Visit Activity
@@ -334,187 +190,129 @@ function VisitActivityContent() {
 
             <form onSubmit={handleSubmit} className="space-y-6">
 
-                {/* VISIT CONTEXT (mini info, bukan form utama) */}
                 <div className="bg-white rounded-3xl p-5 shadow-lg">
                     <p className="text-slate-500 text-sm">Visit ID</p>
-                    <p className="font-bold text-slate-900">{form.visit_id}</p>
+                    <p className="font-bold text-slate-900">{visit_id}</p>
                 </div>
 
-                {/* CAMERA FIRST (IMPORTANT UX SHIFT) */}
-                <div className="bg-white rounded-3xl p-6 shadow-lg text-center">
-
-                    <h2 className="font-bold text-slate-900 mb-3">
-                        📷 Product Photo
-                    </h2>
-
-                    <input
-                        ref={cameraRef}
-                        id="cameraInput"
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        onChange={(e: any) => setPhoto(e.target.files[0])}
-                        className="hidden"
-                    />
-                    <button
-                        type="button"
-                        onClick={() => cameraRef.current?.click()}
-                        className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold"
+                <div className="bg-white rounded-3xl p-5 shadow-lg">
+                    <label className="text-slate-500 text-sm">Activity</label>
+                    <select
+                        value={activityId}
+                        onChange={(e) => setActivityId(e.target.value)}
+                        className="w-full mt-2 border rounded-xl p-3"
                     >
-                        Ambil Foto Produk
-                    </button>
-
-                    {photo && (
-                        <img
-                            src={URL.createObjectURL(photo)}
-                            className="mt-4 rounded-2xl w-full object-cover"
-                        />
-                    )}
-
+                        <option value="">Pilih Activity</option>
+                        {activities.map((a: any) => (
+                            <option key={a.id} value={a.id}>
+                                {a.name}
+                            </option>
+                        ))}
+                    </select>
                 </div>
 
-                {/* CONTEXT BLOCK (Activity + Product) */}
-                <div className="bg-white rounded-3xl p-5 shadow-lg space-y-4">
+                {loadingFields && (
+                    <p className="text-slate-400 text-sm text-center">Memuat field...</p>
+                )}
 
-                    <h2 className="font-bold text-slate-900">
-                        🛒 Activity Context
-                    </h2>
-
-                    {/* ACTIVITY */}
-                    <div>
-                        <label className="text-slate-500 text-sm">Activity</label>
-
-                        <select
-                            name="activity_id"
-                            value={form.activity_id}
-                            onChange={handleChange}
-                            className="w-full mt-2 border rounded-xl p-3"
-                        >
-                            <option value="">Pilih Activity</option>
-                            {activities.map((a: any) => (
-                                <option key={a.id} value={a.id}>
-                                    {a.name}
-                                </option>
-                            ))}
-                        </select>
+                {!loadingFields && activityId && sortedFields.length === 0 && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-3xl p-5 text-sm text-amber-700">
+                        Activity ini belum punya field yang diatur. Atur dulu di halaman Activity Master.
                     </div>
+                )}
 
-                    {/* PRODUCT */}
-                    <div>
-                        <label className="text-slate-500 text-sm">Product</label>
+                {sortedFields.map((f) => (
 
-                        <select
-                            name="product_name"
-                            value={form.product_name}
-                            onChange={handleChange}
-                            className="w-full mt-2 border rounded-xl p-3"
-                        >
-                            <option value="">Pilih Product</option>
-                            {products.map((p: any) => (
-                                <option key={p.id} value={p.name}>
-                                    {p.name}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
+                    <div key={f.id} className="bg-white rounded-3xl p-5 shadow-lg">
 
-                </div>
+                        <label className="text-slate-500 text-sm">
+                            {f.label}{f.required && <span className="text-red-500"> *</span>}
+                        </label>
 
-                {/* TRANSACTION (simplified, not noisy) */}
-                <div className="bg-white rounded-3xl p-5 shadow-lg space-y-4">
+                        {f.field_type === 'PHOTO' && (
+                            <div className="mt-3 text-center">
+                                <input
+                                    ref={(el) => { fileInputRefs.current[f.id] = el }}
+                                    type="file"
+                                    accept="image/*"
+                                    capture="environment"
+                                    onChange={(e: any) => {
+                                        const file = e.target.files?.[0]
+                                        if (file) setPhotos(prev => ({ ...prev, [f.id]: file }))
+                                    }}
+                                    className="hidden"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => fileInputRefs.current[f.id]?.click()}
+                                    className="w-full bg-blue-600 text-white py-3 rounded-2xl font-bold"
+                                >
+                                    Ambil Foto
+                                </button>
 
-                    <h2 className="font-bold text-slate-900">
-                        💰 Transaction
-                    </h2>
+                                {photos[f.id] && (
+                                    <img
+                                        src={URL.createObjectURL(photos[f.id])}
+                                        className="mt-4 rounded-2xl w-full object-cover"
+                                        alt={f.label}
+                                    />
+                                )}
+                            </div>
+                        )}
 
-                    <div className="grid grid-cols-2 gap-3">
+                        {f.field_type === 'TEXT' && (
+                            <input
+                                value={values[f.id] || ''}
+                                onChange={(e) => setValue(f.id, e.target.value)}
+                                className="w-full mt-2 border rounded-xl p-3"
+                            />
+                        )}
 
-                        <div>
-                            <label className="text-slate-500 text-sm">Qty</label>
+                        {f.field_type === 'NUMBER' && (
                             <input
                                 type="number"
-                                name="qty"
-                                value={form.qty}
-                                onChange={handleChange}
+                                value={values[f.id] || ''}
+                                onChange={(e) => setValue(f.id, e.target.value)}
                                 className="w-full mt-2 border rounded-xl p-3"
                             />
-                        </div>
+                        )}
 
-                        <div>
-                            <label className="text-slate-500 text-sm">Expired</label>
+                        {f.field_type === 'DATE' && (
                             <input
                                 type="date"
-                                name="expired_date"
-                                value={form.expired_date}
-                                onChange={handleChange}
+                                value={values[f.id] || ''}
+                                onChange={(e) => setValue(f.id, e.target.value)}
                                 className="w-full mt-2 border rounded-xl p-3"
                             />
-                        </div>
+                        )}
+
+                        {f.field_type === 'DROPDOWN' && (
+                            <select
+                                value={values[f.id] || ''}
+                                onChange={(e) => setValue(f.id, e.target.value)}
+                                className="w-full mt-2 border rounded-xl p-3"
+                            >
+                                <option value="">Pilih {f.label}</option>
+                                {(f.options || []).map((opt) => (
+                                    <option key={opt} value={opt}>{opt}</option>
+                                ))}
+                            </select>
+                        )}
 
                     </div>
 
-                    {/* PRICE (cleaner grouping) */}
-                    <div className="grid grid-cols-2 gap-3">
+                ))}
 
-                        <div>
-                            <label className="text-slate-500 text-sm">Normal</label>
-                            <input
-                                value={
-                                    form.normal_price
-                                        ? "Rp " + Number(form.normal_price).toLocaleString("id-ID")
-                                        : ""
-                                }
-                                onChange={(e) => {
-                                    const raw = e.target.value.replace(/\D/g, "");
-                                    setForm({ ...form, normal_price: raw });
-                                }}
-                                className="w-full mt-2 border rounded-xl p-3"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="text-slate-500 text-sm">Promo</label>
-                            <input
-                                value={
-                                    form.promo_price
-                                        ? "Rp " + Number(form.promo_price).toLocaleString("id-ID")
-                                        : ""
-                                }
-                                onChange={(e) => {
-                                    const raw = e.target.value.replace(/\D/g, "");
-                                    setForm({ ...form, promo_price: raw });
-                                }}
-                                className="w-full mt-2 border rounded-xl p-3"
-                            />
-                        </div>
-
-                    </div>
-
-                </div>
-
-                {/* NOTES (secondary) */}
-                <div className="bg-white rounded-3xl p-5 shadow-lg">
-                    <label className="text-slate-500 text-sm">Notes</label>
-
-                    <textarea
-                        name="notes"
-                        rows={4}
-                        value={form.notes}
-                        onChange={handleChange}
-                        className="w-full mt-2 border rounded-xl p-3"
-                    />
-                </div>
-
-                {/* CTA */}
                 <button
                     type="submit"
-                    className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold"
+                    disabled={saving || !activityId}
+                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white py-4 rounded-2xl font-bold"
                 >
-                    Save Activity
+                    {saving ? 'Menyimpan...' : 'Save Activity'}
                 </button>
 
             </form>
 
         </div>
-    );
+    )
 }
