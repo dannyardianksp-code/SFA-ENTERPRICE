@@ -315,11 +315,20 @@ function VisitActivityContent() {
                                 className="w-full mt-2 border rounded-xl p-3"
                             >
                                 <option value="">Pilih {f.label}</option>
-                                {products.map((p: any) => (
-                                    <option key={p.id} value={p.name}>
-                                        {p.name} ({p.code})
-                                    </option>
-                                ))}
+                                {products
+                                    .filter((p: any) => {
+                                        const kategori = f.options?.[0]
+                                        if (!kategori) return true
+                                        if (kategori === 'JUAL') {
+                                            return p.category !== 'PROMOSI' && p.category !== 'COMPETITOR'
+                                        }
+                                        return p.category === kategori
+                                    })
+                                    .map((p: any) => (
+                                        <option key={p.id} value={p.name}>
+                                            {p.name} ({p.code})
+                                        </option>
+                                    ))}
                             </select>
                         )}
 

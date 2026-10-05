@@ -22,6 +22,14 @@ const FIELD_TYPE_LABEL: Record<FieldType, string> = {
     PHOTO: 'Foto',
 }
 
+type ProductCategory = 'JUAL' | 'PROMOSI' | 'COMPETITOR'
+
+const PRODUCT_CATEGORY_LABEL: Record<ProductCategory, string> = {
+    JUAL: 'Item Jual',
+    PROMOSI: 'Item Promosi',
+    COMPETITOR: 'Item Competitor',
+}
+
 export default function MasterActivitiesPage() {
 
     const [activities, setActivities] = useState<any[]>([])
@@ -39,6 +47,9 @@ export default function MasterActivitiesPage() {
     const [newFieldLabel, setNewFieldLabel] = useState('')
     const [newFieldType, setNewFieldType] = useState<FieldType>('TEXT')
     const [newFieldOptions, setNewFieldOptions] = useState('')
+    // '' = semua kategori produk, selain itu dikirim sebagai
+    // options: [kategori] (lihat addFieldToList).
+    const [newFieldProductCategory, setNewFieldProductCategory] = useState('')
     const [newFieldRequired, setNewFieldRequired] = useState(true)
 
     const openFieldBuilder = async (activity: any) => {
@@ -73,6 +84,7 @@ export default function MasterActivitiesPage() {
         setNewFieldLabel('')
         setNewFieldType('TEXT')
         setNewFieldOptions('')
+        setNewFieldProductCategory('')
         setNewFieldRequired(true)
     }
 
@@ -84,15 +96,19 @@ export default function MasterActivitiesPage() {
             label: newFieldLabel.trim(),
             field_type: newFieldType,
             required: newFieldRequired,
-            options: newFieldType === 'DROPDOWN'
-                ? newFieldOptions.split(',').map(s => s.trim()).filter(Boolean)
-                : null,
+            options:
+                newFieldType === 'DROPDOWN'
+                    ? newFieldOptions.split(',').map(s => s.trim()).filter(Boolean)
+                    : newFieldType === 'PRODUCT'
+                        ? (newFieldProductCategory ? [newFieldProductCategory] : null)
+                        : null,
         }
 
         setFieldList(prev => [...prev, field])
         setNewFieldLabel('')
         setNewFieldType('TEXT')
         setNewFieldOptions('')
+        setNewFieldProductCategory('')
         setNewFieldRequired(true)
 
     }
@@ -522,8 +538,13 @@ export default function MasterActivitiesPage() {
                                                             {FIELD_TYPE_LABEL[f.field_type]}
                                                         </span>
                                                         <span className="text-[11px] text-slate-400">{f.required ? 'Wajib' : 'Opsional'}</span>
-                                                        {f.options && (
+                                                        {f.field_type === 'DROPDOWN' && f.options && (
                                                             <span className="text-[11px] text-slate-400">Pilihan: {f.options.join(', ')}</span>
+                                                        )}
+                                                        {f.field_type === 'PRODUCT' && (
+                                                            <span className="text-[11px] text-slate-400">
+                                                                Kategori: {f.options?.[0] ? PRODUCT_CATEGORY_LABEL[f.options[0] as ProductCategory] : 'Semua'}
+                                                            </span>
                                                         )}
                                                     </div>
                                                 </div>
@@ -575,6 +596,19 @@ export default function MasterActivitiesPage() {
                                                 onChange={(e) => setNewFieldOptions(e.target.value)}
                                                 className="border border-slate-200 rounded-lg px-3 py-2 text-sm"
                                             />
+                                        )}
+
+                                        {newFieldType === 'PRODUCT' && (
+                                            <select
+                                                value={newFieldProductCategory}
+                                                onChange={(e) => setNewFieldProductCategory(e.target.value)}
+                                                className="border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                                            >
+                                                <option value="">Semua kategori produk</option>
+                                                {Object.entries(PRODUCT_CATEGORY_LABEL).map(([value, label]) => (
+                                                    <option key={value} value={value}>{label}</option>
+                                                ))}
+                                            </select>
                                         )}
 
                                         <label className="flex items-center gap-2 text-sm text-slate-600">
