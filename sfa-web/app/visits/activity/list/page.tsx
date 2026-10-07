@@ -87,6 +87,37 @@ export default function ActivityListPage() {
         salesUsers.map((u: any) => [u.id, u.area_id])
     )
 
+    /**
+     * [{label, type, value}] untuk satu baris activity -- dipasangkan
+     * dari Activity.FieldDefinitions (label/tipe) dengan field_values
+     * (nilai, dikunci angka ATAU string tergantung sumbernya JS atau
+     * JSON.parse). Dipakai bersama oleh filter pencarian, kolom Detail,
+     * dan export Excel supaya ketiganya tidak pernah membaca field
+     * dengan cara berbeda.
+     *
+     * HARUS didefinisikan SEBELUM `filtered` di bawah -- `filtered`
+     * memanggilnya sinkron saat didefinisikan (activities.filter
+     * langsung jalan tiap render), jadi kalau taruh di bawah kena
+     * ReferenceError (temporal dead zone) begitu `activities` tidak
+     * kosong lagi.
+     */
+    const fieldValuesArray = (a: any) => {
+
+        const defs = a.Activity?.FieldDefinitions || []
+        const values = a.field_values || {}
+
+        return defs
+            .slice()
+            .sort((x: any, y: any) => x.display_order - y.display_order)
+            .map((def: any) => ({
+                label: def.label,
+                type: def.field_type,
+                value: values[def.id] ?? values[String(def.id)],
+            }))
+            .filter((f: any) => f.value !== undefined && f.value !== null && f.value !== '')
+
+    }
+
     // ======================
     // FILTER (semua di client, sama pola dengan Report Visit)
     // ======================
@@ -122,35 +153,6 @@ export default function ActivityListPage() {
         return matchDateFrom && matchDateTo && matchSales && matchArea && matchActivity && matchProduct
 
     })
-
-    // ======================
-    // UI HELPERS
-    // ======================
-
-    /**
-     * [{label, type, value}] untuk satu baris activity -- dipasangkan
-     * dari Activity.FieldDefinitions (label/tipe) dengan field_values
-     * (nilai, dikunci angka ATAU string tergantung sumbernya JS atau
-     * JSON.parse). Dipakai bersama oleh filter pencarian, kolom Detail,
-     * dan export Excel supaya ketiganya tidak pernah membaca field
-     * dengan cara berbeda.
-     */
-    const fieldValuesArray = (a: any) => {
-
-        const defs = a.Activity?.FieldDefinitions || []
-        const values = a.field_values || {}
-
-        return defs
-            .slice()
-            .sort((x: any, y: any) => x.display_order - y.display_order)
-            .map((def: any) => ({
-                label: def.label,
-                type: def.field_type,
-                value: values[def.id] ?? values[String(def.id)],
-            }))
-            .filter((f: any) => f.value !== undefined && f.value !== null && f.value !== '')
-
-    }
 
     // ======================
     // EXPORT EXCEL
