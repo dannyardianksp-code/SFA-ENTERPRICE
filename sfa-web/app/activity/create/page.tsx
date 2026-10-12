@@ -52,6 +52,11 @@ export default function MasterActivitiesPage() {
     const [newFieldProductCategory, setNewFieldProductCategory] = useState('')
     const [newFieldRequired, setNewFieldRequired] = useState(true)
 
+    // null = form di bawah lagi mode TAMBAH field baru. Angka = lagi
+    // EDIT fieldList[editingIndex] -- form yang sama dipakai ulang,
+    // cuma submitnya ganti isi index itu, bukan nambah baris baru.
+    const [editingIndex, setEditingIndex] = useState<number | null>(null)
+
     const openFieldBuilder = async (activity: any) => {
 
         setFieldModalActivity(activity)
@@ -78,14 +83,35 @@ export default function MasterActivitiesPage() {
 
     }
 
-    const closeFieldBuilder = () => {
-        setFieldModalActivity(null)
-        setFieldList([])
+    const resetFieldForm = () => {
         setNewFieldLabel('')
         setNewFieldType('TEXT')
         setNewFieldOptions('')
         setNewFieldProductCategory('')
         setNewFieldRequired(true)
+        setEditingIndex(null)
+    }
+
+    const closeFieldBuilder = () => {
+        setFieldModalActivity(null)
+        setFieldList([])
+        resetFieldForm()
+    }
+
+    // Isi form dari field yang sudah ada supaya bisa diedit -- bentuk
+    // baliknya persis dari addFieldToList (DROPDOWN options jadi string
+    // dipisah koma, PRODUCT options[0] jadi kategori terpilih).
+    const startEditField = (index: number) => {
+
+        const f = fieldList[index]
+
+        setNewFieldLabel(f.label)
+        setNewFieldType(f.field_type)
+        setNewFieldOptions(f.field_type === 'DROPDOWN' ? (f.options || []).join(', ') : '')
+        setNewFieldProductCategory(f.field_type === 'PRODUCT' ? (f.options?.[0] || '') : '')
+        setNewFieldRequired(f.required)
+        setEditingIndex(index)
+
     }
 
     const addFieldToList = () => {
@@ -104,17 +130,19 @@ export default function MasterActivitiesPage() {
                         : null,
         }
 
-        setFieldList(prev => [...prev, field])
-        setNewFieldLabel('')
-        setNewFieldType('TEXT')
-        setNewFieldOptions('')
-        setNewFieldProductCategory('')
-        setNewFieldRequired(true)
+        if (editingIndex !== null) {
+            setFieldList(prev => prev.map((existing, i) => (i === editingIndex ? field : existing)))
+        } else {
+            setFieldList(prev => [...prev, field])
+        }
+
+        resetFieldForm()
 
     }
 
     const removeFieldFromList = (index: number) => {
         setFieldList(prev => prev.filter((_, i) => i !== index))
+        if (editingIndex === index) resetFieldForm()
     }
 
     const toggleFieldRequired = (index: number) => {
@@ -530,7 +558,14 @@ export default function MasterActivitiesPage() {
                                             <p className="text-sm text-slate-400">Belum ada field. Tambah di bawah.</p>
                                         )}
                                         {fieldList.map((f, i) => (
-                                            <div key={i} className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl p-3">
+                                            <div
+                                                key={i}
+                                                className={`flex items-center gap-2 border rounded-xl p-3 ${
+                                                    editingIndex === i
+                                                        ? 'bg-blue-50 border-blue-300'
+                                                        : 'bg-slate-50 border-slate-200'
+                                                }`}
+                                            >
                                                 <div className="flex-1 min-w-0">
                                                     <div className="font-semibold text-sm text-slate-900">{f.label}</div>
                                                     <div className="flex gap-2 mt-1 items-center flex-wrap">
@@ -550,8 +585,18 @@ export default function MasterActivitiesPage() {
                                                 </div>
                                                 <button
                                                     type="button"
+                                                    onClick={() => startEditField(i)}
+                                                    disabled={editingIndex !== null}
+                                                    className="w-8 h-8 rounded-lg border border-slate-200 bg-white text-sm disabled:opacity-40"
+                                                    title="Edit field"
+                                                >
+                                                    ✎
+                                                </button>
+                                                <button
+                                                    type="button"
                                                     onClick={() => toggleFieldRequired(i)}
-                                                    className="w-8 h-8 rounded-lg border border-slate-200 bg-white text-sm"
+                                                    disabled={editingIndex !== null}
+                                                    className="w-8 h-8 rounded-lg border border-slate-200 bg-white text-sm disabled:opacity-40"
                                                     title="Toggle wajib"
                                                 >
                                                     {f.required ? '✓' : '○'}
@@ -559,7 +604,8 @@ export default function MasterActivitiesPage() {
                                                 <button
                                                     type="button"
                                                     onClick={() => removeFieldFromList(i)}
-                                                    className="w-8 h-8 rounded-lg border border-slate-200 bg-white text-red-600 text-sm"
+                                                    disabled={editingIndex !== null}
+                                                    className="w-8 h-8 rounded-lg border border-slate-200 bg-white text-red-600 text-sm disabled:opacity-40"
                                                     title="Hapus"
                                                 >
                                                     ✕
@@ -569,6 +615,11 @@ export default function MasterActivitiesPage() {
                                     </div>
 
                                     <div className="border-1.5 border-dashed border-slate-300 rounded-2xl p-4 flex flex-col gap-3" style={{ borderStyle: 'dashed', borderWidth: 1.5 }}>
+                                        {editingIndex !== null && (
+                                            <p className="text-xs font-semibold text-blue-600">
+                                                ✎ Mengedit field &ldquo;{fieldList[editingIndex]?.label}&rdquo;
+                                            </p>
+                                        )}
                                         <div className="flex gap-2 flex-wrap">
                                             <input
                                                 type="text"
@@ -620,13 +671,25 @@ export default function MasterActivitiesPage() {
                                             Wajib diisi
                                         </label>
 
-                                        <button
-                                            type="button"
-                                            onClick={addFieldToList}
-                                            className="self-start bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold"
-                                        >
-                                            + Tambah Field
-                                        </button>
+                                        <div className="flex gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={addFieldToList}
+                                                className="self-start bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold"
+                                            >
+                                                {editingIndex !== null ? 'Simpan Perubahan' : '+ Tambah Field'}
+                                            </button>
+
+                                            {editingIndex !== null && (
+                                                <button
+                                                    type="button"
+                                                    onClick={resetFieldForm}
+                                                    className="self-start border border-slate-200 text-slate-500 px-4 py-2 rounded-lg text-sm font-semibold"
+                                                >
+                                                    Batal
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                 </>
                             )}
