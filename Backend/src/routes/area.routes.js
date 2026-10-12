@@ -1,3 +1,6 @@
+const { Op } =
+    require('sequelize')
+
 const router =
     require('express').Router()
 
@@ -19,9 +22,19 @@ const auth =
 const { sendError, sendServerError } =
     require('../utils/response.util')
 
-const { USER_MANAGER_ROLES } =
+const { USER_MANAGER_ROLES, RESTRICTED_ROLES } =
     require('../utils/access.util')
 
+const { resolveAccessibleAreaIds } =
+    require('../utils/area.util')
+
+// Role terbatas (lihat RESTRICTED_ROLES) cuma lihat area yang
+// ditugaskan ke mereka sendiri -- dulu endpoint ini selalu
+// mengembalikan SEMUA area, jadi filter Area di Report Visit (dan
+// dropdown lain yang memakai daftar ini) menampilkan area di luar
+// assignment user, bukan cuma miliknya. Pola SAMA PERSIS dengan
+// getFormOptions di customer.controller.js (satu sumber aturan
+// resolveAccessibleAreaIds, tidak diduplikasi di klien).
 router.get(
 
     '/',
@@ -30,10 +43,40 @@ router.get(
 
     async (req, res) => {
 
-        const data =
-            await Area.findAll()
+        try {
 
-        res.json(data)
+            const isRestricted =
+                RESTRICTED_ROLES.includes(req.user.role)
+
+            if (!isRestricted) {
+                const semua = await Area.findAll()
+                return res.json(semua)
+            }
+
+            const user = await User.findByPk(req.user.id, {
+                include: [
+                    {
+                        model: Area,
+                        as: 'AssignedAreas',
+                        attributes: ['id'],
+                        through: { attributes: [] },
+                    },
+                ],
+            })
+
+            if (!user) {
+                return sendError(res, 404, 'User tidak ditemukan.')
+            }
+
+            const data = await Area.findAll({
+                where: { id: { [Op.in]: resolveAccessibleAreaIds(user) } },
+            })
+
+            res.json(data)
+
+        } catch (err) {
+            return sendServerError(res, err, 'GET AREAS')
+        }
 
     }
 
