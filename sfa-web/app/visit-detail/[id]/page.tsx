@@ -120,42 +120,6 @@ export default function VisitDetailPage() {
         return <div>Loading...</div>
 
     }
-    const handleCheckout =
-        async () => {
-
-            const token =
-                localStorage.getItem(
-                    'token'
-                )
-
-            const res = await fetch(
-
-                `${API_BASE_URL}/visits/${params.id}/checkout`,
-
-                {
-
-                    method: 'POST',
-
-                    headers: {
-
-                        Authorization:
-                            `Bearer ${token}`
-
-                    }
-
-                }
-
-            )
-
-            const data =
-                await res.json()
-
-            alert(data.message)
-
-            fetchVisit()
-
-        }
-
     const getDuration = () => {
 
         if (!visit.checkout_time)
@@ -242,11 +206,16 @@ export default function VisitDetailPage() {
                             </button>
                         )}
 
+                        {/* Checkout dinonaktifkan dari web -- alur yang
+                        sah cuma lewat mobile (ambil GPS, verifikasi
+                        jarak ke toko). Tombol di sini dulu bisa checkout
+                        tanpa verifikasi apa pun, jadi celah. */}
                         <button
-                            onClick={handleCheckout}
-                            className="flex-1 bg-slate-800 text-white px-4 py-3 rounded-xl font-semibold"
+                            disabled
+                            title="Checkout cuma bisa lewat aplikasi mobile (perlu verifikasi lokasi)."
+                            className="flex-1 bg-slate-200 text-slate-400 px-4 py-3 rounded-xl font-semibold cursor-not-allowed"
                         >
-                            🚪 Checkout
+                            🚪 Checkout (lewat mobile)
                         </button>
 
                     </div>

@@ -37,6 +37,7 @@ function VisitActivityContent() {
     const params = useSearchParams()
     const visit_id = params.get('visit_id')
 
+    const [role, setRole] = useState('')
     const [activities, setActivities] = useState<any[]>([])
     const [products, setProducts] = useState<any[]>([])
     const [activityId, setActivityId] = useState('')
@@ -70,6 +71,10 @@ function VisitActivityContent() {
         }
 
     }
+
+    useEffect(() => {
+        setRole(localStorage.getItem('role') || '')
+    }, [])
 
     useEffect(() => {
         fetchActivities()
@@ -184,6 +189,33 @@ function VisitActivityContent() {
     }
 
     const sortedFields = [...fields].sort((a, b) => a.display_order - b.display_order)
+
+    // Tombol "+ Add Activity" di visit-detail sudah ADMINISTRATOR-only,
+    // tapi halaman ini sendiri tidak punya gerbang apa pun -- role lain
+    // (SUPERVISOR dkk) masih bisa submit lewat URL langsung. Input
+    // activity dari lapangan adalah tugas mobile (dengan foto+lokasi
+    // asli); role selain ADMINISTRATOR di web cuma boleh lihat.
+    if (role && role !== 'ADMINISTRATOR') {
+        return (
+            <div className="space-y-6 max-w-3xl mx-auto p-6">
+                <div className="bg-white rounded-3xl p-6 shadow-lg text-center">
+                    <h1 className="text-xl font-bold text-slate-900">
+                        Hanya Bisa Melihat
+                    </h1>
+                    <p className="text-slate-500 mt-2">
+                        Menambah activity dari lapangan dilakukan lewat aplikasi mobile.
+                        Role Anda di web cuma bisa melihat riwayat activity.
+                    </p>
+                    <button
+                        onClick={() => router.push(`/visit-detail/${visit_id}`)}
+                        className="mt-4 bg-blue-600 text-white px-5 py-3 rounded-xl font-semibold"
+                    >
+                        Kembali ke Detail Kunjungan
+                    </button>
+                </div>
+            </div>
+        )
+    }
 
     return (
         <div className="space-y-6 max-w-3xl mx-auto p-6">
