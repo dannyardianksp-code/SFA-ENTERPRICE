@@ -149,6 +149,26 @@ export default function MasterActivitiesPage() {
         setFieldList(prev => prev.map((f, i) => i === index ? { ...f, required: !f.required } : f))
     }
 
+    // Posisi field = urutan array ini -- dikirim apa adanya sebagai
+    // display_order saat saveFieldList (lihat PUT /activities/:id/fields,
+    // display_order diisi dari INDEX array, bukan field tersendiri di
+    // body). Tukar posisi dengan tetangga, bukan modal "pindah ke posisi
+    // N" -- cukup buat jarak field yang wajar, dan tidak perlu validasi
+    // input angka di luar jangkauan.
+    const moveField = (index: number, arah: -1 | 1) => {
+
+        const target = index + arah
+
+        if (target < 0 || target >= fieldList.length) return
+
+        setFieldList(prev => {
+            const next = prev.slice()
+            ;[next[index], next[target]] = [next[target], next[index]]
+            return next
+        })
+
+    }
+
     const saveFieldList = async () => {
 
         setFieldSaving(true)
@@ -566,6 +586,27 @@ export default function MasterActivitiesPage() {
                                                         : 'bg-slate-50 border-slate-200'
                                                 }`}
                                             >
+                                                <div className="flex flex-col gap-1">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => moveField(i, -1)}
+                                                        disabled={editingIndex !== null || i === 0}
+                                                        className="w-6 h-6 rounded border border-slate-200 bg-white text-xs leading-none disabled:opacity-30"
+                                                        title="Naik satu posisi"
+                                                    >
+                                                        ↑
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => moveField(i, 1)}
+                                                        disabled={editingIndex !== null || i === fieldList.length - 1}
+                                                        className="w-6 h-6 rounded border border-slate-200 bg-white text-xs leading-none disabled:opacity-30"
+                                                        title="Turun satu posisi"
+                                                    >
+                                                        ↓
+                                                    </button>
+                                                </div>
+                                                <span className="text-xs font-semibold text-slate-400 w-5 text-center">{i + 1}</span>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="font-semibold text-sm text-slate-900">{f.label}</div>
                                                     <div className="flex gap-2 mt-1 items-center flex-wrap">
