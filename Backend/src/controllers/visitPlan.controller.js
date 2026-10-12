@@ -362,7 +362,7 @@ exports.create =
 // ======================
 
 /** Field visit plan yang boleh diubah. Sisanya diabaikan. */
-const UPDATABLE_FIELDS = ['customer_id', 'visit_date']
+const UPDATABLE_FIELDS = ['customer_id', 'visit_date', 'user_id']
 
 exports.update =
     async (req, res) => {
@@ -430,6 +430,40 @@ exports.update =
                 if (req.body[field] !== undefined) {
                     perubahan[field] = req.body[field]
                 }
+            }
+
+            // Reassign sales: gerbang kepemilikan di atas (baris ~404-411)
+            // cuma memeriksa PEMILIK LAMA (visitPlan.user_id) -- supervisor
+            // yang boleh mengedit jadwal bawahannya sendiri bisa saja
+            // mencoba memindahkannya ke user_id MILIK ORANG LAIN yang
+            // sama sekali di luar subtree-nya. Sama persis pola di
+            // exports.create (lihat targetUserId di atas): parseId dulu
+            // (user_id: 0 lolos NOT NULL tapi jadi baris yatim, visit_plans
+            // tidak punya foreign key), baru gerbang subtree utk target
+            // BARU, baru verifikasi barisnya benar ada.
+            if (perubahan.user_id !== undefined) {
+
+                const targetUserId = parseId(perubahan.user_id)
+
+                if (targetUserId === null) {
+                    return sendError(res, 400, 'user_id harus id yang sah.')
+                }
+
+                const gerbangTarget =
+                    assertWithinSubtree(bolehDilihat, targetUserId)
+
+                if (gerbangTarget) {
+                    return sendError(res, gerbangTarget.status, gerbangTarget.message)
+                }
+
+                const salesBaru = await User.findByPk(targetUserId)
+
+                if (!salesBaru) {
+                    return sendError(res, 400, 'user_id tidak ditemukan.')
+                }
+
+                perubahan.user_id = targetUserId
+
             }
 
             if (Object.keys(perubahan).length === 0) {

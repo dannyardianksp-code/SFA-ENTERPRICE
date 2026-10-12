@@ -14,9 +14,11 @@ export default function EditVisitPlanPage() {
     const [saving, setSaving] = useState(false)
 
     const [customers, setCustomers] = useState<any[]>([])
+    const [salesUsers, setSalesUsers] = useState<any[]>([])
 
     const [plan, setPlan] = useState<any>(null)
 
+    const [userId, setUserId] = useState('')
     const [customerId, setCustomerId] = useState('')
     const [visitDate, setVisitDate] = useState('')
 
@@ -26,9 +28,13 @@ export default function EditVisitPlanPage() {
 
             const token = localStorage.getItem('token')
 
-            const [cRes, pRes] = await Promise.all([
+            const [cRes, uRes, pRes] = await Promise.all([
 
                 fetch(`${API_BASE_URL}/customers?status=ACTIVE`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                }),
+
+                fetch(`${API_BASE_URL}/users`, {
                     headers: { Authorization: `Bearer ${token}` }
                 }),
 
@@ -42,9 +48,11 @@ export default function EditVisitPlanPage() {
             ])
 
             const cData = await cRes.json()
+            const uData = await uRes.json()
             const pData = await pRes.json()
 
             setCustomers(Array.isArray(cData) ? cData : [])
+            setSalesUsers(Array.isArray(uData) ? uData : [])
 
             const found = Array.isArray(pData)
                 ? pData.find((p: any) => String(p.id) === String(params.id))
@@ -57,6 +65,7 @@ export default function EditVisitPlanPage() {
             }
 
             setPlan(found)
+            setUserId(String(found.user_id))
             setCustomerId(String(found.customer_id))
             setVisitDate(found.visit_date?.slice(0, 10) || '')
             setLoading(false)
@@ -91,6 +100,7 @@ export default function EditVisitPlanPage() {
                 },
 
                 body: JSON.stringify({
+                    user_id: userId,
                     customer_id: customerId,
                     visit_date: visitDate
                 })
@@ -193,13 +203,19 @@ export default function EditVisitPlanPage() {
                                 Sales
                             </label>
 
-                            <div className="w-full border rounded-xl p-3 mt-2 bg-slate-50 text-slate-500">
-                                {plan.User?.name}
-                            </div>
+                            <select
+                                className="w-full border rounded-xl p-3 mt-2"
+                                value={userId}
+                                onChange={(e) => setUserId(e.target.value)}
+                            >
 
-                            <p className="text-xs text-slate-400 mt-1">
-                                Sales tidak bisa diubah. Hapus rencana ini lalu buat yang baru.
-                            </p>
+                                {salesUsers.map((u: any) => (
+                                    <option key={u.id} value={u.id}>
+                                        {u.name}
+                                    </option>
+                                ))}
+
+                            </select>
 
                         </div>
 
