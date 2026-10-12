@@ -71,8 +71,18 @@ export default function ActivityListPage() {
 
         setActivities(Array.isArray(aData) ? aData : [])
         setSalesUsers(Array.isArray(uData) ? uData : [])
-        setAreas(Array.isArray(arData) ? arData : [])
         setActivityTypes(Array.isArray(tData) ? tData : [])
+
+        const daftarArea = Array.isArray(arData) ? arData : []
+        setAreas(daftarArea)
+
+        // Role terbatas cuma dapat 1 area dari /areas (lihat area.routes.js) --
+        // opsi "Semua Area" jadi tidak berguna (sama saja dengan area
+        // satu-satunya itu), jadi langsung pilihkan area itu daripada
+        // nampilin "Semua Area" yang menyesatkan.
+        if (daftarArea.length === 1) {
+            setAreaFilter(String(daftarArea[0].id))
+        }
 
         setLoading(false)
     }
@@ -271,7 +281,7 @@ export default function ActivityListPage() {
                         Area
                     </label>
                     <select value={areaFilter} onChange={e => setAreaFilter(e.target.value)}>
-                        <option value="ALL">Semua Area</option>
+                        {areas.length > 1 && <option value="ALL">Semua Area</option>}
                         {areas.map((a: any) => (
                             <option key={a.id} value={a.id}>{a.name}</option>
                         ))}
