@@ -26,13 +26,40 @@ export async function exportToExcel(
 
         const kolom = Object.keys(rows[0])
 
-        sheet.columns = kolom.map((key) => ({
-            header: key,
-            key,
-            width: Math.min(Math.max(key.length + 4, 14), 40)
-        }))
+        // Lebar kolom dari ISI DATA juga, bukan cuma panjang judulnya --
+        // sebelumnya "Catatan"/"Customer" yang judulnya pendek tapi
+        // isinya panjang selalu kepotong, harus di-resize manual tiap
+        // buka file. Link (hyperlink) dihitung dari teks tampilannya
+        // ("Buka Link"), bukan dari panjang URL aslinya -- URL bisa
+        // sangat panjang padahal yang kelihatan di sel cuma label pendek.
+        sheet.columns = kolom.map((key) => {
+
+            const panjangData = rows.map((r) => {
+                const nilai = r[key]
+                if (typeof nilai === 'string' && /^https?:\/\//.test(nilai)) {
+                    return 'Buka Link'.length
+                }
+                return String(nilai ?? '').length
+            })
+
+            const lebarKonten = Math.max(key.length, ...panjangData)
+
+            return {
+                header: key,
+                key,
+                width: Math.min(Math.max(lebarKonten + 2, 12), 45)
+            }
+
+        })
 
         sheet.getRow(1).font = { bold: true }
+
+        // Dropdown filter bawaan Excel di baris header -- penerima file
+        // bisa filter/sort langsung tanpa format ulang sendiri.
+        sheet.autoFilter = {
+            from: { row: 1, column: 1 },
+            to: { row: 1, column: kolom.length }
+        }
 
         // Nilai berupa URL (mis. link foto activity) dijadikan hyperlink
         // beneran yang bisa diklik -- bukan cuma teks biasa yang
