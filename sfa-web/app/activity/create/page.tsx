@@ -46,7 +46,11 @@ export default function MasterActivitiesPage() {
 
     const [newFieldLabel, setNewFieldLabel] = useState('')
     const [newFieldType, setNewFieldType] = useState<FieldType>('TEXT')
-    const [newFieldOptions, setNewFieldOptions] = useState('')
+    // Satu input per pilihan dropdown -- bukan satu textbox dipisah
+    // koma, biar user tidak perlu ketik koma sendiri. Selalu ada
+    // minimal 1 baris (boleh kosong) supaya tombol "+ Tambah Pilihan"
+    // selalu kelihatan.
+    const [newFieldOptionsList, setNewFieldOptionsList] = useState<string[]>([''])
     // '' = semua kategori produk, selain itu dikirim sebagai
     // options: [kategori] (lihat addFieldToList).
     const [newFieldProductCategory, setNewFieldProductCategory] = useState('')
@@ -86,7 +90,7 @@ export default function MasterActivitiesPage() {
     const resetFieldForm = () => {
         setNewFieldLabel('')
         setNewFieldType('TEXT')
-        setNewFieldOptions('')
+        setNewFieldOptionsList([''])
         setNewFieldProductCategory('')
         setNewFieldRequired(true)
         setEditingIndex(null)
@@ -99,15 +103,19 @@ export default function MasterActivitiesPage() {
     }
 
     // Isi form dari field yang sudah ada supaya bisa diedit -- bentuk
-    // baliknya persis dari addFieldToList (DROPDOWN options jadi string
-    // dipisah koma, PRODUCT options[0] jadi kategori terpilih).
+    // baliknya persis dari addFieldToList (DROPDOWN options jadi satu
+    // input per pilihan, PRODUCT options[0] jadi kategori terpilih).
     const startEditField = (index: number) => {
 
         const f = fieldList[index]
 
         setNewFieldLabel(f.label)
         setNewFieldType(f.field_type)
-        setNewFieldOptions(f.field_type === 'DROPDOWN' ? (f.options || []).join(', ') : '')
+        setNewFieldOptionsList(
+            f.field_type === 'DROPDOWN' && f.options && f.options.length > 0
+                ? f.options
+                : ['']
+        )
         setNewFieldProductCategory(f.field_type === 'PRODUCT' ? (f.options?.[0] || '') : '')
         setNewFieldRequired(f.required)
         setEditingIndex(index)
@@ -124,7 +132,7 @@ export default function MasterActivitiesPage() {
             required: newFieldRequired,
             options:
                 newFieldType === 'DROPDOWN'
-                    ? newFieldOptions.split(',').map(s => s.trim()).filter(Boolean)
+                    ? newFieldOptionsList.map(s => s.trim()).filter(Boolean)
                     : newFieldType === 'PRODUCT'
                         ? (newFieldProductCategory ? [newFieldProductCategory] : null)
                         : null,
@@ -138,6 +146,21 @@ export default function MasterActivitiesPage() {
 
         resetFieldForm()
 
+    }
+
+    const setOptionAt = (index: number, value: string) => {
+        setNewFieldOptionsList(prev => prev.map((o, i) => (i === index ? value : o)))
+    }
+
+    const addOptionRow = () => {
+        setNewFieldOptionsList(prev => [...prev, ''])
+    }
+
+    const removeOptionRow = (index: number) => {
+        setNewFieldOptionsList(prev => {
+            const next = prev.filter((_, i) => i !== index)
+            return next.length > 0 ? next : ['']
+        })
     }
 
     const removeFieldFromList = (index: number) => {
@@ -681,13 +704,34 @@ export default function MasterActivitiesPage() {
                                         </div>
 
                                         {newFieldType === 'DROPDOWN' && (
-                                            <input
-                                                type="text"
-                                                placeholder="Pilihan dropdown, pisah koma: A, B, C"
-                                                value={newFieldOptions}
-                                                onChange={(e) => setNewFieldOptions(e.target.value)}
-                                                className="border border-slate-200 rounded-lg px-3 py-2 text-sm"
-                                            />
+                                            <div className="flex flex-col gap-2">
+                                                {newFieldOptionsList.map((opt, i) => (
+                                                    <div key={i} className="flex gap-2">
+                                                        <input
+                                                            type="text"
+                                                            placeholder={`Pilihan ${i + 1}`}
+                                                            value={opt}
+                                                            onChange={(e) => setOptionAt(i, e.target.value)}
+                                                            className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => removeOptionRow(i)}
+                                                            className="w-9 h-9 rounded-lg border border-slate-200 bg-white text-red-600 text-sm"
+                                                            title="Hapus pilihan ini"
+                                                        >
+                                                            ✕
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                                <button
+                                                    type="button"
+                                                    onClick={addOptionRow}
+                                                    className="self-start text-sm text-blue-600 font-semibold"
+                                                >
+                                                    + Tambah Pilihan
+                                                </button>
+                                            </div>
                                         )}
 
                                         {newFieldType === 'PRODUCT' && (
