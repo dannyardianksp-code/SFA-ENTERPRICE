@@ -52,6 +52,46 @@ describe('validateDanSusunFieldValues', () => {
         assert.ok(hasil.error)
     })
 
+    test('PHOTO dengan photo_source CAMERA: ikut tersimpan', () => {
+        const hasil = validateDanSusunFieldValues(
+            [fieldFoto],
+            { values: JSON.stringify({ photo_source_1: 'CAMERA' }) },
+            fileFoto(1)
+        )
+
+        assert.strictEqual(hasil.error, undefined)
+        assert.strictEqual(hasil.fieldValues[1], '/uploads/abc-uji.jpg')
+        assert.strictEqual(hasil.fieldValues['photo_source_1'], 'CAMERA')
+    })
+
+    test('PHOTO dengan photo_source GALLERY: ikut tersimpan', () => {
+        const hasil = validateDanSusunFieldValues(
+            [fieldFoto],
+            { values: JSON.stringify({ photo_source_1: 'GALLERY' }) },
+            fileFoto(1)
+        )
+
+        assert.strictEqual(hasil.fieldValues['photo_source_1'], 'GALLERY')
+    })
+
+    test('PHOTO tanpa photo_source (app lama sebelum fitur ini): tidak ada key, tidak ditolak', () => {
+        const hasil = validateDanSusunFieldValues([fieldFoto], {}, fileFoto(1))
+
+        assert.strictEqual(hasil.error, undefined)
+        assert.strictEqual(hasil.fieldValues['photo_source_1'], undefined)
+    })
+
+    test('PHOTO dengan photo_source nilai tidak dikenal: diabaikan diam-diam, bukan ditolak', () => {
+        const hasil = validateDanSusunFieldValues(
+            [fieldFoto],
+            { values: JSON.stringify({ photo_source_1: 'SCREENSHOT' }) },
+            fileFoto(1)
+        )
+
+        assert.strictEqual(hasil.error, undefined)
+        assert.strictEqual(hasil.fieldValues['photo_source_1'], undefined)
+    })
+
     test('TEXT wajib terisi: valid', () => {
         const hasil = validateDanSusunFieldValues(
             [fieldNama],

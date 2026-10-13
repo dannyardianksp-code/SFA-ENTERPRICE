@@ -55,6 +55,8 @@ const hapusSemuaFile = (req) => {
  *
  * @returns {{error: string}|{fieldValues: object}}
  */
+const SUMBER_FOTO_VALID = ['CAMERA', 'GALLERY']
+
 const validateDanSusunFieldValues = (fieldDefs, body, files) => {
 
     let mentah = {}
@@ -83,6 +85,19 @@ const validateDanSusunFieldValues = (fieldDefs, body, files) => {
             }
 
             fieldValues[def.id] = `/uploads/${file.filename}`
+
+            // Opsional -- kamera langsung vs pilih dari galeri, dikirim
+            // klien lewat key terpisah di JSON `values` yang sama
+            // (bukan field definition sungguhan, jadi tidak ikut
+            // divalidasi/ditampilkan sebagai field biasa). Nilai yang
+            // tidak dikenal/field lama dari sebelum fitur ini diam-diam
+            // diabaikan, bukan ditolak -- informasi tambahan, bukan
+            // syarat activity bisa tersimpan.
+            const sumber = mentah[`photo_source_${def.id}`]
+            if (SUMBER_FOTO_VALID.includes(sumber)) {
+                fieldValues[`photo_source_${def.id}`] = sumber
+            }
+
             continue
 
         }
