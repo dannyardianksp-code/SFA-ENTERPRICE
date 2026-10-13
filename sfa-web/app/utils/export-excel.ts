@@ -34,7 +34,26 @@ export async function exportToExcel(
 
         sheet.getRow(1).font = { bold: true }
 
-        rows.forEach((row) => sheet.addRow(row))
+        // Nilai berupa URL (mis. link foto activity) dijadikan hyperlink
+        // beneran yang bisa diklik -- bukan cuma teks biasa yang
+        // kelihatan kayak link. ExcelJS TIDAK auto-deteksi ini sendiri;
+        // nilai string polos tetap jadi teks mati walau isinya "http...".
+        rows.forEach((row) => {
+
+            const excelRow = sheet.addRow(row)
+
+            kolom.forEach((key, i) => {
+                const nilai = row[key]
+
+                if (typeof nilai === 'string' && /^https?:\/\//.test(nilai)) {
+                    const cell = excelRow.getCell(i + 1)
+                    cell.value = { text: 'Buka Link', hyperlink: nilai }
+                    cell.font = { color: { argb: 'FF2563EB' }, underline: true }
+                }
+
+            })
+
+        })
 
     }
 

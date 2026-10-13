@@ -175,9 +175,15 @@ export default function ActivityListPage() {
     // yang cuma cocok buat sebagian activity.
     const handleExport = () => {
 
+        // PHOTO ikut diekspor (dulu difilter keluar) -- value-nya diganti
+        // jadi URL LENGKAP (UPLOADS_ORIGIN + path) supaya exportToExcel
+        // bisa mengenalinya sebagai link yang bisa diklik, sama seperti
+        // href yang dipakai thumbnail di tabel.
         const semuaBaris = filtered.map((a: any) => ({
             activity: a,
-            fields: fieldValuesArray(a).filter((f: any) => f.type !== 'PHOTO'),
+            fields: fieldValuesArray(a).map((f: any) =>
+                f.type === 'PHOTO' ? { ...f, value: `${UPLOADS_ORIGIN}${f.value}` } : f
+            ),
         }))
 
         const labelUnik = Array.from(
