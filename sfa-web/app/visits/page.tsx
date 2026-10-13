@@ -138,6 +138,7 @@ export default function VisitHistoryPage() {
             'No': i + 1,
             'Sales': v.User?.name || '-',
             'Customer': v.Customer?.name || '-',
+            'Group': v.Customer?.CustomerGroup?.name || '-',
             'Waktu Checkin': v.checkin_time
                 ? new Date(v.checkin_time).toLocaleString('id-ID')
                 : '-',
@@ -324,6 +325,7 @@ export default function VisitHistoryPage() {
                                 'No',
                                 'Sales',
                                 'Customer',
+                                'Group',
                                 'Time',
                                 'Latitude',
                                 'Longitude',
@@ -348,7 +350,7 @@ export default function VisitHistoryPage() {
 
                         {visitsHalamanIni.length === 0 && (
                             <tr>
-                                <td colSpan={7} style={{
+                                <td colSpan={8} style={{
                                     padding: 20,
                                     textAlign: 'center',
                                     color: '#9ca3af'
@@ -377,6 +379,10 @@ export default function VisitHistoryPage() {
 
                                 <td style={{ padding: 12 }}>
                                     <b>{v.Customer?.name || '-'}</b>
+                                </td>
+
+                                <td style={{ padding: 12 }}>
+                                    {v.Customer?.CustomerGroup?.name || '-'}
                                 </td>
 
                                 <td style={{ padding: 12 }}>

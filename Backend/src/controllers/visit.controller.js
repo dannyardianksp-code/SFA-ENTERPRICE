@@ -346,7 +346,13 @@ exports.getAll = async (req, res) => {
                 // tambahan field, tidak mengubah field yang sudah ada.
                 { model: User, attributes: ['id', 'name'] },
 
-                { model: Customer, attributes: ['name'] }
+                {
+                    model: Customer,
+                    attributes: ['name'],
+                    include: [
+                        { model: CustomerGroup, attributes: ['name'] }
+                    ]
+                }
 
             ],
 
