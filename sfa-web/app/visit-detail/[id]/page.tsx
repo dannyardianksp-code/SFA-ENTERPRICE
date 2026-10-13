@@ -303,17 +303,33 @@ export default function VisitDetailPage() {
                                     const nilai = a.field_values?.[def.id] ?? a.field_values?.[String(def.id)]
 
                                     if (def.field_type === 'PHOTO') {
+
+                                        // Sumber foto (kamera langsung vs galeri) -- info
+                                        // sensitif buat audit kejujuran lapangan, cuma
+                                        // ADMINISTRATOR yang boleh lihat, bukan sales/supervisor
+                                        // yang justru jadi subjek yang dipantau.
+                                        const sumberFoto = role === 'ADMINISTRATOR'
+                                            ? (a.field_values?.[`photo_source_${def.id}`] ?? a.field_values?.[`photo_source_${String(def.id)}`])
+                                            : undefined
+
                                         return (
                                             <div key={def.id} className="flex justify-between items-center">
                                                 <span className="text-slate-400">{def.label}</span>
                                                 {nilai ? (
-                                                    <a
-                                                        href={`${UPLOADS_ORIGIN}${nilai}`}
-                                                        target="_blank"
-                                                        className="text-blue-600 font-semibold text-sm"
-                                                    >
-                                                        📷 View Photo
-                                                    </a>
+                                                    <span className="flex items-center gap-2">
+                                                        {sumberFoto && (
+                                                            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                                                                {sumberFoto === 'GALLERY' ? 'Galeri' : 'Kamera'}
+                                                            </span>
+                                                        )}
+                                                        <a
+                                                            href={`${UPLOADS_ORIGIN}${nilai}`}
+                                                            target="_blank"
+                                                            className="text-blue-600 font-semibold text-sm"
+                                                        >
+                                                            📷 View Photo
+                                                        </a>
+                                                    </span>
                                                 ) : (
                                                     <span className="text-slate-400 text-sm">No Photo</span>
                                                 )}

@@ -21,6 +21,7 @@ const akhirBulanIni = () => {
 
 export default function ActivityListPage() {
 
+    const [role, setRole] = useState('')
     const [activities, setActivities] = useState<any[]>([])
     const [salesUsers, setSalesUsers] = useState<any[]>([])
     const [areas, setAreas] = useState<any[]>([])
@@ -88,6 +89,10 @@ export default function ActivityListPage() {
     }
 
     useEffect(() => {
+        setRole(localStorage.getItem('role') || '')
+    }, [])
+
+    useEffect(() => {
         fetchData()
     }, [])
 
@@ -123,6 +128,11 @@ export default function ActivityListPage() {
                 label: def.label,
                 type: def.field_type,
                 value: values[def.id] ?? values[String(def.id)],
+                // Cuma relevan buat PHOTO -- "CAMERA"/"GALLERY" kalau
+                // ada, bukan field definition sungguhan (lihat
+                // photo_source_<id> di backend). Visibility DIATUR di
+                // tempat dipakai (role-gated), bukan di sini.
+                source: values[`photo_source_${def.id}`] ?? values[`photo_source_${String(def.id)}`],
             }))
             .filter((f: any) => f.value !== undefined && f.value !== null && f.value !== '')
 
@@ -462,21 +472,34 @@ export default function ActivityListPage() {
                                     </td>
 
                                     <td style={{ padding: 12 }}>
-                                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                                             {fieldValuesArray(a)
                                                 .filter((f: any) => f.type === 'PHOTO')
                                                 .map((f: any) => (
-                                                    <a key={f.label} href={`${UPLOADS_ORIGIN}${f.value}`} target="_blank" rel="noopener noreferrer">
-                                                        <img
-                                                            src={`${UPLOADS_ORIGIN}${f.value}`}
-                                                            style={{
-                                                                width: 40,
-                                                                height: 40,
-                                                                objectFit: 'cover',
-                                                                borderRadius: 8
-                                                            }}
-                                                        />
-                                                    </a>
+                                                    <div key={f.label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                                                        <a href={`${UPLOADS_ORIGIN}${f.value}`} target="_blank" rel="noopener noreferrer">
+                                                            <img
+                                                                src={`${UPLOADS_ORIGIN}${f.value}`}
+                                                                style={{
+                                                                    width: 40,
+                                                                    height: 40,
+                                                                    objectFit: 'cover',
+                                                                    borderRadius: 8
+                                                                }}
+                                                            />
+                                                        </a>
+                                                        {/* Sumber foto -- info audit, ADMINISTRATOR saja */}
+                                                        {role === 'ADMINISTRATOR' && f.source && (
+                                                            <span style={{
+                                                                fontSize: 9,
+                                                                fontWeight: 700,
+                                                                textTransform: 'uppercase',
+                                                                color: '#64748b'
+                                                            }}>
+                                                                {f.source === 'GALLERY' ? 'Galeri' : 'Kamera'}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 ))}
                                             {fieldValuesArray(a).filter((f: any) => f.type === 'PHOTO').length === 0 && '-'}
                                         </div>
