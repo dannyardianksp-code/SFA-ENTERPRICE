@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { API_BASE_URL, UPLOADS_ORIGIN } from '@/app/utils/api-config'
 import { exportToExcel } from '@/app/utils/export-excel'
 
+const PAGE_SIZE = 10
+
 const pad2 = (n: number) => String(n).padStart(2, '0')
 
 // Awal dan akhir bulan berjalan, "YYYY-MM-DD" -- sama seperti default
@@ -33,6 +35,7 @@ export default function ActivityListPage() {
     const [salesFilter, setSalesFilter] = useState('ALL')
     const [activityFilter, setActivityFilter] = useState('ALL')
     const [product, setProduct] = useState('')
+    const [page, setPage] = useState(1)
 
     const [loading, setLoading] = useState(false)
 
@@ -174,6 +177,13 @@ export default function ActivityListPage() {
 
     })
 
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+    const halamanAman = Math.min(page, totalPages)
+    const activitiesHalamanIni = filtered.slice(
+        (halamanAman - 1) * PAGE_SIZE,
+        halamanAman * PAGE_SIZE
+    )
+
     // ======================
     // EXPORT EXCEL
     // ======================
@@ -282,21 +292,21 @@ export default function ActivityListPage() {
                     <label style={{ fontSize: 12, color: '#6b7280', display: 'block' }}>
                         Dari Tanggal
                     </label>
-                    <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+                    <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1) }} />
                 </div>
 
                 <div>
                     <label style={{ fontSize: 12, color: '#6b7280', display: 'block' }}>
                         Sampai Tanggal
                     </label>
-                    <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+                    <input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1) }} />
                 </div>
 
                 <div>
                     <label style={{ fontSize: 12, color: '#6b7280', display: 'block' }}>
                         Area
                     </label>
-                    <select value={areaFilter} onChange={e => setAreaFilter(e.target.value)}>
+                    <select value={areaFilter} onChange={e => { setAreaFilter(e.target.value); setPage(1) }}>
                         {areas.length > 1 && <option value="ALL">Semua Area</option>}
                         {areas.map((a: any) => (
                             <option key={a.id} value={a.id}>{a.name}</option>
@@ -308,7 +318,7 @@ export default function ActivityListPage() {
                     <label style={{ fontSize: 12, color: '#6b7280', display: 'block' }}>
                         Nama Sales
                     </label>
-                    <select value={salesFilter} onChange={e => setSalesFilter(e.target.value)}>
+                    <select value={salesFilter} onChange={e => { setSalesFilter(e.target.value); setPage(1) }}>
                         <option value="ALL">Semua Sales</option>
                         {salesUsers.map((u: any) => (
                             <option key={u.id} value={u.id}>{u.name}</option>
@@ -320,7 +330,7 @@ export default function ActivityListPage() {
                     <label style={{ fontSize: 12, color: '#6b7280', display: 'block' }}>
                         Kegiatan / Activity
                     </label>
-                    <select value={activityFilter} onChange={e => setActivityFilter(e.target.value)}>
+                    <select value={activityFilter} onChange={e => { setActivityFilter(e.target.value); setPage(1) }}>
                         <option value="ALL">Semua Kegiatan</option>
                         {activityTypes.map((t: any) => (
                             <option key={t.id} value={t.id}>{t.name}</option>
@@ -335,7 +345,7 @@ export default function ActivityListPage() {
                     <input
                         placeholder="Cari di field apa saja..."
                         value={product}
-                        onChange={e => setProduct(e.target.value)}
+                        onChange={e => { setProduct(e.target.value); setPage(1) }}
                     />
                 </div>
 
@@ -421,7 +431,7 @@ export default function ActivityListPage() {
 
                         <tbody>
 
-                            {filtered.length === 0 && (
+                            {activitiesHalamanIni.length === 0 && (
                                 <tr>
                                     <td colSpan={7} style={{
                                         padding: 20,
@@ -433,7 +443,7 @@ export default function ActivityListPage() {
                                 </tr>
                             )}
 
-                            {filtered.map((a: any) => (
+                            {activitiesHalamanIni.map((a: any) => (
                                 <tr
                                     key={a.id}
                                     style={{
@@ -511,6 +521,52 @@ export default function ActivityListPage() {
                         </tbody>
 
                     </table>
+
+                    {totalPages > 1 && (
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: 15,
+                            borderTop: '1px solid #eee'
+                        }}>
+                            <span style={{ fontSize: 13, color: '#6b7280' }}>
+                                Halaman {halamanAman} dari {totalPages} ({filtered.length} data)
+                            </span>
+
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button
+                                    onClick={() => setPage(halamanAman - 1)}
+                                    disabled={halamanAman <= 1}
+                                    style={{
+                                        padding: '8px 16px',
+                                        borderRadius: 8,
+                                        border: '1px solid #d1d5db',
+                                        background: 'white',
+                                        opacity: halamanAman <= 1 ? 0.4 : 1,
+                                        cursor: halamanAman <= 1 ? 'default' : 'pointer'
+                                    }}
+                                >
+                                    ‹ Sebelumnya
+                                </button>
+
+                                <button
+                                    onClick={() => setPage(halamanAman + 1)}
+                                    disabled={halamanAman >= totalPages}
+                                    style={{
+                                        padding: '8px 16px',
+                                        borderRadius: 8,
+                                        border: '1px solid #d1d5db',
+                                        background: 'white',
+                                        opacity: halamanAman >= totalPages ? 0.4 : 1,
+                                        cursor: halamanAman >= totalPages ? 'default' : 'pointer'
+                                    }}
+                                >
+                                    Berikutnya ›
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
                 </div>
 

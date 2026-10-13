@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { API_BASE_URL } from '@/app/utils/api-config'
 import { exportToExcel } from '@/app/utils/export-excel'
 
+const PAGE_SIZE = 10
+
 const pad2 = (n: number) => String(n).padStart(2, '0')
 
 // Awal dan akhir bulan berjalan, "YYYY-MM-DD" -- default tampilan
@@ -33,6 +35,7 @@ export default function VisitHistoryPage() {
     const [dateTo, setDateTo] = useState(akhirBulanIni())
     const [areaFilter, setAreaFilter] = useState('ALL')
     const [salesFilter, setSalesFilter] = useState('ALL')
+    const [page, setPage] = useState(1)
 
     const router = useRouter()
 
@@ -116,6 +119,13 @@ export default function VisitHistoryPage() {
 
     })
 
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+    const halamanAman = Math.min(page, totalPages)
+    const visitsHalamanIni = filtered.slice(
+        (halamanAman - 1) * PAGE_SIZE,
+        halamanAman * PAGE_SIZE
+    )
+
     // ======================
     // EXPORT EXCEL
     // ======================
@@ -178,7 +188,7 @@ export default function VisitHistoryPage() {
                 <input
                     placeholder="🔍 Search customer / sales..."
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => { setSearch(e.target.value); setPage(1) }}
                     style={{
                         flex: 1,
                         padding: 12,
@@ -218,7 +228,7 @@ export default function VisitHistoryPage() {
                     <input
                         type="date"
                         value={dateFrom}
-                        onChange={(e) => setDateFrom(e.target.value)}
+                        onChange={(e) => { setDateFrom(e.target.value); setPage(1) }}
                         style={{
                             display: 'block',
                             padding: 12,
@@ -235,7 +245,7 @@ export default function VisitHistoryPage() {
                     <input
                         type="date"
                         value={dateTo}
-                        onChange={(e) => setDateTo(e.target.value)}
+                        onChange={(e) => { setDateTo(e.target.value); setPage(1) }}
                         style={{
                             display: 'block',
                             padding: 12,
@@ -251,7 +261,7 @@ export default function VisitHistoryPage() {
                     </label>
                     <select
                         value={areaFilter}
-                        onChange={(e) => setAreaFilter(e.target.value)}
+                        onChange={(e) => { setAreaFilter(e.target.value); setPage(1) }}
                         style={{
                             display: 'block',
                             padding: 12,
@@ -274,7 +284,7 @@ export default function VisitHistoryPage() {
                     </label>
                     <select
                         value={salesFilter}
-                        onChange={(e) => setSalesFilter(e.target.value)}
+                        onChange={(e) => { setSalesFilter(e.target.value); setPage(1) }}
                         style={{
                             display: 'block',
                             padding: 12,
@@ -336,7 +346,7 @@ export default function VisitHistoryPage() {
 
                     <tbody>
 
-                        {filtered.length === 0 && (
+                        {visitsHalamanIni.length === 0 && (
                             <tr>
                                 <td colSpan={7} style={{
                                     padding: 20,
@@ -348,7 +358,7 @@ export default function VisitHistoryPage() {
                             </tr>
                         )}
 
-                        {filtered.map((v, i) => (
+                        {visitsHalamanIni.map((v, i) => (
 
                             <tr
                                 key={v.id}
@@ -430,6 +440,52 @@ export default function VisitHistoryPage() {
                     </tbody>
 
                 </table>
+
+                {totalPages > 1 && (
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: 15,
+                        borderTop: '1px solid #eee'
+                    }}>
+                        <span style={{ fontSize: 13, color: '#6b7280' }}>
+                            Halaman {halamanAman} dari {totalPages} ({filtered.length} data)
+                        </span>
+
+                        <div style={{ display: 'flex', gap: 8 }}>
+                            <button
+                                onClick={() => setPage(halamanAman - 1)}
+                                disabled={halamanAman <= 1}
+                                style={{
+                                    padding: '8px 16px',
+                                    borderRadius: 8,
+                                    border: '1px solid #d1d5db',
+                                    background: 'white',
+                                    opacity: halamanAman <= 1 ? 0.4 : 1,
+                                    cursor: halamanAman <= 1 ? 'default' : 'pointer'
+                                }}
+                            >
+                                ‹ Sebelumnya
+                            </button>
+
+                            <button
+                                onClick={() => setPage(halamanAman + 1)}
+                                disabled={halamanAman >= totalPages}
+                                style={{
+                                    padding: '8px 16px',
+                                    borderRadius: 8,
+                                    border: '1px solid #d1d5db',
+                                    background: 'white',
+                                    opacity: halamanAman >= totalPages ? 0.4 : 1,
+                                    cursor: halamanAman >= totalPages ? 'default' : 'pointer'
+                                }}
+                            >
+                                Berikutnya ›
+                            </button>
+                        </div>
+                    </div>
+                )}
 
             </div>
 

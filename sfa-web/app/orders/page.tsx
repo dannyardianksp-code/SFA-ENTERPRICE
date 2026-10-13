@@ -7,9 +7,19 @@ import { getToken } from '../utils/auth'
 import { API_BASE_URL } from '@/app/utils/api-config'
 import { exportToExcel } from '@/app/utils/export-excel'
 
+const PAGE_SIZE = 10
+
 export default function OrdersPage() {
     const [orders, setOrders] = useState<any[]>([])
+    const [page, setPage] = useState(1)
     const router = useRouter()
+
+    const totalPages = Math.max(1, Math.ceil(orders.length / PAGE_SIZE))
+    const halamanAman = Math.min(page, totalPages)
+    const ordersHalamanIni = orders.slice(
+        (halamanAman - 1) * PAGE_SIZE,
+        halamanAman * PAGE_SIZE
+    )
 
     useEffect(() => {
         const token = getToken()
@@ -146,7 +156,7 @@ Jarak: ${data.distance} meter`
                 </thead>
 
                 <tbody>
-                    {orders.map((o, i) => (
+                    {ordersHalamanIni.map((o, i) => (
                         <tr key={o.id}>
                             <td>{i + 1}</td>
                             <td>{o.doc_no}</td>
@@ -162,6 +172,51 @@ Jarak: ${data.distance} meter`
                     ))}
                 </tbody>
             </table>
+
+            {totalPages > 1 && (
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: 15
+                }}>
+                    <span style={{ fontSize: 13, color: '#6b7280' }}>
+                        Halaman {halamanAman} dari {totalPages} ({orders.length} data)
+                    </span>
+
+                    <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                            onClick={() => setPage(halamanAman - 1)}
+                            disabled={halamanAman <= 1}
+                            style={{
+                                padding: '8px 16px',
+                                borderRadius: 8,
+                                border: '1px solid #d1d5db',
+                                background: 'white',
+                                opacity: halamanAman <= 1 ? 0.4 : 1,
+                                cursor: halamanAman <= 1 ? 'default' : 'pointer'
+                            }}
+                        >
+                            ‹ Sebelumnya
+                        </button>
+
+                        <button
+                            onClick={() => setPage(halamanAman + 1)}
+                            disabled={halamanAman >= totalPages}
+                            style={{
+                                padding: '8px 16px',
+                                borderRadius: 8,
+                                border: '1px solid #d1d5db',
+                                background: 'white',
+                                opacity: halamanAman >= totalPages ? 0.4 : 1,
+                                cursor: halamanAman >= totalPages ? 'default' : 'pointer'
+                            }}
+                        >
+                            Berikutnya ›
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
 
     )
