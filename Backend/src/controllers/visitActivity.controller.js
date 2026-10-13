@@ -1,4 +1,5 @@
 const fs = require('fs')
+const path = require('path')
 
 const { Op } =
     require('sequelize')
@@ -565,6 +566,103 @@ exports.getByVisit =
         }
 
     }
+
+// ======================
+// DELETE
+// ======================
+
+/**
+ * Hapus satu file foto dari disk berdasarkan path relatif yang
+ * tersimpan di field_values (mis. "/uploads/abc.jpg"). Diam-diam
+ * dilewati kalau filenya sudah tidak ada -- hapus activity TIDAK
+ * BOLEH gagal cuma karena file fisiknya sudah hilang duluan.
+ */
+const hapusFileFoto = (urlRelatif) => {
+
+    if (typeof urlRelatif !== 'string' || !urlRelatif.startsWith('/uploads/')) {
+        return
+    }
+
+    const namaFile = urlRelatif.slice('/uploads/'.length)
+
+    try {
+        fs.unlinkSync(path.join('uploads', namaFile))
+    } catch {
+        // Sudah tidak ada -- bukan error buat alur hapus activity.
+    }
+
+}
+
+/**
+ * Hapus + input ulang, bukan edit in-place -- keputusan produk
+ * (AddActivityScreen sudah cukup kompleks: 5 tipe field + foto+lokasi+
+ * watermark, duplikasi logika prefill buat semua itu demi jalur koreksi
+ * yang jarang dipakai tidak sepadan). Dibatasi SEBELUM checkout saja,
+ * sama pola dengan VisitPlan yang cuma bisa diedit selagi PENDING --
+ * activity milik kunjungan yang sudah selesai (checkout_time terisi)
+ * adalah catatan historis, terkunci selamanya.
+ */
+exports.remove = async (req, res) => {
+
+    try {
+
+        const id = parseId(req.params.id)
+
+        if (id === null) {
+            return sendError(res, 400, 'Id activity tidak valid.')
+        }
+
+        const activity = await VisitActivity.findByPk(id, {
+            include: [
+                { model: Visit },
+                {
+                    model: Activity,
+                    as: 'Activity',
+                    include: [{ model: ActivityFieldDefinition, as: 'FieldDefinitions' }],
+                },
+            ],
+        })
+
+        if (!activity) {
+            return sendError(res, 404, 'Activity tidak ditemukan.')
+        }
+
+        // Personal, sama seperti create -- SPG cuma boleh hapus activity
+        // di kunjungannya sendiri.
+        if (activity.Visit.user_id !== req.user.id) {
+            return sendError(res, 403, 'Kunjungan ini bukan milik Anda.')
+        }
+
+        if (activity.Visit.checkout_time) {
+            return sendError(
+                res,
+                400,
+                'Kunjungan ini sudah checkout -- activity tidak bisa dihapus lagi.'
+            )
+        }
+
+        // File foto DIHAPUS DULU, baru baris DB -- kalau urutan dibalik
+        // dan unlink gagal di tengah jalan, baris DB sudah hilang padahal
+        // filenya masih nyangkut (orphan permanen, tidak ada field_values
+        // lagi buat melacaknya).
+        const defs = activity.Activity?.FieldDefinitions || []
+        const nilai = activity.field_values || {}
+
+        for (const def of defs) {
+            if (def.field_type === 'PHOTO') {
+                hapusFileFoto(nilai[def.id] ?? nilai[String(def.id)])
+            }
+        }
+
+        await activity.destroy()
+
+        res.json({ message: 'Activity berhasil dihapus.' })
+
+    } catch (err) {
+        return sendServerError(res, err, 'DELETE VISIT ACTIVITY')
+    }
+
+}
 
 // Diekspor cuma buat tes unit -- fungsi murni, tidak menyentuh
 // req/res/DB, jadi bisa diuji langsung tanpa server.

@@ -18,7 +18,12 @@ const SUPERVISOR = 3
 // activity_id tetap (Activity Master) -- field-nya sendiri sekarang
 // dinamis (activity_field_definitions), jadi diambil lewat API di
 // before() di bawah, bukan di-hardcode di sini.
-const ACTIVITY_FOTO = 11
+// Activity id 11 ("FOTO") sempat dipakai di sini tapi sudah dihapus
+// dari Activity Master (field definition-nya sendiri masih nyangkut
+// yatim di activity_field_definitions -- tidak ada FK constraint).
+// Activity 7 "GRAND OPENING" punya bentuk field IDENTIK (Catatan
+// opsional + Foto wajib), jadi dipakai sebagai gantinya.
+const ACTIVITY_FOTO = 7
 const ACTIVITY_STOCK = 4
 
 let db
@@ -474,6 +479,121 @@ describe('POST /api/visit-activities -- batas upload', () => {
         // sebelum sempat sampai body JSON ini.
         assert.strictEqual(res.status, 200)
         assert.strictEqual(typeof data.inserted, 'number')
+    })
+
+})
+
+describe('DELETE /api/visit-activities/:id', () => {
+
+    let visitMilikMD
+    let visitSudahCheckout
+
+    before(async () => {
+        const [customerRow] = await db.query(
+            'SELECT id FROM customers WHERE id NOT IN (97, 123) LIMIT 1'
+        )
+
+        const customerId = customerRow[0].id
+
+        const [v1] = await db.query(
+            `INSERT INTO visits (user_id, customer_id, checkin_time)
+             VALUES (?, ?, NOW())`,
+            [MD, customerId]
+        )
+
+        visitMilikMD = v1.insertId
+        visitIdsDibuat.push(visitMilikMD)
+
+        const [v2] = await db.query(
+            `INSERT INTO visits (user_id, customer_id, checkin_time, checkout_time)
+             VALUES (?, ?, NOW(), NOW())`,
+            [MD, customerId]
+        )
+
+        visitSudahCheckout = v2.insertId
+        visitIdsDibuat.push(visitSudahCheckout)
+    })
+
+    test('MD menghapus activity miliknya sendiri sebelum checkout: berhasil, file foto ikut terhapus', async () => {
+        const fotoField = cariField(fieldsFoto, 'Foto')
+
+        const { data: dibuat } = await kirimActivity(MD, {
+            visitId: visitMilikMD,
+            activityId: ACTIVITY_FOTO,
+            photoFieldId: fotoField.id,
+        })
+
+        activityIdsDibuat.push(dibuat.id)
+
+        const [sebelum] = await db.query(
+            'SELECT field_values FROM visit_activities WHERE id = ?',
+            [dibuat.id]
+        )
+        const fieldValuesSebelum = typeof sebelum[0].field_values === 'string'
+            ? JSON.parse(sebelum[0].field_values)
+            : sebelum[0].field_values
+        const lokasiFile = path.join(
+            __dirname, '..', '..', 'uploads',
+            fieldValuesSebelum[fotoField.id].replace('/uploads/', '')
+        )
+        assert.ok(fs.existsSync(lokasiFile), 'file foto belum ada sebelum dihapus')
+
+        const { status, data } = await kirim('DELETE', `/api/visit-activities/${dibuat.id}`, MD)
+
+        assert.strictEqual(status, 200, JSON.stringify(data))
+
+        const [sesudah] = await db.query(
+            'SELECT id FROM visit_activities WHERE id = ?',
+            [dibuat.id]
+        )
+        assert.strictEqual(sesudah.length, 0, 'baris masih ada di DB setelah dihapus')
+
+        assert.strictEqual(fs.existsSync(lokasiFile), false, 'file foto masih tertinggal setelah dihapus')
+    })
+
+    test('user lain mencoba hapus activity bukan miliknya: ditolak 403, baris tetap ada', async () => {
+        const { data: dibuat } = await kirimActivity(MD, {
+            visitId: visitMilikMD,
+            activityId: ACTIVITY_STOCK,
+            values: {
+                [cariField(fieldsStock, 'Nama Produk').id]: 'Kara 65ml',
+                [cariField(fieldsStock, 'Qty').id]: '5',
+                [cariField(fieldsStock, 'Tanggal Kadaluarsa').id]: '2026-12-01',
+            },
+        })
+
+        activityIdsDibuat.push(dibuat.id)
+
+        const { status } = await kirim('DELETE', `/api/visit-activities/${dibuat.id}`, MD_LUAR)
+
+        assert.strictEqual(status, 403)
+
+        const [rows] = await db.query('SELECT id FROM visit_activities WHERE id = ?', [dibuat.id])
+        assert.strictEqual(rows.length, 1)
+    })
+
+    test('activity di kunjungan yang sudah checkout: ditolak 400, tidak terhapus', async () => {
+        const [insertResult] = await db.query(
+            `INSERT INTO visit_activities (visit_id, activity_id, field_values, created_at)
+             VALUES (?, ?, ?, NOW())`,
+            [visitSudahCheckout, ACTIVITY_STOCK, JSON.stringify({})]
+        )
+
+        const idActivityLama = insertResult.insertId
+        activityIdsDibuat.push(idActivityLama)
+
+        const { status, data } = await kirim('DELETE', `/api/visit-activities/${idActivityLama}`, MD)
+
+        assert.strictEqual(status, 400, JSON.stringify(data))
+
+        const [rows] = await db.query('SELECT id FROM visit_activities WHERE id = ?', [idActivityLama])
+        assert.strictEqual(rows.length, 1)
+    })
+
+    test('activity_id yang tidak ada: 404', async () => {
+        const { status } = await kirim('DELETE', '/api/visit-activities/999999999', MD)
+
+        assert.strictEqual(status, 404)
     })
 
 })

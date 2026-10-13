@@ -11,6 +11,7 @@ const upload = require('../middleware/upload.middleware')
 router.post('/', auth, upload.any(), controller.create)
 router.get('/', auth, controller.getAll)
 router.get('/visit/:id', auth, controller.getByVisit)
+router.delete('/:id', auth, controller.remove)
 
 
 module.exports = router
