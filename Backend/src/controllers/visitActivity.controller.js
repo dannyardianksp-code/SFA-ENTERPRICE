@@ -13,6 +13,9 @@ const Visit =
 const Customer =
     require('../models/customer.model')
 
+const CustomerGroup =
+    require('../models/customerGroup.model')
+
 const User =
     require('../models/user.model')
 
@@ -428,7 +431,10 @@ exports.getAll = async (req, res) => {
                         include: [
 
                             {
-                                model: Customer
+                                model: Customer,
+                                include: [
+                                    { model: CustomerGroup, attributes: ['name'] }
+                                ]
                             },
 
                             {

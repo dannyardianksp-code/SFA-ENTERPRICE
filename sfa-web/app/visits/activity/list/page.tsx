@@ -219,6 +219,7 @@ export default function ActivityListPage() {
                 'Tanggal': new Date(a.created_at).toLocaleDateString('id-ID'),
                 'Sales': a.Visit?.User?.name || '-',
                 'Customer': a.Visit?.Customer?.name || '-',
+                'Group': a.Visit?.Customer?.CustomerGroup?.name || '-',
                 'Activity': a.Activity?.name || '-',
             }
 
@@ -410,6 +411,7 @@ export default function ActivityListPage() {
                                     'Date',
                                     'Sales',
                                     'Customer',
+                                    'Group',
                                     'Activity',
                                     'Detail',
                                     'Photo'
@@ -433,7 +435,7 @@ export default function ActivityListPage() {
 
                             {activitiesHalamanIni.length === 0 && (
                                 <tr>
-                                    <td colSpan={7} style={{
+                                    <td colSpan={8} style={{
                                         padding: 20,
                                         textAlign: 'center',
                                         color: '#9ca3af'
@@ -464,6 +466,10 @@ export default function ActivityListPage() {
 
                                     <td style={{ padding: 12 }}>
                                         {badge(a.Visit?.Customer?.name || '-')}
+                                    </td>
+
+                                    <td style={{ padding: 12 }}>
+                                        {a.Visit?.Customer?.CustomerGroup?.name || '-'}
                                     </td>
 
                                     <td style={{ padding: 12 }}>
