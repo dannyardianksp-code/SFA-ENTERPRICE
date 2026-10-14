@@ -21,6 +21,7 @@ export default function EditVisitPlanPage() {
     const [userId, setUserId] = useState('')
     const [customerId, setCustomerId] = useState('')
     const [visitDate, setVisitDate] = useState('')
+    const [tokoSearch, setTokoSearch] = useState('')
 
     useEffect(() => {
 
@@ -225,17 +226,33 @@ export default function EditVisitPlanPage() {
                                 Toko
                             </label>
 
+                            <input
+                                type="text"
+                                placeholder="Cari nama toko..."
+                                className="w-full border rounded-xl p-3 mt-2"
+                                value={tokoSearch}
+                                onChange={(e) => setTokoSearch(e.target.value)}
+                            />
+
                             <select
                                 className="w-full border rounded-xl p-3 mt-2"
                                 value={customerId}
                                 onChange={(e) => setCustomerId(e.target.value)}
                             >
 
-                                {customers.map((c: any) => (
-                                    <option key={c.id} value={c.id}>
-                                        {c.name}
-                                    </option>
-                                ))}
+                                {customers
+                                    // Toko yang sedang terpilih tetap tampil walau tidak
+                                    // cocok pencarian -- biar pilihan yang sudah ada tidak
+                                    // hilang begitu user ngetik di kolom cari.
+                                    .filter((c: any) =>
+                                        String(c.id) === customerId ||
+                                        c.name.toLowerCase().includes(tokoSearch.toLowerCase())
+                                    )
+                                    .map((c: any) => (
+                                        <option key={c.id} value={c.id}>
+                                            {c.name}
+                                        </option>
+                                    ))}
 
                             </select>
 
