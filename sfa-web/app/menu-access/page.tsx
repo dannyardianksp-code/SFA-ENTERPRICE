@@ -21,17 +21,26 @@ const CONFIGURABLE_ROLES = [
     'GENERAL MANAGER',
 ]
 
-type AccessByRole = Record<string, Record<string, boolean>>
+// Kunci access disimpan per "<channel_id>|<role>" -- TIDAK ADA baris
+// "semua channel", tiap channel ngatur sendiri-sendiri dari titik awal
+// yang sama (default per grup), persis seperti tiap role sebelumnya.
+type AccessByChannelRole = Record<string, Record<string, boolean>>
 
-const buildDefaultAccess = (): AccessByRole => {
-    const acc: AccessByRole = {}
+type ChannelRow = { id: number; code: string; name: string }
 
-    CONFIGURABLE_ROLES.forEach((role) => {
-        acc[role] = {}
+const accessKey = (channelId: number | string, role: string) => `${channelId}|${role}`
 
-        SIDEBAR_MENU_GROUPS.forEach((group) => {
-            group.items.forEach((item) => {
-                acc[role][item.key] = isMenuVisibleByDefault(group.key)
+const buildDefaultAccess = (channels: ChannelRow[]): AccessByChannelRole => {
+    const acc: AccessByChannelRole = {}
+
+    channels.forEach((ch) => {
+        CONFIGURABLE_ROLES.forEach((role) => {
+            acc[accessKey(ch.id, role)] = {}
+
+            SIDEBAR_MENU_GROUPS.forEach((group) => {
+                group.items.forEach((item) => {
+                    acc[accessKey(ch.id, role)][item.key] = isMenuVisibleByDefault(group.key)
+                })
             })
         })
     })
@@ -43,10 +52,12 @@ export default function MenuAccessPage() {
 
     const [role, setRole] = useState('')
     const [loading, setLoading] = useState(true)
+    const [channels, setChannels] = useState<ChannelRow[]>([])
+    const [selectedChannelId, setSelectedChannelId] = useState<number | null>(null)
     const [selectedRole, setSelectedRole] = useState('SUPERVISOR')
-    const [access, setAccess] = useState<AccessByRole>(buildDefaultAccess())
+    const [access, setAccess] = useState<AccessByChannelRole>({})
     const [saving, setSaving] = useState(false)
-    const [savedForRole, setSavedForRole] = useState<string | null>(null)
+    const [savedFor, setSavedFor] = useState<string | null>(null)
 
     useEffect(() => {
         setRole(localStorage.getItem('role') || '')
@@ -60,28 +71,44 @@ export default function MenuAccessPage() {
 
             const token = localStorage.getItem('token')
 
-            const res = await fetch(`${API_BASE_URL}/role-menu-access`, {
-                headers: { Authorization: `Bearer ${token}` },
-            })
+            const [chRes, accessRes] = await Promise.all([
+                fetch(`${API_BASE_URL}/channels`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                }),
+                fetch(`${API_BASE_URL}/role-menu-access`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                }),
+            ])
 
-            if (!res.ok) {
+            if (!chRes.ok) {
                 setLoading(false)
                 return
             }
 
-            const rows: { role: string; menu_key: string; visible: boolean }[] =
-                await res.json()
+            const chData: ChannelRow[] = await chRes.json()
+            setChannels(chData)
+            setSelectedChannelId((prev) => prev ?? chData[0]?.id ?? null)
+
+            if (!accessRes.ok) {
+                setAccess(buildDefaultAccess(chData))
+                setLoading(false)
+                return
+            }
+
+            const rows: { channel_id: number; role: string; menu_key: string; visible: boolean }[] =
+                await accessRes.json()
 
             // Mulai dari default per grup -- baris dari server cuma
-            // override (lihat migration 016-create-role-menu-overrides.sql),
+            // override (lihat migration 025-add-channel-id-to-role-menu-overrides.sql),
             // bukan matriks penuh, jadi harus digabung di sini supaya
             // checkbox-nya nunjukin status SEBENARNYA (default ATAU
             // override), bukan cuma yang eksplisit tersimpan.
-            const merged = buildDefaultAccess()
+            const merged = buildDefaultAccess(chData)
 
             rows.forEach((row) => {
-                if (!merged[row.role]) return
-                merged[row.role][row.menu_key] = !!row.visible
+                const key = accessKey(row.channel_id, row.role)
+                if (!merged[key]) return
+                merged[key][row.menu_key] = !!row.visible
             })
 
             setAccess(merged)
@@ -93,21 +120,27 @@ export default function MenuAccessPage() {
 
     }, [])
 
+    const currentKey = selectedChannelId !== null ? accessKey(selectedChannelId, selectedRole) : ''
+
     const toggleItem = (menuKey: string) => {
+
+        if (!currentKey) return
 
         setAccess((prev) => ({
             ...prev,
-            [selectedRole]: {
-                ...prev[selectedRole],
-                [menuKey]: !prev[selectedRole]?.[menuKey],
+            [currentKey]: {
+                ...prev[currentKey],
+                [menuKey]: !prev[currentKey]?.[menuKey],
             },
         }))
 
-        setSavedForRole(null)
+        setSavedFor(null)
 
     }
 
     const handleSave = async () => {
+
+        if (selectedChannelId === null) return
 
         setSaving(true)
 
@@ -116,7 +149,7 @@ export default function MenuAccessPage() {
         const items = SIDEBAR_MENU_GROUPS.flatMap((group) =>
             group.items.map((item) => ({
                 menu_key: item.key,
-                visible: !!access[selectedRole]?.[item.key],
+                visible: !!access[currentKey]?.[item.key],
             }))
         )
 
@@ -128,7 +161,11 @@ export default function MenuAccessPage() {
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${token}`,
                 },
-                body: JSON.stringify({ role: selectedRole, items }),
+                body: JSON.stringify({
+                    channel_id: selectedChannelId,
+                    role: selectedRole,
+                    items,
+                }),
             })
 
             if (!res.ok) {
@@ -137,7 +174,7 @@ export default function MenuAccessPage() {
                 return
             }
 
-            setSavedForRole(selectedRole)
+            setSavedFor(currentKey)
 
         } finally {
 
@@ -169,7 +206,19 @@ export default function MenuAccessPage() {
         )
     }
 
-    const roleAccess = access[selectedRole] || {}
+    if (channels.length === 0) {
+        return (
+            <div className="p-6">
+                <div className="bg-white rounded-3xl p-6 shadow-lg">
+                    <p className="text-slate-500">
+                        Belum ada Channel -- tambah Channel dulu sebelum mengatur Menu Access.
+                    </p>
+                </div>
+            </div>
+        )
+    }
+
+    const roleAccess = access[currentKey] || {}
 
     return (
         <div className="p-6 flex flex-col lg:flex-row gap-6">
@@ -180,15 +229,37 @@ export default function MenuAccessPage() {
                 <div className="bg-white rounded-3xl p-6 shadow-lg mb-5">
                     <h1 className="text-3xl font-bold text-slate-900">🔐 Menu Access</h1>
                     <p className="text-slate-500 mt-2">
-                        Atur menu mana yang keliatan di sidebar buat tiap role
+                        Atur menu mana yang keliatan di sidebar per channel &amp; role --
+                        tiap channel ngatur sendiri, tidak ada aturan bersama.
                     </p>
                 </div>
 
+                <div className="mb-1 text-xs font-bold text-slate-400 uppercase tracking-wide">
+                    1. Channel
+                </div>
+                <div className="flex gap-2 mb-4 flex-wrap">
+                    {channels.map((ch) => (
+                        <button
+                            key={ch.id}
+                            onClick={() => { setSelectedChannelId(ch.id); setSavedFor(null) }}
+                            className={`px-4 py-2.5 rounded-xl text-xs font-bold border ${ch.id === selectedChannelId
+                                ? 'bg-blue-600 border-blue-600 text-white'
+                                : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                                }`}
+                        >
+                            {ch.name}
+                        </button>
+                    ))}
+                </div>
+
+                <div className="mb-1 text-xs font-bold text-slate-400 uppercase tracking-wide">
+                    2. Jabatan
+                </div>
                 <div className="flex gap-2 mb-2 flex-wrap">
                     {CONFIGURABLE_ROLES.map((r) => (
                         <button
                             key={r}
-                            onClick={() => setSelectedRole(r)}
+                            onClick={() => { setSelectedRole(r); setSavedFor(null) }}
                             className={`px-4 py-2.5 rounded-xl text-xs font-bold border ${r === selectedRole
                                 ? 'bg-blue-600 border-blue-600 text-white'
                                 : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
@@ -253,9 +324,9 @@ export default function MenuAccessPage() {
                     {saving ? 'Menyimpan...' : 'Simpan Menu Access'}
                 </button>
 
-                {savedForRole === selectedRole && (
+                {savedFor === currentKey && (
                     <p className="text-sm font-semibold text-green-600 mt-3">
-                        ✅ Tersimpan buat role {selectedRole}
+                        ✅ Tersimpan buat {channels.find((c) => c.id === selectedChannelId)?.name} -- {selectedRole}
                     </p>
                 )}
 
@@ -265,7 +336,7 @@ export default function MenuAccessPage() {
             <div className="w-full lg:w-72 flex-shrink-0 bg-slate-950 rounded-3xl p-5 flex flex-col gap-5 self-start">
 
                 <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">
-                    Preview sidebar -- {selectedRole}
+                    Preview sidebar -- {channels.find((c) => c.id === selectedChannelId)?.name} -- {selectedRole}
                 </div>
 
                 <div className="border-b border-slate-800 pb-4">

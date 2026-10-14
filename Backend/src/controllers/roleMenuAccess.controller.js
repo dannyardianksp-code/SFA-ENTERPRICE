@@ -8,6 +8,7 @@ const {
 } = require('../utils/access.util')
 
 const RoleMenuOverride = require('../models/roleMenuOverride.model')
+const Channel = require('../models/channel.model')
 
 // Role yang bisa diatur lewat fitur ini.
 // - ADMINISTRATOR SENGAJA tidak termasuk -- selalu lihat semua menu
@@ -54,7 +55,10 @@ exports.getAll = async (req, res) => {
 
 // ======================
 // GET MINE -- dipakai Sidebar, BUKAN admin-only (semua role login
-// perlu tau menu mana yang keliatan buat dirinya sendiri)
+// perlu tau menu mana yang keliatan buat dirinya sendiri). Disaring
+// per channel user ITU SENDIRI -- user tanpa channel (channel_id NULL)
+// tidak akan cocok baris mana pun, otomatis jatuh ke default per grup
+// di Sidebar, sama seperti role yang belum pernah di-override.
 // ======================
 exports.getMine = async (req, res) => {
 
@@ -67,7 +71,10 @@ exports.getMine = async (req, res) => {
         }
 
         const rows = await RoleMenuOverride.findAll({
-            where: { role: req.user.role },
+            where: {
+                role: req.user.role,
+                channel_id: req.user.channel_id,
+            },
         })
 
         res.json(rows)
@@ -82,10 +89,10 @@ exports.getMine = async (req, res) => {
 
 
 // ======================
-// SAVE FOR ROLE (admin-only) -- ganti SELURUH override milik satu
-// role sekaligus (tombol "Simpan" di halaman Menu Access nyimpen
-// seluruh checklist role yang lagi dibuka, bukan satu-satu per
-// checkbox)
+// SAVE FOR CHANNEL + ROLE (admin-only) -- ganti SELURUH override milik
+// satu kombinasi channel+role sekaligus (tombol "Simpan" di halaman
+// Menu Access nyimpen seluruh checklist yang lagi dibuka, bukan
+// satu-satu per checkbox)
 // ======================
 exports.saveForRole = async (req, res) => {
 
@@ -99,13 +106,25 @@ exports.saveForRole = async (req, res) => {
             )
         }
 
-        const { role, items } = req.body
+        const { channel_id, role, items } = req.body
 
         if (!CONFIGURABLE_ROLES.includes(role)) {
             return sendError(
                 res,
                 400,
                 'Role tidak dikenal atau tidak bisa diatur di sini.'
+            )
+        }
+
+        const channel = channel_id
+            ? await Channel.findByPk(channel_id)
+            : null
+
+        if (!channel) {
+            return sendError(
+                res,
+                400,
+                'Channel wajib dipilih dan harus valid.'
             )
         }
 
@@ -125,13 +144,14 @@ exports.saveForRole = async (req, res) => {
         await db.transaction(async (t) => {
 
             await RoleMenuOverride.destroy({
-                where: { role },
+                where: { channel_id, role },
                 transaction: t,
             })
 
             if (items.length > 0) {
                 await RoleMenuOverride.bulkCreate(
                     items.map((item) => ({
+                        channel_id,
                         role,
                         menu_key: item.menu_key,
                         visible: !!item.visible,
