@@ -86,6 +86,20 @@ export default function AttendanceReportPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
+    // user_id -> daftar area_id -- pakai AssignedAreas (bisa lebih dari
+    // satu, dari GET /users) kalau ada, baru fallback ke area_id legacy
+    // kalau user itu belum pernah di-assign lewat AssignedAreas sama
+    // sekali. Tanpa ini, user yang pegang >1 area (ada 5 user begini)
+    // tidak pernah cocok filter area manapun selain "Semua Area".
+    const areasByUserId = new Map(
+        users.map((u: any) => [
+            u.id,
+            u.AssignedAreas?.length
+                ? u.AssignedAreas.map((ar: any) => ar.id)
+                : (u.area_id ? [u.area_id] : [])
+        ])
+    )
+
     // ======================
     // FILTER (sales/area di client, tanggal sudah difilter server)
     // ======================
@@ -95,7 +109,8 @@ export default function AttendanceReportPage() {
             salesFilter === 'ALL' || String(a.user_id) === salesFilter
 
         const matchArea =
-            areaFilter === 'ALL' || String(a.User?.area_id) === areaFilter
+            areaFilter === 'ALL' ||
+            (areasByUserId.get(a.User?.id) || []).map(String).includes(areaFilter)
 
         return matchSales && matchArea
 
