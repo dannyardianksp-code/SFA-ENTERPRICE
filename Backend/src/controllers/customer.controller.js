@@ -153,6 +153,27 @@ exports.getAll =
 
                 }
 
+            } else if (user.role === 'GENERAL MANAGER') {
+
+                // GM mengawasi banyak area sekaligus dalam SATU channel --
+                // beda dengan RESTRICTED_ROLES yang dibatasi AssignedAreas
+                // juga, GM TIDAK dibatasi area (lihat seluruh area), cuma
+                // dibatasi channel yang di-assign ke dirinya. Belum punya
+                // channel sama sekali -> tidak berhak lihat customer mana
+                // pun, sama pola fail-closed dengan RESTRICTED_ROLES di atas.
+                if (!user.channel_id) {
+
+                    return res.json([])
+
+                }
+
+                whereCondition = {
+
+                    channel_id:
+                        user.channel_id
+
+                }
+
             }
 
             // Opsional, default TIDAK memfilter -- Master Customer (web)
