@@ -28,6 +28,11 @@ const { USER_MANAGER_ROLES, RESTRICTED_ROLES } =
 const { resolveAccessibleAreaIds } =
     require('../utils/area.util')
 
+// 3 zona waktu Indonesia -- WIB/WITA/WIT. Dibatasi ke 3 ini (bukan
+// terima string IANA bebas) supaya admin tidak bisa salah ketik jadi
+// timezone yang tidak dikenal browser/Intl.
+const VALID_TIMEZONES = ['Asia/Jakarta', 'Asia/Makassar', 'Asia/Jayapura']
+
 // Role terbatas (lihat RESTRICTED_ROLES) cuma lihat area yang
 // ditugaskan ke mereka sendiri -- dulu endpoint ini selalu
 // mengembalikan SEMUA area, jadi filter Area di Report Visit (dan
@@ -102,7 +107,7 @@ router.post(
                 )
             }
 
-            const { code, name, checkin_radius_meters } = req.body
+            const { code, name, checkin_radius_meters, timezone } = req.body
 
             if (typeof code !== 'string' || code.trim() === '') {
                 return sendError(res, 400, 'Code wajib diisi.')
@@ -110,6 +115,14 @@ router.post(
 
             if (typeof name !== 'string' || name.trim() === '') {
                 return sendError(res, 400, 'Name wajib diisi.')
+            }
+
+            if (timezone !== undefined && !VALID_TIMEZONES.includes(timezone)) {
+                return sendError(
+                    res,
+                    400,
+                    `timezone wajib salah satu dari ${VALID_TIMEZONES.join(', ')}.`
+                )
             }
 
             let radius = null
@@ -132,6 +145,7 @@ router.post(
                 code: code.trim(),
                 name: name.trim(),
                 checkin_radius_meters: radius,
+                timezone: timezone || 'Asia/Jakarta',
             })
 
             res.json(area)
@@ -170,12 +184,26 @@ router.put(
                 return sendError(res, 404, 'Area tidak ditemukan.')
             }
 
-            const { code, name, checkin_radius_meters } = req.body
+            const { code, name, checkin_radius_meters, timezone } = req.body
 
             const perubahan = {}
 
             if (code !== undefined) perubahan.code = code
             if (name !== undefined) perubahan.name = name
+
+            if (timezone !== undefined) {
+
+                if (!VALID_TIMEZONES.includes(timezone)) {
+                    return sendError(
+                        res,
+                        400,
+                        `timezone wajib salah satu dari ${VALID_TIMEZONES.join(', ')}.`
+                    )
+                }
+
+                perubahan.timezone = timezone
+
+            }
 
             if (checkin_radius_meters !== undefined) {
 

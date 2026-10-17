@@ -25,6 +25,16 @@ const Area =
             // radius beda dari 50m (mis. sinyal GPS jelek).
             checkin_radius_meters: {
                 type: DataTypes.INTEGER
+            },
+
+            // IANA timezone zona area ini -- dipakai nampilin jam/tanggal
+            // report (Attendance, dst) sesuai waktu SETEMPAT pegawai,
+            // bukan dipaksa WIB. Default 'Asia/Jakarta' (WIB) -- area di
+            // luar Jawa/Sumatra diubah manual ke 'Asia/Makassar' (WITA)
+            // atau 'Asia/Jayapura' (WIT) lewat Area Management.
+            timezone: {
+                type: DataTypes.STRING,
+                defaultValue: 'Asia/Jakarta',
             }
 
         },

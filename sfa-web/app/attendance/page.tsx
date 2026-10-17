@@ -100,6 +100,26 @@ export default function AttendanceReportPage() {
         ])
     )
 
+    // user_id -> timezone IANA areanya (WIB/WITA/WIT) -- dipakai nampilin
+    // Clock In/Out & Tanggal sesuai jam SETEMPAT pegawai, bukan dipaksa
+    // WIB. Area pertama yang di-assign yang dipakai kalau user punya
+    // lebih dari satu (jarang beda zona waktu sekaligus); 'Asia/Jakarta'
+    // kalau area user tidak ditemukan sama sekali (akun tanpa area).
+    const timezoneByAreaId = new Map(areas.map((ar: any) => [ar.id, ar.timezone || 'Asia/Jakarta']))
+
+    const timezoneByUserId = new Map(
+        users.map((u: any) => {
+            const areaId = u.AssignedAreas?.[0]?.id ?? u.area_id
+            return [u.id, timezoneByAreaId.get(areaId) || 'Asia/Jakarta']
+        })
+    )
+
+    const TIMEZONE_LABEL: Record<string, string> = {
+        'Asia/Jakarta': 'WIB',
+        'Asia/Makassar': 'WITA',
+        'Asia/Jayapura': 'WIT',
+    }
+
     // ======================
     // FILTER (sales/area di client, tanggal sudah difilter server)
     // ======================
@@ -126,15 +146,19 @@ export default function AttendanceReportPage() {
     // ======================
     // UI HELPERS
     // ======================
-    const jam = (iso: string | null) =>
-        iso ? new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'
+    // tz WAJIB diisi eksplisit (timezone area pegawai ybs) -- dulu jam()
+    // tidak di-pin timezone sama sekali (ikut jam browser/laptop admin
+    // yang buka report, bisa beda-beda), dan formatTanggal dipaksa
+    // 'Asia/Jakarta' buat semua orang walau pegawainya di WITA/WIT.
+    const jam = (iso: string | null, tz: string) =>
+        iso ? new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: tz }) : '-'
 
     // Format sama dipakai buat kolom Tanggal (a.tanggal, DATEONLY
     // "YYYY-MM-DD") dan Tanggal Out (dari clock_out_time, timestamp ISO)
     // -- keduanya harus tampil dengan format yang sama persis.
-    const formatTanggal = (nilai: string | null) =>
+    const formatTanggal = (nilai: string | null, tz: string) =>
         nilai
-            ? new Date(nilai).toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' })
+            ? new Date(nilai).toLocaleDateString('id-ID', { timeZone: tz })
             : '-'
 
     // Tanggal Out kolom terpisah -- checkOut bisa menutup absen masuk
@@ -152,20 +176,27 @@ export default function AttendanceReportPage() {
     // Map yang tidak berarti apa-apa di Excel).
     const handleExport = () => {
 
-        const rows = filtered.map((a: any, i: number) => ({
-            'No': i + 1,
-            'Sales': a.User?.name || '-',
-            'Tanggal': formatTanggal(a.tanggal),
-            'Clock In': jam(a.clock_in_time),
-            'Tanggal Out': formatTanggal(a.clock_out_time),
-            'Clock Out': a.clock_out_time ? jam(a.clock_out_time) : 'Belum pulang',
-            'Latitude Masuk': a.clock_in_latitude ?? '-',
-            'Longitude Masuk': a.clock_in_longitude ?? '-',
-            'Latitude Pulang': a.clock_out_latitude ?? '-',
-            'Longitude Pulang': a.clock_out_longitude ?? '-',
-            'Foto Masuk': a.clock_in_photo_url ? `${UPLOADS_ORIGIN}${a.clock_in_photo_url}` : '-',
-            'Foto Pulang': a.clock_out_photo_url ? `${UPLOADS_ORIGIN}${a.clock_out_photo_url}` : '-'
-        }))
+        const rows = filtered.map((a: any, i: number) => {
+
+            const tz = timezoneByUserId.get(a.User?.id) || 'Asia/Jakarta'
+
+            return {
+                'No': i + 1,
+                'Sales': a.User?.name || '-',
+                'Zona Waktu': TIMEZONE_LABEL[tz] || tz,
+                'Tanggal': formatTanggal(a.tanggal, tz),
+                'Clock In': jam(a.clock_in_time, tz),
+                'Tanggal Out': formatTanggal(a.clock_out_time, tz),
+                'Clock Out': a.clock_out_time ? jam(a.clock_out_time, tz) : 'Belum pulang',
+                'Latitude Masuk': a.clock_in_latitude ?? '-',
+                'Longitude Masuk': a.clock_in_longitude ?? '-',
+                'Latitude Pulang': a.clock_out_latitude ?? '-',
+                'Longitude Pulang': a.clock_out_longitude ?? '-',
+                'Foto Masuk': a.clock_in_photo_url ? `${UPLOADS_ORIGIN}${a.clock_in_photo_url}` : '-',
+                'Foto Pulang': a.clock_out_photo_url ? `${UPLOADS_ORIGIN}${a.clock_out_photo_url}` : '-'
+            }
+
+        })
 
         exportToExcel(
             `report-absen_${dateFrom}_${dateTo}`,
@@ -338,7 +369,11 @@ export default function AttendanceReportPage() {
                             </tr>
                         )}
 
-                        {attendancesHalamanIni.map((a: any, i: number) => (
+                        {attendancesHalamanIni.map((a: any, i: number) => {
+
+                            const tz = timezoneByUserId.get(a.User?.id) || 'Asia/Jakarta'
+
+                            return (
 
                             <tr
                                 key={a.id}
@@ -349,22 +384,33 @@ export default function AttendanceReportPage() {
 
                                 <td style={{ padding: 12 }}>
                                     {a.User?.name || '-'}
+                                    <span style={{
+                                        marginLeft: 8,
+                                        padding: '2px 8px',
+                                        borderRadius: 20,
+                                        fontSize: 11,
+                                        fontWeight: 600,
+                                        background: '#eef2ff',
+                                        color: '#4338ca'
+                                    }}>
+                                        {TIMEZONE_LABEL[tz] || tz}
+                                    </span>
                                 </td>
 
                                 <td style={{ padding: 12 }}>
-                                    {formatTanggal(a.tanggal)}
+                                    {formatTanggal(a.tanggal, tz)}
                                 </td>
 
                                 <td style={{ padding: 12 }}>
-                                    {jam(a.clock_in_time)}
+                                    {jam(a.clock_in_time, tz)}
                                 </td>
 
                                 <td style={{ padding: 12 }}>
-                                    {formatTanggal(a.clock_out_time)}
+                                    {formatTanggal(a.clock_out_time, tz)}
                                 </td>
 
                                 <td style={{ padding: 12 }}>
-                                    {a.clock_out_time ? jam(a.clock_out_time) : (
+                                    {a.clock_out_time ? jam(a.clock_out_time, tz) : (
                                         <span style={{
                                             padding: '4px 10px',
                                             borderRadius: 20,
@@ -447,7 +493,9 @@ export default function AttendanceReportPage() {
 
                             </tr>
 
-                        ))}
+                            )
+
+                        })}
 
                     </tbody>
 

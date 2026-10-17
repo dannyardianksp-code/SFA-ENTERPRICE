@@ -5,13 +5,25 @@ import { API_BASE_URL } from '@/app/utils/api-config'
 
 const DEFAULT_RADIUS = 50
 
+const TIMEZONE_OPTIONS = [
+    { value: 'Asia/Jakarta', label: 'WIB -- Asia/Jakarta' },
+    { value: 'Asia/Makassar', label: 'WITA -- Asia/Makassar' },
+    { value: 'Asia/Jayapura', label: 'WIT -- Asia/Jayapura' },
+]
+
+const TIMEZONE_LABEL: Record<string, string> = {
+    'Asia/Jakarta': 'WIB',
+    'Asia/Makassar': 'WITA',
+    'Asia/Jayapura': 'WIT',
+}
+
 export default function AreasPage() {
 
     const [areas, setAreas] = useState<any[]>([])
     const [search, setSearch] = useState('')
     const [role, setRole] = useState('')
 
-    const [form, setForm] = useState({ code: '', name: '', checkin_radius_meters: '' })
+    const [form, setForm] = useState({ code: '', name: '', checkin_radius_meters: '', timezone: 'Asia/Jakarta' })
     const [editId, setEditId] = useState<number | null>(null)
     const [saving, setSaving] = useState(false)
 
@@ -60,13 +72,14 @@ export default function AreasPage() {
             code: a.code || '',
             name: a.name || '',
             checkin_radius_meters:
-                a.checkin_radius_meters != null ? String(a.checkin_radius_meters) : ''
+                a.checkin_radius_meters != null ? String(a.checkin_radius_meters) : '',
+            timezone: a.timezone || 'Asia/Jakarta'
         })
     }
 
     const handleCancelEdit = () => {
         setEditId(null)
-        setForm({ code: '', name: '', checkin_radius_meters: '' })
+        setForm({ code: '', name: '', checkin_radius_meters: '', timezone: 'Asia/Jakarta' })
     }
 
     const handleDelete = async (a: any) => {
@@ -119,7 +132,8 @@ export default function AreasPage() {
             body: JSON.stringify({
                 code: form.code,
                 name: form.name,
-                checkin_radius_meters: form.checkin_radius_meters || null
+                checkin_radius_meters: form.checkin_radius_meters || null,
+                timezone: form.timezone
             })
 
         })
@@ -135,7 +149,7 @@ export default function AreasPage() {
 
         alert(editId ? 'Area berhasil diupdate' : 'Area berhasil ditambahkan')
 
-        setForm({ code: '', name: '', checkin_radius_meters: '' })
+        setForm({ code: '', name: '', checkin_radius_meters: '', timezone: 'Asia/Jakarta' })
         setEditId(null)
 
         fetchAreas()
@@ -163,7 +177,7 @@ export default function AreasPage() {
                         {editId ? '✏️ Edit Area' : '➕ Tambah Area Baru'}
                     </h2>
 
-                    <form onSubmit={handleSubmit} className="grid md:grid-cols-4 gap-4 items-end">
+                    <form onSubmit={handleSubmit} className="grid md:grid-cols-5 gap-4 items-end">
 
                         <div>
                             <label className="text-sm text-slate-500">Code</label>
@@ -199,6 +213,21 @@ export default function AreasPage() {
                                 }
                                 className="w-full mt-2 border rounded-xl p-3"
                             />
+                        </div>
+
+                        <div>
+                            <label className="text-sm text-slate-500">
+                                Zona Waktu
+                            </label>
+                            <select
+                                value={form.timezone}
+                                onChange={(e) => setForm({ ...form, timezone: e.target.value })}
+                                className="w-full mt-2 border rounded-xl p-3"
+                            >
+                                {TIMEZONE_OPTIONS.map((tz) => (
+                                    <option key={tz.value} value={tz.value}>{tz.label}</option>
+                                ))}
+                            </select>
                         </div>
 
                         <div className="flex gap-3">
@@ -252,6 +281,7 @@ export default function AreasPage() {
                             <th className="p-4 text-sm font-semibold text-slate-500">Code</th>
                             <th className="p-4 text-sm font-semibold text-slate-500">Name</th>
                             <th className="p-4 text-sm font-semibold text-slate-500">Radius Check-in (meter)</th>
+                            <th className="p-4 text-sm font-semibold text-slate-500">Zona Waktu</th>
                             {isAdmin && (
                                 <th className="p-4 text-sm font-semibold text-slate-500">Aksi</th>
                             )}
@@ -276,6 +306,10 @@ export default function AreasPage() {
 
                                     <td className="p-4 text-slate-600">
                                         {a.checkin_radius_meters ?? `${DEFAULT_RADIUS} (default)`}
+                                    </td>
+
+                                    <td className="p-4 text-slate-600">
+                                        {TIMEZONE_LABEL[a.timezone] || a.timezone || 'WIB'}
                                     </td>
 
                                     {isAdmin && (
