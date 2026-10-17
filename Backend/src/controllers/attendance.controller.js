@@ -3,6 +3,7 @@ const { Op } = require('sequelize')
 const Attendance = require('../models/attendance.model')
 const User = require('../models/user.model')
 const { localDateString } = require('../utils/date.util')
+const { resolveUserTimezone } = require('../utils/area.util')
 const {
     parseCoordinate,
     isValidLatitude,
@@ -20,7 +21,12 @@ exports.checkIn = async (req, res) => {
 
         const { latitude, longitude, accuracy } = req.body
 
-        const tanggal = localDateString()
+        // "Hari ini" versi pegawai ini sendiri (WIB/WITA/WIT sesuai
+        // areanya) -- bukan dipaksa WIB, supaya absen dini hari yang
+        // sudah hari baru menurut jam lokalnya tidak kecatat sebagai
+        // hari kemarin (lihat resolveUserTimezone).
+        const timezone = await resolveUserTimezone(req.user.id)
+        const tanggal = localDateString(new Date(), timezone)
 
         const sudahAda = await Attendance.findOne({
             where: { user_id: req.user.id, tanggal }
@@ -214,7 +220,8 @@ exports.getToday = async (req, res) => {
 
     try {
 
-        const tanggal = localDateString()
+        const timezone = await resolveUserTimezone(req.user.id)
+        const tanggal = localDateString(new Date(), timezone)
 
         const today = await Attendance.findOne({
             where: { user_id: req.user.id, tanggal }

@@ -9,6 +9,7 @@ const VisitPlan = require('../models/visitPlan.model')
 const VisitActivity = require('../models/visitActivity.model')
 const { Op } = require('sequelize')
 const { localDateString } = require('../utils/date.util')
+const { resolveUserTimezone } = require('../utils/area.util')
 
 const {
     parseCoordinate,
@@ -113,11 +114,14 @@ exports.checkIn = async (req, res) => {
 
         // visit_date bertipe DATEONLY -- Sequelize mengembalikannya
         // sebagai string 'YYYY-MM-DD', jadi aman dibandingkan langsung
-        // secara leksikografis dengan tanggal lokal WIB. SPG boleh
+        // secara leksikografis dengan tanggal lokal SPG ini sendiri
+        // (WIB/WITA/WIT sesuai areanya, bukan dipaksa WIB). SPG boleh
         // susulan check-in untuk tanggal lampau (hari ini atau
         // sebelumnya), tapi belum boleh mendahului jadwal masa depan --
         // rencana kunjungan besok cuma tampil sebagai lihat-lihat.
-        if (plan.visit_date > localDateString()) {
+        const timezoneCheckin = await resolveUserTimezone(req.user.id)
+
+        if (plan.visit_date > localDateString(new Date(), timezoneCheckin)) {
             return sendError(
                 res,
                 400,
@@ -318,7 +322,8 @@ exports.getAll = async (req, res) => {
         let sampai = cocokTanggal(req.query.to) ? req.query.to : null
 
         if ((!dari || !sampai) && req.query.mine === '1') {
-            const [tahunIni, bulanIni] = localDateString().split('-')
+            const timezoneMine = await resolveUserTimezone(req.user.id)
+            const [tahunIni, bulanIni] = localDateString(new Date(), timezoneMine).split('-')
             const hariTerakhir =
                 new Date(Number(tahunIni), Number(bulanIni), 0).getDate()
 

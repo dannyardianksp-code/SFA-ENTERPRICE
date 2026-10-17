@@ -41,7 +41,7 @@ const {
     assertWithinSubtree,
 } = require('../utils/access.util')
 
-const { resolveAccessibleAreaIds } =
+const { resolveAccessibleAreaIds, resolveUserTimezone } =
     require('../utils/area.util')
 
 const { parseId } =
@@ -54,7 +54,9 @@ const { parseId } =
 // ======================
 
 /**
- * Rentang tanggal yang dilihat SPG: hari ini dan besok.
+ * Rentang tanggal yang dilihat SPG: hari ini dan besok, DI ZONA WAKTU
+ * SPG ITU SENDIRI (timezone area-nya, bukan dipaksa WIB -- lihat
+ * resolveUserTimezone).
  *
  * Dua hari, bukan satu — sales perlu bisa bersiap untuk besok. Ini
  * keputusan produk yang sebelumnya terjadi secara kebetulan lewat
@@ -63,9 +65,9 @@ const { parseId } =
  * Fungsi murni dan diekspor supaya batas bulan serta batas tahun bisa
  * diuji tanpa database.
  */
-const spgDateRange = (now = new Date()) => [
-    localDateString(now),
-    addDaysLocal(now, 1),
+const spgDateRange = (now = new Date(), timezone) => [
+    localDateString(now, timezone),
+    addDaysLocal(now, 1, timezone),
 ]
 
 exports.getAll =
@@ -126,7 +128,8 @@ exports.getAll =
             // manajemen tim lintas tanggal) tetap jalan seperti semula.
             if (['MD', 'SPG', 'SALES'].includes(loginUser.role) || req.query.mine === '1') {
 
-                const [hariIni, besok] = spgDateRange()
+                const timezoneSpg = await resolveUserTimezone(loginUser.id)
+                const [hariIni, besok] = spgDateRange(new Date(), timezoneSpg)
 
                 whereCondition = {
 
@@ -252,7 +255,13 @@ exports.create =
             // date, gerbang klik di kalender), tapi itu bisa dilewati
             // lewat panggilan API langsung -- gerbang yang berlaku
             // adalah yang di sini.
-            if (visit_date < localDateString(new Date())) {
+            //
+            // "Hari ini" versi user_id YANG DITUGASKAN (bukan versi
+            // supervisor yang membuat jadwalnya) -- dia yang akan
+            // benar-benar check-in di lokasinya sendiri.
+            const timezonePenugasan = await resolveUserTimezone(user_id)
+
+            if (visit_date < localDateString(new Date(), timezonePenugasan)) {
                 return sendError(
                     res,
                     400,

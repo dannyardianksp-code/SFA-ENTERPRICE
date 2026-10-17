@@ -7,6 +7,7 @@ const auth =
 const { Op } = require('sequelize')
 
 const { localDateString } = require('../utils/date.util')
+const { resolveUserTimezone } = require('../utils/area.util')
 
 const { sendServerError } = require('../utils/response.util')
 
@@ -61,7 +62,8 @@ router.get(
 
             const now = new Date()
 
-            const today = localDateString(now)
+            const timezone = await resolveUserTimezone(req.user.id)
+            const today = localDateString(now, timezone)
 
             const firstDay =
                 new Date(
