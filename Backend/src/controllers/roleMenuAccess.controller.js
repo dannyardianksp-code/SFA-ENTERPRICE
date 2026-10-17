@@ -10,19 +10,29 @@ const {
 const RoleMenuOverride = require('../models/roleMenuOverride.model')
 const Channel = require('../models/channel.model')
 
-// Role yang bisa diatur lewat fitur ini.
-// - ADMINISTRATOR SENGAJA tidak termasuk -- selalu lihat semua menu
-//   tanpa terkecuali, tidak boleh dibatasi lewat sini sama sekali.
-// - MD, SPG, SALES SENGAJA tidak termasuk juga -- ketiga role ini
-//   defaultnya TIDAK PUNYA akses web sama sekali (can_access_web
-//   default false, cuma dibuka manual per-user lewat form Edit User).
-//   Mengatur Menu Access buat role yang pada dasarnya tidak login ke
-//   web cuma bikin bingung.
-const EXCLUDED_ROLES = ['ADMINISTRATOR', 'MD', 'SPG', 'SALES']
+const PLATFORM_VALUES = ['WEB', 'MOBILE']
 
-const CONFIGURABLE_ROLES = USER_ROLES.filter(
-    (role) => !EXCLUDED_ROLES.includes(role)
-)
+// Role yang bisa diatur lewat fitur ini -- BEDA per platform, karena
+// siapa yang benar-benar memakai tiap platform beda:
+// - ADMINISTRATOR tidak pernah termasuk di platform MANA PUN -- selalu
+//   lihat semua menu tanpa terkecuali (sidebar penuh di web, menu
+//   "Setting" tersendiri di mobile), tidak boleh dibatasi lewat sini.
+// - Web: MD/SPG/SALES dikecualikan juga -- ketiga role ini defaultnya
+//   TIDAK PUNYA akses web sama sekali (can_access_web default false,
+//   cuma dibuka manual per-user lewat form Edit User). Mengatur Menu
+//   Access buat role yang pada dasarnya tidak login ke web cuma bikin
+//   bingung.
+// - Mobile: SEMUA role (termasuk SUPERVISOR ke atas) bisa login dan
+//   dikasih menu mobile sendiri -- tidak ada role lapangan vs kantoran
+//   di sini, cuma ADMINISTRATOR yang dikecualikan.
+const CONFIGURABLE_ROLES_BY_PLATFORM = {
+    WEB: USER_ROLES.filter(
+        (role) => !['ADMINISTRATOR', 'MD', 'SPG', 'SALES'].includes(role)
+    ),
+    MOBILE: USER_ROLES.filter(
+        (role) => role !== 'ADMINISTRATOR'
+    ),
+}
 
 
 // ======================
@@ -54,24 +64,43 @@ exports.getAll = async (req, res) => {
 
 
 // ======================
-// GET MINE -- dipakai Sidebar, BUKAN admin-only (semua role login
-// perlu tau menu mana yang keliatan buat dirinya sendiri). Disaring
-// per channel user ITU SENDIRI -- user tanpa channel (channel_id NULL)
-// tidak akan cocok baris mana pun, otomatis jatuh ke default per grup
-// di Sidebar, sama seperti role yang belum pernah di-override.
+// GET MINE -- dipakai Sidebar (web) dan QuickMenu (mobile), BUKAN
+// admin-only (semua role login perlu tau menu mana yang keliatan buat
+// dirinya sendiri). Disaring per channel user ITU SENDIRI -- user
+// tanpa channel (channel_id NULL) tidak akan cocok baris mana pun,
+// otomatis jatuh ke default per grup di client, sama seperti role yang
+// belum pernah di-override.
+//
+// ?platform=web|mobile -- default 'WEB' kalau tidak dikirim sama
+// sekali, supaya pemanggil lama (Sidebar sebelum fitur platform ada)
+// tetap jalan tanpa perubahan.
 // ======================
 exports.getMine = async (req, res) => {
 
     try {
 
-        // ADMINISTRATOR tidak pernah dibatasi -- balas array kosong,
-        // Sidebar tidak menyaring apa pun buat role ini.
+        // ADMINISTRATOR tidak pernah dibatasi di platform mana pun --
+        // balas array kosong, client tidak menyaring apa pun buat
+        // role ini (dan di mobile, role ini sama sekali tidak
+        // memakai QuickMenu -- lihat menu "Setting" tersendiri).
         if (req.user.role === 'ADMINISTRATOR') {
             return res.json([])
         }
 
+        const platform =
+            String(req.query.platform || 'WEB').toUpperCase()
+
+        if (!PLATFORM_VALUES.includes(platform)) {
+            return sendError(
+                res,
+                400,
+                `platform wajib salah satu dari ${PLATFORM_VALUES.join(', ')}.`
+            )
+        }
+
         const rows = await RoleMenuOverride.findAll({
             where: {
+                platform,
                 role: req.user.role,
                 channel_id: req.user.channel_id,
             },
@@ -89,10 +118,10 @@ exports.getMine = async (req, res) => {
 
 
 // ======================
-// SAVE FOR CHANNEL + ROLE (admin-only) -- ganti SELURUH override milik
-// satu kombinasi channel+role sekaligus (tombol "Simpan" di halaman
-// Menu Access nyimpen seluruh checklist yang lagi dibuka, bukan
-// satu-satu per checkbox)
+// SAVE FOR PLATFORM + CHANNEL + ROLE (admin-only) -- ganti SELURUH
+// override milik satu kombinasi platform+channel+role sekaligus
+// (tombol "Simpan" di halaman Menu Access nyimpen seluruh checklist
+// yang lagi dibuka, bukan satu-satu per checkbox)
 // ======================
 exports.saveForRole = async (req, res) => {
 
@@ -108,11 +137,22 @@ exports.saveForRole = async (req, res) => {
 
         const { channel_id, role, items } = req.body
 
-        if (!CONFIGURABLE_ROLES.includes(role)) {
+        const platform =
+            String(req.body.platform || 'WEB').toUpperCase()
+
+        if (!PLATFORM_VALUES.includes(platform)) {
             return sendError(
                 res,
                 400,
-                'Role tidak dikenal atau tidak bisa diatur di sini.'
+                `platform wajib salah satu dari ${PLATFORM_VALUES.join(', ')}.`
+            )
+        }
+
+        if (!CONFIGURABLE_ROLES_BY_PLATFORM[platform].includes(role)) {
+            return sendError(
+                res,
+                400,
+                'Role tidak dikenal atau tidak bisa diatur di platform ini.'
             )
         }
 
@@ -144,13 +184,14 @@ exports.saveForRole = async (req, res) => {
         await db.transaction(async (t) => {
 
             await RoleMenuOverride.destroy({
-                where: { channel_id, role },
+                where: { platform, channel_id, role },
                 transaction: t,
             })
 
             if (items.length > 0) {
                 await RoleMenuOverride.bulkCreate(
                     items.map((item) => ({
+                        platform,
                         channel_id,
                         role,
                         menu_key: item.menu_key,

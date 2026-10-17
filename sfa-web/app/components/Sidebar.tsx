@@ -104,7 +104,7 @@ export default function Sidebar({
 
         const token = localStorage.getItem('token')
 
-        fetch(`${API_BASE_URL}/role-menu-access/mine`, {
+        fetch(`${API_BASE_URL}/role-menu-access/mine?platform=web`, {
             headers: { Authorization: `Bearer ${token}` },
         })
             .then((res) => (res.ok ? res.json() : []))

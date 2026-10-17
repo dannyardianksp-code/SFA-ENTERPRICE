@@ -4,8 +4,14 @@ const db = require('../config/database')
 // Cuma nyimpen OVERRIDE dari default per grup menu (lihat migration
 // 016) -- tidak ada baris berarti "pakai default", bukan "sembunyikan
 // semua". Sejak migration 025, override-nya per (channel, role) --
-// tiap channel ngatur sendiri, TIDAK ADA baris "semua channel".
+// tiap channel ngatur sendiri, TIDAK ADA baris "semua channel". Sejak
+// migration 026, juga per PLATFORM ('WEB'/'MOBILE') -- menu_key di web
+// (sidebar) dan mobile (QuickMenu) adalah daftar yang sama sekali beda.
 const RoleMenuOverride = db.define('RoleMenuOverride', {
+    platform: {
+        type: DataTypes.STRING,
+        primaryKey: true,
+    },
     channel_id: {
         type: DataTypes.INTEGER,
         primaryKey: true,
