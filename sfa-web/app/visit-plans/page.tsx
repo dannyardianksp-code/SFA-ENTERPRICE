@@ -12,6 +12,7 @@ import { useRouter }
 import { getDistanceFromLatLonInKm } from "../utils/distance"
 import { API_BASE_URL } from '@/app/utils/api-config'
 import VisitPlanCalendar from './VisitPlanCalendar'
+import TokoCombobox from '@/app/components/TokoCombobox'
 
 // Role lapangan daun -- lihat hanya jadwalnya sendiri (bukan dasbor tim
 // lintas tanggal), sama seperti MD.
@@ -759,45 +760,11 @@ Failed : ${result.failed}`
 
                                     </label>
 
-                                    <select
-
-                                        className="w-full border rounded-xl p-3 mt-2"
-
-                                        name="customer_id"
-
+                                    <TokoCombobox
+                                        customers={customers}
                                         value={form.customer_id}
-
-                                        onChange={handleChange}
-
-                                    >
-
-                                        <option value="">
-
-                                            Pilih Toko
-
-                                        </option>
-
-                                        {
-
-                                            customers.map((c: any) => (
-
-                                                <option
-
-                                                    key={c.id}
-
-                                                    value={c.id}
-
-                                                >
-
-                                                    {c.name}
-
-                                                </option>
-
-                                            ))
-
-                                        }
-
-                                    </select>
+                                        onChange={(id) => setForm({ ...form, customer_id: id })}
+                                    />
 
                                 </div>
 
