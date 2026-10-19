@@ -42,6 +42,12 @@ export default function EditUserPage() {
     const [allUsers, setAllUsers] =
         useState<any[]>([])
 
+    // Filter tampilan doang -- TIDAK mengubah form.area_ids yang sudah
+    // tercentang, cuma nyembunyiin baris yang tidak cocok pencarian
+    // dari grid checkbox (daftar area bisa panjang).
+    const [areaSearch, setAreaSearch] =
+        useState('')
+
 
 
     const [form, setForm] =
@@ -253,7 +259,15 @@ export default function EditUserPage() {
             ...form,
 
             [e.target.name]:
-                e.target.value
+                e.target.value,
+
+            // Ganti channel -> supervisor yang sudah kepilih bisa jadi
+            // tidak lagi muncul di dropdown (beda channel) -- reset
+            // supaya tidak ada submit senyap, supervisor_id yang sudah
+            // tidak kelihatan tapi masih nyangkut.
+            ...(e.target.name === 'channel_id' && {
+                supervisor_id: ''
+            })
 
         })
 
@@ -385,7 +399,13 @@ export default function EditUserPage() {
         roleAbove
 
             ? allUsers.filter(
-                (u: any) => u.role === roleAbove
+                (u: any) =>
+                    u.role === roleAbove &&
+                    // Channel dipilih -> cuma kandidat atasan di channel
+                    // yang SAMA. Belum pilih channel -> semua kandidat
+                    // role-nya cocok (perilaku lama).
+                    (!form.channel_id ||
+                        String(u.channel_id) === String(form.channel_id))
             )
 
             : []
@@ -516,21 +536,33 @@ export default function EditUserPage() {
                             Pilih Semua Area
                         </label>
 
+                        <input
+                            type="text"
+                            placeholder="🔍 Cari area..."
+                            value={areaSearch}
+                            onChange={(e) => setAreaSearch(e.target.value)}
+                            className="w-full mt-2 border rounded-xl p-3"
+                        />
+
                         <div className="mt-2 border rounded-xl p-3 grid sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto">
 
-                            {areas.map((a: any) => (
-                                <label
-                                    key={a.id}
-                                    className="flex items-center gap-2 text-sm text-slate-700"
-                                >
-                                    <input
-                                        type="checkbox"
-                                        checked={form.area_ids.includes(a.id)}
-                                        onChange={() => toggleArea(a.id)}
-                                    />
-                                    {a.name}
-                                </label>
-                            ))}
+                            {areas
+                                .filter((a: any) =>
+                                    a.name?.toLowerCase().includes(areaSearch.toLowerCase())
+                                )
+                                .map((a: any) => (
+                                    <label
+                                        key={a.id}
+                                        className="flex items-center gap-2 text-sm text-slate-700"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={form.area_ids.includes(a.id)}
+                                            onChange={() => toggleArea(a.id)}
+                                        />
+                                        {a.name}
+                                    </label>
+                                ))}
 
                         </div>
                     </div>

@@ -69,6 +69,12 @@ export default function CreateUserPage() {
     const [areaIds, setAreaIds] =
         useState<number[]>([])
 
+    // Filter tampilan doang -- TIDAK mengubah areaIds yang sudah
+    // tercentang, cuma nyembunyiin baris yang tidak cocok pencarian
+    // dari grid checkbox (daftar area bisa panjang).
+    const [areaSearch, setAreaSearch] =
+        useState('')
+
     const toggleArea = (id: number) => {
 
         setAreaIds((sekarang) =>
@@ -337,6 +343,14 @@ export default function CreateUserPage() {
                 // override lewat checkbox sesudahnya.
                 ...(e.target.name === 'role' && {
                     can_access_web: !['MD', 'SPG', 'SALES'].includes(e.target.value)
+                }),
+
+                // Ganti channel -> supervisor yang sudah kepilih bisa
+                // jadi tidak lagi muncul di dropdown (beda channel) --
+                // reset supaya tidak ada submit senyap, supervisor_id
+                // yang sudah tidak kelihatan tapi masih nyangkut.
+                ...(e.target.name === 'channel_id' && {
+                    supervisor_id: ''
                 })
 
             })
@@ -574,21 +588,33 @@ export default function CreateUserPage() {
                             Pilih Semua Area
                         </label>
 
+                        <input
+                            type="text"
+                            placeholder="🔍 Cari area..."
+                            value={areaSearch}
+                            onChange={(e) => setAreaSearch(e.target.value)}
+                            className="w-full mt-2 border rounded-xl p-3"
+                        />
+
                         <div className="mt-2 border rounded-xl p-3 grid sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto">
 
-                            {areas.map((a: any) => (
-                                <label
-                                    key={a.id}
-                                    className="flex items-center gap-2 text-sm text-slate-700"
-                                >
-                                    <input
-                                        type="checkbox"
-                                        checked={areaIds.includes(a.id)}
-                                        onChange={() => toggleArea(a.id)}
-                                    />
-                                    {a.name}
-                                </label>
-                            ))}
+                            {areas
+                                .filter((a: any) =>
+                                    a.name?.toLowerCase().includes(areaSearch.toLowerCase())
+                                )
+                                .map((a: any) => (
+                                    <label
+                                        key={a.id}
+                                        className="flex items-center gap-2 text-sm text-slate-700"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={areaIds.includes(a.id)}
+                                            onChange={() => toggleArea(a.id)}
+                                        />
+                                        {a.name}
+                                    </label>
+                                ))}
 
                         </div>
                     </div>
@@ -651,11 +677,19 @@ export default function CreateUserPage() {
                                     Select {ROLE_ABOVE[form.role]}
                                 </option>
 
-                                {supervisors.map((s: any) => (
-                                    <option key={s.id} value={s.id}>
-                                        {s.name}
-                                    </option>
-                                ))}
+                                {supervisors
+                                    // Channel dipilih -> cuma tampilkan atasan di
+                                    // channel yang SAMA. Belum pilih channel ->
+                                    // tampilkan semua kandidat (perilaku lama).
+                                    .filter((s: any) =>
+                                        !form.channel_id ||
+                                        String(s.channel_id) === String(form.channel_id)
+                                    )
+                                    .map((s: any) => (
+                                        <option key={s.id} value={s.id}>
+                                            {s.name}
+                                        </option>
+                                    ))}
                             </select>
                         </div>
 
