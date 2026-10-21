@@ -63,6 +63,9 @@ const ExcelJS =
 const upload =
     require('../middleware/upload.middleware')
 
+const { Op } =
+    require('sequelize')
+
 
 /**
  * Jawaban seragam untuk kedua handler saat transaksinya kalah balapan
@@ -659,15 +662,35 @@ router.get(
                 order: [['name', 'ASC']],
             })
 
+            // Kandidat atasan -- role mana pun yang BISA jadi atasan
+            // seseorang (lihat ROLE_ABOVE di sfa-web), bukan dibatasi
+            // subtree siapa pun: cuma ADMINISTRATOR yang sampai ke
+            // endpoint ini (assertUserManagement di atas), dan dia
+            // memang boleh menugaskan atasan dari mana saja.
+            const supervisorList = await User.findAll({
+                where: {
+                    role: {
+                        [Op.in]:
+                            ['SUPERVISOR', 'MANAGER', 'REGIONAL MANAGER', 'GENERAL MANAGER'],
+                    },
+                },
+                attributes: ['code', 'name'],
+                order: [['name', 'ASC']],
+            })
+
             const wb = new ExcelJS.Workbook()
 
-            // ---- SHEET REFERENSI (sumber dropdown Channel + panduan nama Area) ----
+            // ---- SHEET REFERENSI (sumber dropdown Channel/Atasan + panduan nama Area) ----
             const ref = wb.addWorksheet('Referensi')
 
             ref.columns = [
                 { header: 'Channel', key: 'channel', width: 20 },
-                { header: '', key: 'gap', width: 3 },
+                { header: '', key: 'gap1', width: 3 },
                 { header: 'Nama Area (panduan, bukan dropdown)', key: 'area', width: 32 },
+                { header: '', key: 'gap2', width: 3 },
+                { header: 'Pilihan Atasan', key: 'supPilihan', width: 32 },
+                { header: 'Kode Atasan', key: 'supCode', width: 16 },
+                { header: 'Nama Atasan', key: 'supName', width: 24 },
             ]
 
             channelList.forEach((c, i) => {
@@ -678,20 +701,28 @@ router.get(
                 ref.getRow(i + 2).getCell('area').value = a.name
             })
 
+            supervisorList.forEach((s, i) => {
+                const row = ref.getRow(i + 2)
+                row.getCell('supPilihan').value = `${s.name} (${s.code})`
+                row.getCell('supCode').value = s.code
+                row.getCell('supName').value = s.name
+            })
+
             ref.getRow(1).font = { bold: true }
             ref.state = 'hidden'
 
             const channelCount = channelList.length
+            const supervisorCount = supervisorList.length
 
             // ---- SHEET INPUT (yang diisi admin) ----
             const sheet = wb.addWorksheet('Input User')
 
-            sheet.mergeCells('A1:I1')
+            sheet.mergeCells('A1:J1')
             const instruksi = sheet.getCell('A1')
             instruksi.value =
                 'Petunjuk: Code/Name/Email/Password/Role wajib diisi. Role & Channel pilih dari dropdown. ' +
                 'Nama Area diisi manual, dipisah koma kalau lebih dari satu (lihat daftar nama yang valid di sheet Referensi/Area Management) -- boleh dikosongkan. ' +
-                'Kode Atasan opsional, isi kode user yang sudah ada kalau mau langsung diatur. ' +
+                'Atasan opsional -- pilih dari dropdown "Pilihan Atasan" (cari berdasarkan NAMA), kolom Kode Atasan terisi otomatis. ' +
                 'Web Access opsional -- dikosongkan berarti ikut default per Role (field = Tidak, lainnya = Ya).'
             instruksi.alignment = { wrapText: true, vertical: 'middle' }
             instruksi.font = { italic: true, color: { argb: 'FF555555' } }
@@ -700,7 +731,7 @@ router.get(
             const headerRow = sheet.getRow(2)
             headerRow.values = [
                 'Code', 'Name', 'Email', 'Password', 'Role',
-                'Channel', 'Nama Area', 'Kode Atasan', 'Web Access',
+                'Channel', 'Nama Area', 'Pilihan Atasan', 'Kode Atasan', 'Web Access',
             ]
             headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } }
             headerRow.eachCell((cell) => {
@@ -716,7 +747,8 @@ router.get(
                 { key: 'role', width: 18 },
                 { key: 'channel', width: 16 },
                 { key: 'area', width: 28 },
-                { key: 'supervisorCode', width: 16 },
+                { key: 'supPilihan', width: 32 },
+                { key: 'supCode', width: 16 },
                 { key: 'webAccess', width: 12 },
             ]
 
@@ -751,7 +783,31 @@ router.get(
                     }
                 }
 
-                r.getCell(9).dataValidation = {
+                if (supervisorCount > 0) {
+
+                    r.getCell(8).dataValidation = {
+                        type: 'list',
+                        allowBlank: true,
+                        formulae: [`Referensi!$E$2:$E$${1 + supervisorCount}`],
+                        showErrorMessage: true,
+                        errorTitle: 'Pilihan tidak valid',
+                        error: 'Pilih Atasan dari daftar dropdown, jangan ketik manual.',
+                    }
+
+                    // Kode Atasan auto-terisi dari pilihan di atas -- sama
+                    // pola dengan "Kode Sales" di template Visit Plan.
+                    // Dikunci + abu-abu supaya admin tidak mengira ini
+                    // kolom yang harus diisi manual.
+                    r.getCell(9).value = {
+                        formula: `IFERROR(VLOOKUP(H${3 + i},Referensi!$E:$F,2,0),"")`,
+                    }
+                    r.getCell(9).protection = { locked: true }
+                    r.getCell(9).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } }
+                    r.getCell(9).font = { color: { argb: 'FF6B7280' } }
+
+                }
+
+                r.getCell(10).dataValidation = {
                     type: 'list',
                     allowBlank: true,
                     formulae: ['"Ya,Tidak"'],
