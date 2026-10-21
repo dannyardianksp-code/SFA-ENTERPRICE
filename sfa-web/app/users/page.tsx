@@ -213,6 +213,97 @@ export default function UsersPage() {
 
         }
 
+    // ======================
+    // BULK UPLOAD (Excel) -- sama pola dengan Visit Plan: download
+    // template berisi dropdown Role/Channel + panduan nama Area, isi,
+    // upload, laporan per baris (sukses/gagal) ditampilkan lewat alert.
+    // ======================
+    const [showUpload, setShowUpload] = useState(false)
+    const [uploadFile, setUploadFile] = useState<File | null>(null)
+    const [uploading, setUploading] = useState(false)
+
+    const downloadTemplate = async () => {
+
+        try {
+
+            const token = localStorage.getItem('token')
+
+            const response = await fetch(`${API_BASE_URL}/users/template`, {
+                headers: { Authorization: `Bearer ${token}` }
+            })
+
+            if (!response.ok) {
+                alert('Gagal download template')
+                return
+            }
+
+            const blob = await response.blob()
+            const url = window.URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = 'user-template.xlsx'
+            a.click()
+            window.URL.revokeObjectURL(url)
+
+        } catch {
+            alert('Gagal download template')
+        }
+
+    }
+
+    const handleUpload = async () => {
+
+        if (!uploadFile) {
+            alert('Pilih file dulu')
+            return
+        }
+
+        const token = localStorage.getItem('token')
+
+        const formData = new FormData()
+        formData.append('file', uploadFile)
+
+        setUploading(true)
+
+        try {
+
+            const response = await fetch(`${API_BASE_URL}/users/upload`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+                body: formData
+            })
+
+            const result = await response.json()
+
+            if (!response.ok) {
+                alert(result.message || 'Upload gagal')
+                return
+            }
+
+            // Baris gagal (kalau ada) ditunjukkan ringkas -- Code +
+            // alasannya, maksimal 10 biar alert tidak sepanjang gulungan.
+            const ringkasanGagal = result.errors
+                ?.slice(0, 10)
+                .map((e: any) => `- ${e.row?.Code || '(tanpa code)'}: ${e.reason}`)
+                .join('\n')
+
+            alert(
+                `Import selesai\n\nTotal baris : ${result.total}\nBerhasil : ${result.inserted}\nGagal : ${result.failed}` +
+                (ringkasanGagal ? `\n\nBaris gagal:\n${ringkasanGagal}` : '') +
+                (result.failed > 10 ? `\n... dan ${result.failed - 10} lainnya` : '')
+            )
+
+            setUploadFile(null)
+            fetchUsers()
+
+        } catch {
+            alert('Upload gagal')
+        } finally {
+            setUploading(false)
+        }
+
+    }
+
     const PAGE_SIZE = 10
     const [page, setPage] = useState(1)
 
@@ -254,15 +345,73 @@ export default function UsersPage() {
                     </p>
                 </div>
 
-                <button
-                    onClick={() => router.push('/users/create')}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-2xl font-semibold shadow"
-                >
-                    + Add User
-                </button>
+                <div className="flex gap-3">
+
+                    <button
+                        onClick={() => setShowUpload(!showUpload)}
+                        className="border border-slate-300 hover:bg-slate-100 px-5 py-3 rounded-2xl font-semibold"
+                    >
+                        📤 Upload Excel
+                    </button>
+
+                    <button
+                        onClick={() => router.push('/users/create')}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-2xl font-semibold shadow"
+                    >
+                        + Add User
+                    </button>
+
+                </div>
 
             </div>
 
+            {showUpload && (
+                <div className="bg-white rounded-3xl p-6 shadow-lg space-y-4">
+
+                    <h2 className="font-bold text-slate-900">
+                        📤 Bulk Upload User
+                    </h2>
+
+                    <p className="text-slate-500 text-sm">
+                        Download template, isi data user (Role &amp; Channel lewat dropdown,
+                        Nama Area dipisah koma kalau lebih dari satu), lalu upload lagi di sini.
+                    </p>
+
+                    <button
+                        onClick={downloadTemplate}
+                        className="border border-blue-600 text-blue-600 hover:bg-blue-50 px-4 py-2.5 rounded-xl font-semibold text-sm w-fit"
+                    >
+                        📥 Download Template
+                    </button>
+
+                    <div className="flex flex-wrap gap-3 items-center">
+
+                        <input
+                            type="file"
+                            accept=".xlsx,.xls"
+                            onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                            className="flex-1 border rounded-xl p-2.5 text-sm"
+                        />
+
+                        <button
+                            onClick={handleUpload}
+                            disabled={uploading || !uploadFile}
+                            className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white px-5 py-2.5 rounded-xl font-semibold text-sm"
+                        >
+                            {uploading ? 'Mengunggah...' : 'Upload'}
+                        </button>
+
+                        <button
+                            onClick={() => { setShowUpload(false); setUploadFile(null) }}
+                            className="border border-slate-300 px-4 py-2.5 rounded-xl text-sm hover:bg-slate-100"
+                        >
+                            Batal
+                        </button>
+
+                    </div>
+
+                </div>
+            )}
 
             <div className="bg-white rounded-3xl p-4 shadow flex gap-3 items-center">
 

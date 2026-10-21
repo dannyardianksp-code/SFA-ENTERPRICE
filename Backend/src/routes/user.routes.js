@@ -51,6 +51,18 @@ const {
     nullableUpdate,
 } = require('../utils/update.util')
 
+const fs =
+    require('fs')
+
+const XLSX =
+    require('xlsx')
+
+const ExcelJS =
+    require('exceljs')
+
+const upload =
+    require('../middleware/upload.middleware')
+
 
 /**
  * Jawaban seragam untuk kedua handler saat transaksinya kalah balapan
@@ -600,6 +612,180 @@ router.put(
 
 
 // ======================
+// DOWNLOAD TEMPLATE -- bulk create user lewat Excel
+// ======================
+
+/**
+ * Header kolom sheet "Input User" HARUS cocok persis dengan yang
+ * dibaca router.post('/upload') di bawah -- satu sumber kebenaran,
+ * ditulis di sini, dibaca di sana (pola sama dengan
+ * visitPlan.controller.js downloadTemplate/uploadExcel).
+ *
+ * Area TIDAK pakai dropdown kayak Channel/Role -- satu user bisa
+ * punya lebih dari satu area (area_ids), dan Excel data validation
+ * list cuma mendukung pilihan TUNGGAL per sel. Kolom "Nama Area" jadi
+ * teks bebas dipisah koma, dicocokkan ke daftar nama di sheet
+ * Referensi sebagai panduan copy-paste, bukan dropdown.
+ *
+ * Didaftarkan SEBELUM GET /:id di bawah -- Express mencocokkan rute
+ * sesuai urutan daftar, dan /:id menerima string apa pun termasuk
+ * "template". Didaftarkan sesudahnya, request ke /users/template akan
+ * ketangkap /:id duluan (id="template") dan tidak pernah sampai ke
+ * sini.
+ */
+router.get(
+
+    '/template',
+
+    auth,
+
+    async (req, res) => {
+
+        try {
+
+            const gerbang = assertUserManagement(req.user)
+
+            if (gerbang) {
+                return sendError(res, gerbang.status, gerbang.message)
+            }
+
+            const channelList = await Channel.findAll({
+                attributes: ['name'],
+                order: [['name', 'ASC']],
+            })
+
+            const areaList = await Area.findAll({
+                attributes: ['name'],
+                order: [['name', 'ASC']],
+            })
+
+            const wb = new ExcelJS.Workbook()
+
+            // ---- SHEET REFERENSI (sumber dropdown Channel + panduan nama Area) ----
+            const ref = wb.addWorksheet('Referensi')
+
+            ref.columns = [
+                { header: 'Channel', key: 'channel', width: 20 },
+                { header: '', key: 'gap', width: 3 },
+                { header: 'Nama Area (panduan, bukan dropdown)', key: 'area', width: 32 },
+            ]
+
+            channelList.forEach((c, i) => {
+                ref.getRow(i + 2).getCell('channel').value = c.name
+            })
+
+            areaList.forEach((a, i) => {
+                ref.getRow(i + 2).getCell('area').value = a.name
+            })
+
+            ref.getRow(1).font = { bold: true }
+            ref.state = 'hidden'
+
+            const channelCount = channelList.length
+
+            // ---- SHEET INPUT (yang diisi admin) ----
+            const sheet = wb.addWorksheet('Input User')
+
+            sheet.mergeCells('A1:I1')
+            const instruksi = sheet.getCell('A1')
+            instruksi.value =
+                'Petunjuk: Code/Name/Email/Password/Role wajib diisi. Role & Channel pilih dari dropdown. ' +
+                'Nama Area diisi manual, dipisah koma kalau lebih dari satu (lihat daftar nama yang valid di sheet Referensi/Area Management) -- boleh dikosongkan. ' +
+                'Kode Atasan opsional, isi kode user yang sudah ada kalau mau langsung diatur. ' +
+                'Web Access opsional -- dikosongkan berarti ikut default per Role (field = Tidak, lainnya = Ya).'
+            instruksi.alignment = { wrapText: true, vertical: 'middle' }
+            instruksi.font = { italic: true, color: { argb: 'FF555555' } }
+            sheet.getRow(1).height = 70
+
+            const headerRow = sheet.getRow(2)
+            headerRow.values = [
+                'Code', 'Name', 'Email', 'Password', 'Role',
+                'Channel', 'Nama Area', 'Kode Atasan', 'Web Access',
+            ]
+            headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+            headerRow.eachCell((cell) => {
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2563EB' } }
+                cell.alignment = { horizontal: 'center' }
+            })
+
+            sheet.columns = [
+                { key: 'code', width: 14 },
+                { key: 'name', width: 24 },
+                { key: 'email', width: 26 },
+                { key: 'password', width: 16 },
+                { key: 'role', width: 18 },
+                { key: 'channel', width: 16 },
+                { key: 'area', width: 28 },
+                { key: 'supervisorCode', width: 16 },
+                { key: 'webAccess', width: 12 },
+            ]
+
+            const TOTAL_BARIS_DISIAPKAN = 200
+
+            const ROLE_LIST = [
+                'MD', 'SPG', 'SALES', 'SUPERVISOR', 'MANAGER',
+                'REGIONAL MANAGER', 'GENERAL MANAGER', 'ADMINISTRATOR',
+            ].join(',')
+
+            for (let i = 0; i < TOTAL_BARIS_DISIAPKAN; i++) {
+
+                const r = sheet.getRow(3 + i)
+
+                r.getCell(5).dataValidation = {
+                    type: 'list',
+                    allowBlank: false,
+                    formulae: [`"${ROLE_LIST}"`],
+                    showErrorMessage: true,
+                    errorTitle: 'Pilihan tidak valid',
+                    error: 'Pilih Role dari daftar dropdown.',
+                }
+
+                if (channelCount > 0) {
+                    r.getCell(6).dataValidation = {
+                        type: 'list',
+                        allowBlank: true,
+                        formulae: [`Referensi!$A$2:$A$${1 + channelCount}`],
+                        showErrorMessage: true,
+                        errorTitle: 'Pilihan tidak valid',
+                        error: 'Pilih Channel dari daftar dropdown, jangan ketik manual.',
+                    }
+                }
+
+                r.getCell(9).dataValidation = {
+                    type: 'list',
+                    allowBlank: true,
+                    formulae: ['"Ya,Tidak"'],
+                    showErrorMessage: true,
+                    errorTitle: 'Pilihan tidak valid',
+                    error: 'Pilih Ya atau Tidak dari dropdown.',
+                }
+
+            }
+
+            sheet.views = [{ state: 'frozen', ySplit: 2 }]
+
+            res.setHeader(
+                'Content-Type',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            res.setHeader(
+                'Content-Disposition',
+                'attachment; filename="user-template.xlsx"'
+            )
+
+            await wb.xlsx.write(res)
+            res.end()
+
+        } catch (err) {
+            return sendServerError(res, err, 'DOWNLOAD USER TEMPLATE')
+        }
+
+    }
+
+)
+
+
+// ======================
 // GET USER BY ID
 // ======================
 
@@ -1126,6 +1312,227 @@ router.put(
                 err,
                 'RESET PASSWORD'
             )
+
+        }
+
+    }
+
+)
+
+
+// ======================
+// UPLOAD EXCEL -- bulk create user
+// ======================
+router.post(
+
+    '/upload',
+
+    auth,
+
+    upload.single('file'),
+
+    async (req, res) => {
+
+        try {
+
+            // Gerbang role dulu, sebelum file apa pun dibaca -- sama pola
+            // dengan visitPlan.controller.js uploadExcel. Multer sudah
+            // menulis berkasnya ke disk sebelum handler ini sempat
+            // memeriksa apa pun; berkas yang tidak dihapus di sini jadi
+            // bisa dibaca siapa pun tanpa token lewat /uploads.
+            const gerbang = assertUserManagement(req.user)
+
+            if (gerbang) {
+                if (req.file) fs.unlinkSync(req.file.path)
+                return sendError(res, gerbang.status, gerbang.message)
+            }
+
+            if (!req.file) {
+                return sendError(res, 400, 'File wajib diunggah.')
+            }
+
+            const workbook =
+                XLSX.readFile(req.file.path)
+
+            const sheet =
+                workbook.Sheets['Input User'] ||
+                workbook.Sheets[workbook.SheetNames[0]]
+
+            // range: 1 -- baris pertama sheet ini berisi teks petunjuk
+            // (satu sel digabung), bukan header kolom. Header sebenarnya
+            // di baris kedua.
+            const rows =
+                XLSX.utils.sheet_to_json(sheet, { range: 1 })
+
+            let inserted = 0
+
+            const errors = []
+
+            // Code/email yang baru dibuat DALAM request ini -- dicek di
+            // samping query DB, karena dua baris dalam FILE YANG SAMA
+            // bisa saja memakai code/email yang sama persis (DB belum
+            // tahu soal baris pertama saat baris kedua diperiksa).
+            const codeTerpakai = new Set()
+            const emailTerpakai = new Set()
+
+            for (const row of rows) {
+
+                // Baris kosong (dari Excel yang nge-save seluruh 200
+                // baris yang disiapkan walau tidak semua diisi) --
+                // dilewati diam-diam, bukan dihitung gagal.
+                const kosong =
+                    !row['Code'] && !row['Name'] &&
+                    !row['Email'] && !row['Password']
+
+                if (kosong) continue
+
+                const code = String(row['Code'] ?? '').trim()
+                const name = String(row['Name'] ?? '').trim()
+                const email = String(row['Email'] ?? '').trim()
+                const password = String(row['Password'] ?? '')
+                const role = String(row['Role'] ?? '').trim()
+                const channelName = String(row['Channel'] ?? '').trim()
+                const areaNamesRaw = String(row['Nama Area'] ?? '').trim()
+                const supervisorCode = String(row['Kode Atasan'] ?? '').trim()
+                const webAccessRaw = String(row['Web Access'] ?? '').trim().toLowerCase()
+
+                if (!code || !name || !email || !password || !role) {
+                    errors.push({ row, reason: 'Code/Name/Email/Password/Role ada yang kosong' })
+                    continue
+                }
+
+                if (!USER_ROLES.includes(role)) {
+                    errors.push({ row, reason: 'Role tidak dikenal' })
+                    continue
+                }
+
+                if (codeTerpakai.has(code) || await User.findOne({ where: { code } })) {
+                    errors.push({ row, reason: 'Code sudah dipakai' })
+                    continue
+                }
+
+                if (emailTerpakai.has(email) || await User.findOne({ where: { email } })) {
+                    errors.push({ row, reason: 'Email sudah dipakai' })
+                    continue
+                }
+
+                let channelId = null
+
+                if (channelName) {
+
+                    const channel = await Channel.findOne({ where: { name: channelName } })
+
+                    if (!channel) {
+                        errors.push({ row, reason: `Channel "${channelName}" tidak ditemukan` })
+                        continue
+                    }
+
+                    channelId = channel.id
+
+                }
+
+                let areaIds = []
+
+                if (areaNamesRaw) {
+
+                    const namaList = areaNamesRaw.split(',').map((s) => s.trim()).filter(Boolean)
+
+                    let semuaKetemu = true
+
+                    for (const nama of namaList) {
+
+                        const area = await Area.findOne({ where: { name: nama } })
+
+                        if (!area) {
+                            errors.push({ row, reason: `Area "${nama}" tidak ditemukan` })
+                            semuaKetemu = false
+                            break
+                        }
+
+                        areaIds.push(area.id)
+
+                    }
+
+                    if (!semuaKetemu) continue
+
+                }
+
+                let supervisorId = null
+
+                if (supervisorCode) {
+
+                    const supervisor = await User.findOne({ where: { code: supervisorCode } })
+
+                    if (!supervisor) {
+                        errors.push({ row, reason: `Kode Atasan "${supervisorCode}" tidak ditemukan` })
+                        continue
+                    }
+
+                    supervisorId = supervisor.id
+
+                }
+
+                const canAccessWeb =
+                    webAccessRaw === 'ya'
+                        ? true
+                        : webAccessRaw === 'tidak'
+                            ? false
+                            : !['MD', 'SPG', 'SALES'].includes(role)
+
+                try {
+
+                    const hashedPassword = await bcrypt.hash(password, 10)
+
+                    const user = await User.create({
+                        code,
+                        name,
+                        email,
+                        password: hashedPassword,
+                        role,
+                        area_id: areaIds.length > 0 ? areaIds[0] : null,
+                        channel_id: channelId,
+                        supervisor_id: supervisorId,
+                        can_access_web: canAccessWeb,
+                    })
+
+                    if (areaIds.length > 0) {
+                        await UserArea.bulkCreate(
+                            areaIds.map((areaId) => ({
+                                user_id: user.id,
+                                area_id: areaId,
+                            }))
+                        )
+                    }
+
+                    codeTerpakai.add(code)
+                    emailTerpakai.add(email)
+                    inserted++
+
+                } catch (errBaris) {
+
+                    errors.push({ row, reason: 'Gagal menyimpan baris ini: ' + errBaris.message })
+
+                }
+
+            }
+
+            fs.unlinkSync(req.file.path)
+
+            res.json({
+                success: true,
+                total: rows.length,
+                inserted,
+                failed: errors.length,
+                errors,
+            })
+
+        } catch (err) {
+
+            if (req.file?.path) {
+                fs.unlinkSync(req.file.path)
+            }
+
+            return sendServerError(res, err, 'UPLOAD USER EXCEL')
 
         }
 
