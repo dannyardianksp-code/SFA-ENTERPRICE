@@ -52,7 +52,7 @@ router.post(
                 )
             }
 
-            const { code, name } = req.body
+            const { code, name, channel_id } = req.body
 
             if (typeof code !== 'string' || code.trim() === '') {
                 return sendError(res, 400, 'Code wajib diisi.')
@@ -65,6 +65,7 @@ router.post(
             const kelas = await Class.create({
                 code: code.trim(),
                 name: name.trim(),
+                channel_id: channel_id || null,
             })
 
             res.json(kelas)
@@ -102,12 +103,13 @@ router.put(
                 return sendError(res, 404, 'Class tidak ditemukan.')
             }
 
-            const { code, name } = req.body
+            const { code, name, channel_id } = req.body
 
             const perubahan = {}
 
             if (code !== undefined) perubahan.code = code
             if (name !== undefined) perubahan.name = name
+            if (channel_id !== undefined) perubahan.channel_id = channel_id || null
 
             await kelas.update(perubahan)
 

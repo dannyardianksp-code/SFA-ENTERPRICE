@@ -244,11 +244,17 @@ export default function EditCustomerPage() {
                             className="w-full border rounded-2xl px-4 py-3 mt-2"
                         >
                             <option value="">Select Class</option>
-                            {classes.map((c: any) => (
-                                <option key={c.id} value={c.id}>
-                                    {c.name}
-                                </option>
-                            ))}
+                            {classes
+                                .filter((c: any) =>
+                                    !c.channel_id ||
+                                    c.channel_id === customer.Channel?.id ||
+                                    String(c.id) === form.class_id
+                                )
+                                .map((c: any) => (
+                                    <option key={c.id} value={c.id}>
+                                        {c.name}
+                                    </option>
+                                ))}
                         </select>
                     </div>
 

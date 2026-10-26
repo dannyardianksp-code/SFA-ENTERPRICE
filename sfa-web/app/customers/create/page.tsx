@@ -148,7 +148,12 @@ export default function CreateCustomerPage() {
 
         setForm({
             ...form,
-            [e.target.name]: e.target.value
+            [e.target.name]: e.target.value,
+
+            // Class yang sudah kepilih bisa jadi khusus channel lain --
+            // reset supaya tidak ada submit senyap, class yang sudah
+            // tidak kelihatan di dropdown tapi masih nyangkut.
+            ...(e.target.name === 'channel_id' && { class_id: '' })
         })
 
     }
@@ -594,11 +599,15 @@ export default function CreateCustomerPage() {
                                 </option>
 
                                 {
-                                    classes.map((c: any) => (
-                                        <option key={c.id} value={c.id}>
-                                            {c.name}
-                                        </option>
-                                    ))
+                                    classes
+                                        .filter((c: any) =>
+                                            !c.channel_id || String(c.channel_id) === form.channel_id
+                                        )
+                                        .map((c: any) => (
+                                            <option key={c.id} value={c.id}>
+                                                {c.name}
+                                            </option>
+                                        ))
                                 }
 
                             </select>

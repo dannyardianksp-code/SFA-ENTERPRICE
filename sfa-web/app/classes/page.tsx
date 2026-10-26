@@ -6,10 +6,12 @@ import { API_BASE_URL } from '@/app/utils/api-config'
 export default function ClassesPage() {
 
     const [classes, setClasses] = useState<any[]>([])
+    const [channels, setChannels] = useState<any[]>([])
     const [search, setSearch] = useState('')
     const [role, setRole] = useState('')
+    const [channelFilter, setChannelFilter] = useState('ALL')
 
-    const [form, setForm] = useState({ code: '', name: '' })
+    const [form, setForm] = useState({ code: '', name: '', channel_id: '' })
     const [editId, setEditId] = useState<number | null>(null)
     const [saving, setSaving] = useState(false)
 
@@ -17,13 +19,20 @@ export default function ClassesPage() {
 
         const token = localStorage.getItem('token')
 
-        const res = await fetch(`${API_BASE_URL}/classes`, {
-            headers: { Authorization: `Bearer ${token}` }
-        })
+        const [classRes, channelRes] = await Promise.all([
+            fetch(`${API_BASE_URL}/classes`, {
+                headers: { Authorization: `Bearer ${token}` }
+            }),
+            fetch(`${API_BASE_URL}/channels`, {
+                headers: { Authorization: `Bearer ${token}` }
+            })
+        ])
 
-        const data = await res.json()
+        const data = await classRes.json()
+        const channelData = await channelRes.json()
 
         setClasses(Array.isArray(data) ? data : [])
+        setChannels(Array.isArray(channelData) ? channelData : [])
 
     }
 
@@ -37,12 +46,21 @@ export default function ClassesPage() {
     const PAGE_SIZE = 10
     const [page, setPage] = useState(1)
 
+    const channelName = (channelId: number | null) => {
+        if (!channelId) return 'Semua Channel'
+        return channels.find((ch: any) => ch.id === channelId)?.name || '-'
+    }
+
     const filteredClasses = classes.filter((c: any) => {
         const keyword = search.toLowerCase()
-        return (
+        const matchSearch =
             c.name?.toLowerCase().includes(keyword) ||
             c.code?.toLowerCase().includes(keyword)
-        )
+
+        const matchChannel =
+            channelFilter === 'ALL' || String(c.channel_id || '') === channelFilter
+
+        return matchSearch && matchChannel
     })
 
     const totalPages = Math.max(1, Math.ceil(filteredClasses.length / PAGE_SIZE))
@@ -54,12 +72,12 @@ export default function ClassesPage() {
 
     const handleEdit = (c: any) => {
         setEditId(c.id)
-        setForm({ code: c.code || '', name: c.name || '' })
+        setForm({ code: c.code || '', name: c.name || '', channel_id: c.channel_id ? String(c.channel_id) : '' })
     }
 
     const handleCancelEdit = () => {
         setEditId(null)
-        setForm({ code: '', name: '' })
+        setForm({ code: '', name: '', channel_id: '' })
     }
 
     const handleDelete = async (c: any) => {
@@ -124,7 +142,7 @@ export default function ClassesPage() {
 
         alert(editId ? 'Class berhasil diupdate' : 'Class berhasil ditambahkan')
 
-        setForm({ code: '', name: '' })
+        setForm({ code: '', name: '', channel_id: '' })
         setEditId(null)
 
         fetchClasses()
@@ -152,7 +170,7 @@ export default function ClassesPage() {
                         {editId ? '✏️ Edit Class' : '➕ Tambah Class Baru'}
                     </h2>
 
-                    <form onSubmit={handleSubmit} className="grid md:grid-cols-3 gap-4 items-end">
+                    <form onSubmit={handleSubmit} className="grid md:grid-cols-4 gap-4 items-end">
 
                         <div>
                             <label className="text-sm text-slate-500">Code</label>
@@ -172,6 +190,22 @@ export default function ClassesPage() {
                                 className="w-full mt-2 border rounded-xl p-3"
                                 required
                             />
+                        </div>
+
+                        <div>
+                            <label className="text-sm text-slate-500">
+                                Channel (kosongkan = semua channel)
+                            </label>
+                            <select
+                                value={form.channel_id}
+                                onChange={(e) => setForm({ ...form, channel_id: e.target.value })}
+                                className="w-full mt-2 border rounded-xl p-3"
+                            >
+                                <option value="">Semua Channel</option>
+                                {channels.map((ch: any) => (
+                                    <option key={ch.id} value={ch.id}>{ch.name}</option>
+                                ))}
+                            </select>
                         </div>
 
                         <div className="flex gap-3">
@@ -211,6 +245,17 @@ export default function ClassesPage() {
                     className="flex-1 border rounded-2xl p-3"
                 />
 
+                <select
+                    value={channelFilter}
+                    onChange={(e) => { setChannelFilter(e.target.value); setPage(1) }}
+                    className="border rounded-2xl p-3"
+                >
+                    <option value="ALL">🏷️ Semua Channel</option>
+                    {channels.map((ch: any) => (
+                        <option key={ch.id} value={ch.id}>{ch.name}</option>
+                    ))}
+                </select>
+
             </div>
 
             {/* LIST */}
@@ -224,6 +269,7 @@ export default function ClassesPage() {
 
                             <th className="p-4 text-sm font-semibold text-slate-500">Code</th>
                             <th className="p-4 text-sm font-semibold text-slate-500">Name</th>
+                            <th className="p-4 text-sm font-semibold text-slate-500">Channel</th>
                             {isAdmin && (
                                 <th className="p-4 text-sm font-semibold text-slate-500">Aksi</th>
                             )}
@@ -244,6 +290,8 @@ export default function ClassesPage() {
                                 <td className="p-4 text-slate-600">{c.code}</td>
 
                                 <td className="p-4 font-semibold text-slate-900">{c.name}</td>
+
+                                <td className="p-4 text-slate-600">{channelName(c.channel_id)}</td>
 
                                 {isAdmin && (
                                     <td className="p-4 flex gap-2">

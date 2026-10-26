@@ -892,10 +892,13 @@ async (req, res) => {
                     order: [['name', 'ASC']]
                 }),
 
-                // Class BUKAN dibatasi hak akses area/channel -- semua
-                // role melihat daftar lengkap, sama seperti CustomerGroup.
+                // Class TIDAK dibatasi hak akses area/channel seperti
+                // Area/Channel di atas -- semua role tetap melihat
+                // daftar lengkap (termasuk channel_id-nya), lalu FORM
+                // yang menyaring tampilan sesuai channel yang dipilih
+                // (null = semua channel, sama pola dengan Activity).
                 Class.findAll({
-                    attributes: ['id', 'code', 'name'],
+                    attributes: ['id', 'code', 'name', 'channel_id'],
                     order: [['name', 'ASC']]
                 }),
 
