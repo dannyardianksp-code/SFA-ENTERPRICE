@@ -29,6 +29,12 @@ export default function CustomersPage() {
     const [areaFilterOpen, setAreaFilterOpen] =
         useState(false)
 
+    const [selectedChannelIds, setSelectedChannelIds] =
+        useState<number[]>([])
+
+    const [channelFilterOpen, setChannelFilterOpen] =
+        useState(false)
+
     const router = useRouter()
 
     useEffect(() => {
@@ -407,6 +413,31 @@ export default function CustomersPage() {
 
     }
 
+    // Sama pola dengan uniqueAreas -- diambil dari customer yang sudah
+    // ke-load (sudah dibatasi backend sesuai hak akses user), bukan
+    // endpoint /channels terpisah.
+    const uniqueChannels = Array.from(
+        new Map(
+            customers
+                .filter((c) => c.Channel?.id)
+                .map((c) => [c.Channel.id, c.Channel])
+        ).values()
+    ).sort((a: any, b: any) =>
+        (a.code || '').localeCompare(b.code || '')
+    )
+
+    const toggleChannelFilter = (channelId: number) => {
+
+        setSelectedChannelIds((prev) =>
+            prev.includes(channelId)
+                ? prev.filter((id) => id !== channelId)
+                : [...prev, channelId]
+        )
+
+        setPage(1)
+
+    }
+
     const filteredCustomers = customers.filter((c) =>
         c.name.toLowerCase().includes(search.toLowerCase())
         &&
@@ -414,6 +445,12 @@ export default function CustomersPage() {
             selectedAreaIds.length === 0
             ||
             selectedAreaIds.includes(c.Area?.id ?? c.area_id)
+        )
+        &&
+        (
+            selectedChannelIds.length === 0
+            ||
+            selectedChannelIds.includes(c.Channel?.id ?? c.channel_id)
         )
     )
 
@@ -611,6 +648,70 @@ export default function CustomersPage() {
                                             onChange={() => toggleAreaFilter(area.id)}
                                         />
                                         {area.code} -- {area.name}
+                                    </label>
+                                ))}
+
+                            </div>
+
+                        </div>
+
+                    )}
+
+                </div>
+
+                <div className="relative">
+
+                    <button
+                        onClick={() => setChannelFilterOpen((v) => !v)}
+                        className={`px-4 py-4 rounded-2xl shadow text-sm font-semibold ${
+                            selectedChannelIds.length > 0
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-white text-slate-700'
+                        }`}
+                    >
+                        🏷️ Channel{selectedChannelIds.length > 0 ? ` (${selectedChannelIds.length})` : ''}
+                    </button>
+
+                    {channelFilterOpen && (
+
+                        <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl shadow-lg border border-slate-200 p-3 z-20">
+
+                            <div className="flex items-center justify-between mb-2">
+
+                                <span className="text-xs font-bold text-slate-400 uppercase">
+                                    Filter Channel
+                                </span>
+
+                                {selectedChannelIds.length > 0 && (
+                                    <button
+                                        onClick={() => { setSelectedChannelIds([]); setPage(1) }}
+                                        className="text-xs text-blue-600 font-semibold"
+                                    >
+                                        Hapus semua
+                                    </button>
+                                )}
+
+                            </div>
+
+                            <div className="max-h-64 overflow-y-auto flex flex-col gap-1">
+
+                                {uniqueChannels.length === 0 && (
+                                    <p className="text-sm text-slate-400 px-1 py-2">
+                                        Belum ada data channel.
+                                    </p>
+                                )}
+
+                                {uniqueChannels.map((channel: any) => (
+                                    <label
+                                        key={channel.id}
+                                        className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer text-sm text-slate-700"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedChannelIds.includes(channel.id)}
+                                            onChange={() => toggleChannelFilter(channel.id)}
+                                        />
+                                        {channel.code} -- {channel.name}
                                     </label>
                                 ))}
 
