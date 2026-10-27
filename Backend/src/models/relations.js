@@ -266,6 +266,15 @@ ActivityFieldDefinition.belongsTo(Activity, {
     foreignKey: 'activity_id',
 })
 
+const ExcelUpload = require('./excelUpload.model')
+
+// Siapa yang meng-upload file Excel -- alias supaya bentuk JSON-nya
+// { Uploader: { id, name } }.
+ExcelUpload.belongsTo(User, {
+    foreignKey: 'uploaded_by',
+    as: 'Uploader',
+})
+
 
 User.belongsToMany(
 
