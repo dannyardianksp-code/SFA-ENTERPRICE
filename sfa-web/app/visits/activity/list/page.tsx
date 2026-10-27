@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { API_BASE_URL, UPLOADS_ORIGIN } from '@/app/utils/api-config'
 import { exportToExcel } from '@/app/utils/export-excel'
+import MultiSelectFilter from '@/app/components/MultiSelectFilter'
 
 const PAGE_SIZE = 10
 
@@ -31,9 +32,10 @@ export default function ActivityListPage() {
 
     const [dateFrom, setDateFrom] = useState(awalBulanIni())
     const [dateTo, setDateTo] = useState(akhirBulanIni())
-    const [areaFilter, setAreaFilter] = useState('ALL')
-    const [salesFilter, setSalesFilter] = useState('ALL')
-    const [activityFilter, setActivityFilter] = useState('ALL')
+    // Multi-pilih (model filter menu Customer) -- kosong = semua.
+    const [areaFilter, setAreaFilter] = useState<number[]>([])
+    const [salesFilter, setSalesFilter] = useState<number[]>([])
+    const [activityFilter, setActivityFilter] = useState<number[]>([])
     const [product, setProduct] = useState('')
     const [page, setPage] = useState(1)
 
@@ -77,16 +79,7 @@ export default function ActivityListPage() {
         setSalesUsers(Array.isArray(uData) ? uData : [])
         setActivityTypes(Array.isArray(tData) ? tData : [])
 
-        const daftarArea = Array.isArray(arData) ? arData : []
-        setAreas(daftarArea)
-
-        // Role terbatas cuma dapat 1 area dari /areas (lihat area.routes.js) --
-        // opsi "Semua Area" jadi tidak berguna (sama saja dengan area
-        // satu-satunya itu), jadi langsung pilihkan area itu daripada
-        // nampilin "Semua Area" yang menyesatkan.
-        if (daftarArea.length === 1) {
-            setAreaFilter(String(daftarArea[0].id))
-        }
+        setAreas(Array.isArray(arData) ? arData : [])
 
         setLoading(false)
     }
@@ -99,10 +92,17 @@ export default function ActivityListPage() {
         fetchData()
     }, [])
 
-    // user_id -> area_id, sama pola dengan Report Visit -- area ada di
-    // tabel users, bukan di visit-activities.
-    const areaByUserId = new Map(
-        salesUsers.map((u: any) => [u.id, u.area_id])
+    // user_id -> [area_id...], sama pola dengan Attendance -- area ada
+    // di tabel users (bukan di visit-activities), dan sales bisa
+    // di-assign ke LEBIH DARI SATU area (AssignedAreas). area_id cuma
+    // fallback kalau belum ada assignment sama sekali.
+    const areasByUserId = new Map(
+        salesUsers.map((u: any) => [
+            u.id,
+            u.AssignedAreas?.length
+                ? u.AssignedAreas.map((ar: any) => ar.id)
+                : (u.area_id ? [u.area_id] : [])
+        ])
     )
 
     /**
@@ -152,14 +152,14 @@ export default function ActivityListPage() {
         const matchDateTo = !dateTo || (tanggal && tanggal <= dateTo)
 
         const matchSales =
-            salesFilter === 'ALL' || String(a.Visit?.User?.id) === salesFilter
+            salesFilter.length === 0 || salesFilter.includes(a.Visit?.User?.id)
 
         const matchArea =
-            areaFilter === 'ALL' ||
-            String(areaByUserId.get(a.Visit?.User?.id)) === areaFilter
+            areaFilter.length === 0 ||
+            (areasByUserId.get(a.Visit?.User?.id) || []).some((id: number) => areaFilter.includes(id))
 
         const matchActivity =
-            activityFilter === 'ALL' || String(a.activity_id) === activityFilter
+            activityFilter.length === 0 || activityFilter.includes(a.activity_id)
 
         // Field activity sekarang dinamis (lihat field_values +
         // Activity.FieldDefinitions) -- cari di SEMUA nilai field baris
@@ -303,40 +303,37 @@ export default function ActivityListPage() {
                     <input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1) }} />
                 </div>
 
-                <div>
-                    <label style={{ fontSize: 12, color: '#6b7280', display: 'block' }}>
-                        Area
-                    </label>
-                    <select value={areaFilter} onChange={e => { setAreaFilter(e.target.value); setPage(1) }}>
-                        {areas.length > 1 && <option value="ALL">Semua Area</option>}
-                        {areas.map((a: any) => (
-                            <option key={a.id} value={a.id}>{a.name}</option>
-                        ))}
-                    </select>
-                </div>
+                <div style={{ alignSelf: 'flex-end', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
 
-                <div>
-                    <label style={{ fontSize: 12, color: '#6b7280', display: 'block' }}>
-                        Nama Sales
-                    </label>
-                    <select value={salesFilter} onChange={e => { setSalesFilter(e.target.value); setPage(1) }}>
-                        <option value="ALL">Semua Sales</option>
-                        {salesUsers.map((u: any) => (
-                            <option key={u.id} value={u.id}>{u.name}</option>
-                        ))}
-                    </select>
-                </div>
+                    <MultiSelectFilter
+                        icon="📍"
+                        label="Area"
+                        options={areas.map((a: any) => ({ id: a.id, label: `${a.code} -- ${a.name}` }))}
+                        selected={areaFilter}
+                        onChange={(ids) => { setAreaFilter(ids); setPage(1) }}
+                        emptyText="Belum ada data area."
+                    />
 
-                <div>
-                    <label style={{ fontSize: 12, color: '#6b7280', display: 'block' }}>
-                        Kegiatan / Activity
-                    </label>
-                    <select value={activityFilter} onChange={e => { setActivityFilter(e.target.value); setPage(1) }}>
-                        <option value="ALL">Semua Kegiatan</option>
-                        {activityTypes.map((t: any) => (
-                            <option key={t.id} value={t.id}>{t.name}</option>
-                        ))}
-                    </select>
+                    <MultiSelectFilter
+                        icon="👤"
+                        label="Sales"
+                        options={salesUsers.map((u: any) => ({ id: u.id, label: u.name }))}
+                        selected={salesFilter}
+                        onChange={(ids) => { setSalesFilter(ids); setPage(1) }}
+                        searchable
+                        emptyText="Belum ada data sales."
+                    />
+
+                    <MultiSelectFilter
+                        icon="📝"
+                        label="Kegiatan"
+                        options={activityTypes.map((t: any) => ({ id: t.id, label: t.name }))}
+                        selected={activityFilter}
+                        onChange={(ids) => { setActivityFilter(ids); setPage(1) }}
+                        searchable
+                        emptyText="Belum ada data kegiatan."
+                    />
+
                 </div>
 
                 <div>

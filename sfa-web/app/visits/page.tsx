@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { API_BASE_URL } from '@/app/utils/api-config'
 import { exportToExcel } from '@/app/utils/export-excel'
+import MultiSelectFilter from '@/app/components/MultiSelectFilter'
 
 const PAGE_SIZE = 10
 
@@ -33,8 +34,9 @@ export default function VisitHistoryPage() {
 
     const [dateFrom, setDateFrom] = useState(awalBulanIni())
     const [dateTo, setDateTo] = useState(akhirBulanIni())
-    const [areaFilter, setAreaFilter] = useState('ALL')
-    const [salesFilter, setSalesFilter] = useState('ALL')
+    // Multi-pilih (model filter menu Customer) -- kosong = semua.
+    const [areaFilter, setAreaFilter] = useState<number[]>([])
+    const [salesFilter, setSalesFilter] = useState<number[]>([])
     const [page, setPage] = useState(1)
 
     const router = useRouter()
@@ -71,16 +73,7 @@ export default function VisitHistoryPage() {
         setVisits(Array.isArray(vData) ? vData : [])
         setUsers(Array.isArray(uData) ? uData : [])
 
-        const daftarArea = Array.isArray(aData) ? aData : []
-        setAreas(daftarArea)
-
-        // Role terbatas cuma dapat 1 area dari /areas (lihat area.routes.js) --
-        // opsi "Semua Area" jadi tidak berguna (sama saja dengan area
-        // satu-satunya itu), jadi langsung pilihkan area itu daripada
-        // nampilin "Semua Area" yang menyesatkan.
-        if (daftarArea.length === 1) {
-            setAreaFilter(String(daftarArea[0].id))
-        }
+        setAreas(Array.isArray(aData) ? aData : [])
     }
 
     useEffect(() => {
@@ -88,10 +81,17 @@ export default function VisitHistoryPage() {
         fetchData()
     }, [])
 
-    // user_id -> area_id, dari daftar users (visit sendiri tidak
-    // membawa area).
-    const areaByUserId = new Map(
-        users.map((u: any) => [u.id, u.area_id])
+    // user_id -> [area_id...], dari daftar users (visit sendiri tidak
+    // membawa area). Sales bisa di-assign ke LEBIH DARI SATU area
+    // (AssignedAreas) -- area_id cuma fallback kalau belum ada
+    // assignment sama sekali. Sama pola dengan Attendance.
+    const areasByUserId = new Map(
+        users.map((u: any) => [
+            u.id,
+            u.AssignedAreas?.length
+                ? u.AssignedAreas.map((ar: any) => ar.id)
+                : (u.area_id ? [u.area_id] : [])
+        ])
     )
 
     // ======================
@@ -109,11 +109,11 @@ export default function VisitHistoryPage() {
         const matchDateTo = !dateTo || (checkinDate && checkinDate <= dateTo)
 
         const matchSales =
-            salesFilter === 'ALL' || String(v.User?.id) === salesFilter
+            salesFilter.length === 0 || salesFilter.includes(v.User?.id)
 
         const matchArea =
-            areaFilter === 'ALL' ||
-            String(areaByUserId.get(v.User?.id)) === areaFilter
+            areaFilter.length === 0 ||
+            (areasByUserId.get(v.User?.id) || []).some((id: number) => areaFilter.includes(id))
 
         return matchSearch && matchDateFrom && matchDateTo && matchSales && matchArea
 
@@ -256,50 +256,27 @@ export default function VisitHistoryPage() {
                     />
                 </div>
 
-                <div>
-                    <label style={{ fontSize: 12, color: '#6b7280' }}>
-                        Area
-                    </label>
-                    <select
-                        value={areaFilter}
-                        onChange={(e) => { setAreaFilter(e.target.value); setPage(1) }}
-                        style={{
-                            display: 'block',
-                            padding: 12,
-                            borderRadius: 12,
-                            border: '1px solid #ddd'
-                        }}
-                    >
-                        {areas.length > 1 && <option value="ALL">Semua Area</option>}
-                        {areas.map((a: any) => (
-                            <option key={a.id} value={a.id}>
-                                {a.name}
-                            </option>
-                        ))}
-                    </select>
-                </div>
+                <div style={{ alignSelf: 'flex-end', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
 
-                <div>
-                    <label style={{ fontSize: 12, color: '#6b7280' }}>
-                        Nama Sales
-                    </label>
-                    <select
-                        value={salesFilter}
-                        onChange={(e) => { setSalesFilter(e.target.value); setPage(1) }}
-                        style={{
-                            display: 'block',
-                            padding: 12,
-                            borderRadius: 12,
-                            border: '1px solid #ddd'
-                        }}
-                    >
-                        <option value="ALL">Semua Sales</option>
-                        {users.map((u: any) => (
-                            <option key={u.id} value={u.id}>
-                                {u.name}
-                            </option>
-                        ))}
-                    </select>
+                    <MultiSelectFilter
+                        icon="📍"
+                        label="Area"
+                        options={areas.map((a: any) => ({ id: a.id, label: `${a.code} -- ${a.name}` }))}
+                        selected={areaFilter}
+                        onChange={(ids) => { setAreaFilter(ids); setPage(1) }}
+                        emptyText="Belum ada data area."
+                    />
+
+                    <MultiSelectFilter
+                        icon="👤"
+                        label="Sales"
+                        options={users.map((u: any) => ({ id: u.id, label: u.name }))}
+                        selected={salesFilter}
+                        onChange={(ids) => { setSalesFilter(ids); setPage(1) }}
+                        searchable
+                        emptyText="Belum ada data sales."
+                    />
+
                 </div>
 
             </div>
