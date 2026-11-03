@@ -107,7 +107,7 @@ router.post(
                 )
             }
 
-            const { code, name, checkin_radius_meters, timezone } = req.body
+            const { code, name, checkin_radius_meters, timezone, channel_id } = req.body
 
             if (typeof code !== 'string' || code.trim() === '') {
                 return sendError(res, 400, 'Code wajib diisi.')
@@ -146,6 +146,9 @@ router.post(
                 name: name.trim(),
                 checkin_radius_meters: radius,
                 timezone: timezone || 'Asia/Jakarta',
+                // Kosong/tidak dikirim = berlaku buat semua channel --
+                // sama pola dengan class.routes.js.
+                channel_id: channel_id || null,
             })
 
             res.json(area)
@@ -184,12 +187,13 @@ router.put(
                 return sendError(res, 404, 'Area tidak ditemukan.')
             }
 
-            const { code, name, checkin_radius_meters, timezone } = req.body
+            const { code, name, checkin_radius_meters, timezone, channel_id } = req.body
 
             const perubahan = {}
 
             if (code !== undefined) perubahan.code = code
             if (name !== undefined) perubahan.name = name
+            if (channel_id !== undefined) perubahan.channel_id = channel_id || null
 
             if (timezone !== undefined) {
 

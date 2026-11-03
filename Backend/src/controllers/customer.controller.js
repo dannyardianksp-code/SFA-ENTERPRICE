@@ -882,7 +882,10 @@ async (req, res) => {
 
                 Area.findAll({
                     where: areaWhere,
-                    attributes: ['id', 'code', 'name'],
+                    // channel_id ikut dikirim supaya form bisa menyaring
+                    // area yang khusus channel lain -- sama pola dengan
+                    // classes di bawah.
+                    attributes: ['id', 'code', 'name', 'channel_id'],
                     order: [['name', 'ASC']]
                 }),
 

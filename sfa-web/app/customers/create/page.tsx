@@ -150,10 +150,10 @@ export default function CreateCustomerPage() {
             ...form,
             [e.target.name]: e.target.value,
 
-            // Class yang sudah kepilih bisa jadi khusus channel lain --
-            // reset supaya tidak ada submit senyap, class yang sudah
-            // tidak kelihatan di dropdown tapi masih nyangkut.
-            ...(e.target.name === 'channel_id' && { class_id: '' })
+            // Area/Class yang sudah kepilih bisa jadi khusus channel
+            // lain -- reset supaya tidak ada submit senyap, pilihan yang
+            // sudah tidak kelihatan di dropdown tapi masih nyangkut.
+            ...(e.target.name === 'channel_id' && { area_id: '', class_id: '' })
         })
 
     }
@@ -482,25 +482,29 @@ export default function CreateCustomerPage() {
 
                                 {
 
-                                    areas.map(
+                                    areas
+                                        .filter((a: any) =>
+                                            !a.channel_id || String(a.channel_id) === form.channel_id
+                                        )
+                                        .map(
 
-                                        (a: any) => (
+                                            (a: any) => (
 
-                                            <option
+                                                <option
 
-                                                key={a.id}
+                                                    key={a.id}
 
-                                                value={a.id}
+                                                    value={a.id}
 
-                                            >
+                                                >
 
-                                                {a.name}
+                                                    {a.name}
 
-                                            </option>
+                                                </option>
+
+                                            )
 
                                         )
-
-                                    )
 
                                 }
 

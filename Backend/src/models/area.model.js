@@ -35,6 +35,15 @@ const Area =
             timezone: {
                 type: DataTypes.STRING,
                 defaultValue: 'Asia/Jakarta',
+            },
+
+            // NULL = berlaku buat semua channel (default) -- sama pola
+            // dengan Class.channel_id dan Activity.channel_id. Kota besar
+            // biasanya dipakai campur semua channel; daerah lain bisa
+            // dikunci cuma milik satu channel (mis. kawasan industri cuma
+            // channel Industri).
+            channel_id: {
+                type: DataTypes.INTEGER
             }
 
         },

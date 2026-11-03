@@ -266,7 +266,17 @@ export default function EditUserPage() {
             // supaya tidak ada submit senyap, supervisor_id yang sudah
             // tidak kelihatan tapi masih nyangkut.
             ...(e.target.name === 'channel_id' && {
-                supervisor_id: ''
+                supervisor_id: '',
+
+                // Area khusus channel lain yang sudah tercentang tidak
+                // lagi boleh ikut -- lepas supaya tidak ada submit senyap,
+                // area yang sudah tidak kelihatan di checklist tapi masih
+                // nyangkut. Area "Semua Channel" (channel_id null) tetap
+                // dipertahankan.
+                area_ids: form.area_ids.filter((id: number) => {
+                    const area = areas.find((a: any) => a.id === id)
+                    return !area?.channel_id || String(area.channel_id) === e.target.value
+                })
             })
 
         })
@@ -305,14 +315,26 @@ export default function EditUserPage() {
 
     }
 
-    // Semua area sudah terpilih -> checkbox "Pilih Semua" tercentang.
-    // areas.length > 0 dicek supaya tidak keliru tercentang saat master
-    // data area belum selesai di-fetch (array kosong).
+    // Area khusus channel lain disembunyikan dari pilihan -- sama pola
+    // dengan Class/Area di form Customer. Belum pilih channel -> semua
+    // area tetap kelihatan (sama perilaku dengan dropdown Supervisor di
+    // bawah), karena role lapangan boleh saja belum ditentukan channel-nya
+    // saat area di-assign.
+    const areasForChannel = areas.filter((a: any) =>
+        !a.channel_id || !form.channel_id || String(a.channel_id) === String(form.channel_id)
+    )
+
+    // Semua area (yang kelihatan) sudah terpilih -> checkbox "Pilih
+    // Semua" tercentang. areasForChannel.length > 0 dicek supaya tidak
+    // keliru tercentang saat master data area belum selesai di-fetch
+    // (array kosong).
     const semuaAreaTerpilih =
-        areas.length > 0 &&
-        areas.every((a: any) => form.area_ids.includes(a.id))
+        areasForChannel.length > 0 &&
+        areasForChannel.every((a: any) => form.area_ids.includes(a.id))
 
     const toggleAllAreas = () => {
+
+        const idsForChannel = areasForChannel.map((a: any) => a.id)
 
         setForm((sekarang) => ({
 
@@ -320,8 +342,11 @@ export default function EditUserPage() {
 
             area_ids:
                 semuaAreaTerpilih
-                    ? []
-                    : areas.map((a: any) => a.id)
+                    // Lepas cuma yang kelihatan sekarang -- area channel
+                    // lain yang kebetulan sudah tercentang dari
+                    // sebelumnya tetap dipertahankan.
+                    ? sekarang.area_ids.filter((id) => !idsForChannel.includes(id))
+                    : [...new Set([...sekarang.area_ids, ...idsForChannel])]
 
         }))
 
@@ -546,7 +571,7 @@ export default function EditUserPage() {
 
                         <div className="mt-2 border rounded-xl p-3 grid sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto">
 
-                            {areas
+                            {areasForChannel
                                 .filter((a: any) =>
                                     a.name?.toLowerCase().includes(areaSearch.toLowerCase())
                                 )

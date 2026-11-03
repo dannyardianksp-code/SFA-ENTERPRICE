@@ -20,10 +20,12 @@ const TIMEZONE_LABEL: Record<string, string> = {
 export default function AreasPage() {
 
     const [areas, setAreas] = useState<any[]>([])
+    const [channels, setChannels] = useState<any[]>([])
     const [search, setSearch] = useState('')
     const [role, setRole] = useState('')
+    const [channelFilter, setChannelFilter] = useState('ALL')
 
-    const [form, setForm] = useState({ code: '', name: '', checkin_radius_meters: '', timezone: 'Asia/Jakarta' })
+    const [form, setForm] = useState({ code: '', name: '', checkin_radius_meters: '', timezone: 'Asia/Jakarta', channel_id: '' })
     const [editId, setEditId] = useState<number | null>(null)
     const [saving, setSaving] = useState(false)
 
@@ -31,13 +33,20 @@ export default function AreasPage() {
 
         const token = localStorage.getItem('token')
 
-        const res = await fetch(`${API_BASE_URL}/areas`, {
-            headers: { Authorization: `Bearer ${token}` }
-        })
+        const [areaRes, channelRes] = await Promise.all([
+            fetch(`${API_BASE_URL}/areas`, {
+                headers: { Authorization: `Bearer ${token}` }
+            }),
+            fetch(`${API_BASE_URL}/channels`, {
+                headers: { Authorization: `Bearer ${token}` }
+            })
+        ])
 
-        const data = await res.json()
+        const data = await areaRes.json()
+        const channelData = await channelRes.json()
 
         setAreas(Array.isArray(data) ? data : [])
+        setChannels(Array.isArray(channelData) ? channelData : [])
 
     }
 
@@ -51,12 +60,21 @@ export default function AreasPage() {
     const PAGE_SIZE = 10
     const [page, setPage] = useState(1)
 
+    const channelName = (channelId: number | null) => {
+        if (!channelId) return 'Semua Channel'
+        return channels.find((ch: any) => ch.id === channelId)?.name || '-'
+    }
+
     const filteredAreas = areas.filter((a: any) => {
         const keyword = search.toLowerCase()
-        return (
+        const matchSearch =
             a.name?.toLowerCase().includes(keyword) ||
             a.code?.toLowerCase().includes(keyword)
-        )
+
+        const matchChannel =
+            channelFilter === 'ALL' || String(a.channel_id || '') === channelFilter
+
+        return matchSearch && matchChannel
     })
 
     const totalPages = Math.max(1, Math.ceil(filteredAreas.length / PAGE_SIZE))
@@ -73,13 +91,14 @@ export default function AreasPage() {
             name: a.name || '',
             checkin_radius_meters:
                 a.checkin_radius_meters != null ? String(a.checkin_radius_meters) : '',
-            timezone: a.timezone || 'Asia/Jakarta'
+            timezone: a.timezone || 'Asia/Jakarta',
+            channel_id: a.channel_id ? String(a.channel_id) : ''
         })
     }
 
     const handleCancelEdit = () => {
         setEditId(null)
-        setForm({ code: '', name: '', checkin_radius_meters: '', timezone: 'Asia/Jakarta' })
+        setForm({ code: '', name: '', checkin_radius_meters: '', timezone: 'Asia/Jakarta', channel_id: '' })
     }
 
     const handleDelete = async (a: any) => {
@@ -133,7 +152,8 @@ export default function AreasPage() {
                 code: form.code,
                 name: form.name,
                 checkin_radius_meters: form.checkin_radius_meters || null,
-                timezone: form.timezone
+                timezone: form.timezone,
+                channel_id: form.channel_id || null
             })
 
         })
@@ -149,7 +169,7 @@ export default function AreasPage() {
 
         alert(editId ? 'Area berhasil diupdate' : 'Area berhasil ditambahkan')
 
-        setForm({ code: '', name: '', checkin_radius_meters: '', timezone: 'Asia/Jakarta' })
+        setForm({ code: '', name: '', checkin_radius_meters: '', timezone: 'Asia/Jakarta', channel_id: '' })
         setEditId(null)
 
         fetchAreas()
@@ -177,7 +197,7 @@ export default function AreasPage() {
                         {editId ? '✏️ Edit Area' : '➕ Tambah Area Baru'}
                     </h2>
 
-                    <form onSubmit={handleSubmit} className="grid md:grid-cols-5 gap-4 items-end">
+                    <form onSubmit={handleSubmit} className="grid md:grid-cols-6 gap-4 items-end">
 
                         <div>
                             <label className="text-sm text-slate-500">Code</label>
@@ -230,6 +250,22 @@ export default function AreasPage() {
                             </select>
                         </div>
 
+                        <div>
+                            <label className="text-sm text-slate-500">
+                                Channel (kosongkan = semua channel)
+                            </label>
+                            <select
+                                value={form.channel_id}
+                                onChange={(e) => setForm({ ...form, channel_id: e.target.value })}
+                                className="w-full mt-2 border rounded-xl p-3"
+                            >
+                                <option value="">Semua Channel</option>
+                                {channels.map((ch: any) => (
+                                    <option key={ch.id} value={ch.id}>{ch.name}</option>
+                                ))}
+                            </select>
+                        </div>
+
                         <div className="flex gap-3">
 
                             <button
@@ -267,6 +303,17 @@ export default function AreasPage() {
                     className="flex-1 border rounded-2xl p-3"
                 />
 
+                <select
+                    value={channelFilter}
+                    onChange={(e) => { setChannelFilter(e.target.value); setPage(1) }}
+                    className="border rounded-2xl p-3"
+                >
+                    <option value="ALL">🏷️ Semua Channel</option>
+                    {channels.map((ch: any) => (
+                        <option key={ch.id} value={ch.id}>{ch.name}</option>
+                    ))}
+                </select>
+
             </div>
 
             {/* LIST */}
@@ -282,6 +329,7 @@ export default function AreasPage() {
                             <th className="p-4 text-sm font-semibold text-slate-500">Name</th>
                             <th className="p-4 text-sm font-semibold text-slate-500">Radius Check-in (meter)</th>
                             <th className="p-4 text-sm font-semibold text-slate-500">Zona Waktu</th>
+                            <th className="p-4 text-sm font-semibold text-slate-500">Channel</th>
                             {isAdmin && (
                                 <th className="p-4 text-sm font-semibold text-slate-500">Aksi</th>
                             )}
@@ -310,6 +358,17 @@ export default function AreasPage() {
 
                                     <td className="p-4 text-slate-600">
                                         {TIMEZONE_LABEL[a.timezone] || a.timezone || 'WIB'}
+                                    </td>
+
+                                    <td className="p-4">
+                                        <span
+                                            className={`px-3 py-1 rounded-full text-xs font-semibold ${a.channel_id
+                                                ? 'bg-blue-50 text-blue-700'
+                                                : 'bg-slate-100 text-slate-500'
+                                                }`}
+                                        >
+                                            {channelName(a.channel_id)}
+                                        </span>
                                     </td>
 
                                     {isAdmin && (
