@@ -607,6 +607,23 @@ export default function CreateUserPage() {
                     </div>
 
                     <div>
+                        <label className="text-sm text-slate-500">Channel</label>
+                        <select
+                            name="channel_id"
+                            value={form.channel_id}
+                            onChange={handleChange}
+                            className="w-full mt-2 border rounded-xl p-3"
+                        >
+                            <option value="">Select Channel</option>
+                            {channels.map((c: any) => (
+                                <option key={c.id} value={c.id}>
+                                    {c.name}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div>
                         <label className="text-sm text-slate-500">
                             Area {areaIds.length > 0 && `(${areaIds.length} dipilih)`}
                         </label>
@@ -649,23 +666,6 @@ export default function CreateUserPage() {
                                 ))}
 
                         </div>
-                    </div>
-
-                    <div>
-                        <label className="text-sm text-slate-500">Channel</label>
-                        <select
-                            name="channel_id"
-                            value={form.channel_id}
-                            onChange={handleChange}
-                            className="w-full mt-2 border rounded-xl p-3"
-                        >
-                            <option value="">Select Channel</option>
-                            {channels.map((c: any) => (
-                                <option key={c.id} value={c.id}>
-                                    {c.name}
-                                </option>
-                            ))}
-                        </select>
                     </div>
 
                     <div>
