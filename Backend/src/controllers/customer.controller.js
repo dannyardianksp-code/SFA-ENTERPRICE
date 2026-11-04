@@ -718,18 +718,46 @@ async (req, res) => {
         }
 
 
-        // Helper yang sama dipakai getAll, supaya hak akses area
-        // tidak pernah dihitung dengan dua cara berbeda.
-        const areaIds =
-            resolveAccessibleAreaIds(user);
+        // SAMA PERSIS pola tiga cabang dengan getAll -- jangan cuma
+        // menyaring area dan lupa channel (bug nyata: SUPERVISOR channel
+        // Modern Trade sempat melihat toko channel Food Service di
+        // Nearby karena cuma area yang disaring, channel-nya tidak).
+        //
+        // RESTRICTED_ROLES: area YANG di-assign + channel sendiri.
+        // GENERAL MANAGER: semua area, tapi cuma channel sendiri.
+        // Selain itu (ADMINISTRATOR dkk): tidak dibatasi -- sama seperti
+        // Master Customer.
+        let whereCondition = { status: 'ACTIVE' }
 
+        if (RESTRICTED_ROLES.includes(user.role)) {
 
-        // Selalu balas array telanjang. Sebelumnya cabang ini
-        // mengembalikan { success, message, data } sehingga bentuk
-        // responsnya berbeda dari cabang sukses dan memecahkan client.
-        if (areaIds.length === 0) {
+            // Helper yang sama dipakai getAll, supaya hak akses area
+            // tidak pernah dihitung dengan dua cara berbeda.
+            const areaIds =
+                resolveAccessibleAreaIds(user);
 
-            return res.json([]);
+            // Selalu balas array telanjang. Sebelumnya cabang ini
+            // mengembalikan { success, message, data } sehingga bentuk
+            // responsnya berbeda dari cabang sukses dan memecahkan
+            // client.
+            if (areaIds.length === 0) {
+
+                return res.json([]);
+
+            }
+
+            whereCondition.area_id = { [Op.in]: areaIds }
+            whereCondition.channel_id = user.channel_id
+
+        } else if (user.role === 'GENERAL MANAGER') {
+
+            if (!user.channel_id) {
+
+                return res.json([]);
+
+            }
+
+            whereCondition.channel_id = user.channel_id
 
         }
 
@@ -741,13 +769,9 @@ async (req, res) => {
                 // getAll (yang defaultnya tidak memfilter supaya Master
                 // Customer bisa lihat semua). Di sini TIDAK ADA alasan
                 // sah buat nampilin toko INACTIVE sebagai kandidat
-                // check-in, jadi filternya wajib, bukan opsional.
-                where:{
-                    area_id:{
-                        [Op.in]: areaIds
-                    },
-                    status: 'ACTIVE'
-                },
+                // check-in, jadi filternya wajib, bukan opsional (sudah
+                // ikut di whereCondition di atas).
+                where: whereCondition,
 
 
                 include:[
