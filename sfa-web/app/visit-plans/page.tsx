@@ -69,6 +69,9 @@ export default function VisitPlansPage() {
     const [salesFilter, setSalesFilter] = useState('ALL')
     const [dateFilter, setDateFilter] = useState(todayStr())
 
+    const PAGE_SIZE = 20
+    const [page, setPage] = useState(1)
+
     // Kalender jadi default -- lebih cepat buat assign banyak toko
     // sekaligus daripada isi form satu-satu, sambil form/Excel tetap ada
     // buat yang lebih suka cara lama.
@@ -609,6 +612,13 @@ Failed : ${result.failed}`
 
     })
 
+    const totalPages = Math.max(1, Math.ceil(filteredPlans.length / PAGE_SIZE))
+    const halamanAman = Math.min(page, totalPages)
+    const plansHalamanIni = filteredPlans.slice(
+        (halamanAman - 1) * PAGE_SIZE,
+        halamanAman * PAGE_SIZE
+    )
+
     return (
 
         <div className="space-y-6">
@@ -1072,7 +1082,7 @@ Failed : ${result.failed}`
 
                     value={search}
 
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => { setSearch(e.target.value); setPage(1) }}
 
                     className="
       flex-1
@@ -1089,11 +1099,12 @@ Failed : ${result.failed}`
 
                     value={statusFilter}
 
-                    onChange={(e) =>
+                    onChange={(e) => {
                         setStatusFilter(
                             e.target.value
                         )
-                    }
+                        setPage(1)
+                    }}
 
                     className="
       bg-white
@@ -1127,11 +1138,12 @@ Failed : ${result.failed}`
 
                     value={salesFilter}
 
-                    onChange={(e) =>
+                    onChange={(e) => {
                         setSalesFilter(
                             e.target.value
                         )
-                    }
+                        setPage(1)
+                    }}
 
                     className="
       bg-white
@@ -1167,11 +1179,12 @@ Failed : ${result.failed}`
 
                     value={dateFilter}
 
-                    onChange={(e) =>
+                    onChange={(e) => {
                         setDateFilter(
                             e.target.value
                         )
-                    }
+                        setPage(1)
+                    }}
 
                     className="
       bg-white
@@ -1211,7 +1224,7 @@ Failed : ${result.failed}`
 
                         {
 
-                            filteredPlans
+                            plansHalamanIni
 
                                 .map((p: any) => {
                                     const distance =
@@ -1454,6 +1467,36 @@ Failed : ${result.failed}`
                     </tbody>
 
                 </table>
+
+                {totalPages > 1 && (
+                    <div className="flex items-center justify-between p-4 border-t border-slate-200">
+
+                        <span className="text-sm text-slate-500">
+                            Halaman {halamanAman} dari {totalPages} ({filteredPlans.length} visit plan)
+                        </span>
+
+                        <div className="flex gap-2">
+
+                            <button
+                                onClick={() => setPage(halamanAman - 1)}
+                                disabled={halamanAman <= 1}
+                                className="border border-slate-300 disabled:opacity-40 px-4 py-2 rounded-xl text-sm"
+                            >
+                                ‹ Sebelumnya
+                            </button>
+
+                            <button
+                                onClick={() => setPage(halamanAman + 1)}
+                                disabled={halamanAman >= totalPages}
+                                className="border border-slate-300 disabled:opacity-40 px-4 py-2 rounded-xl text-sm"
+                            >
+                                Berikutnya ›
+                            </button>
+
+                        </div>
+
+                    </div>
+                )}
 
             </div>
 
