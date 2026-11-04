@@ -6,10 +6,10 @@ import {
     useEffect,
     useState
 } from 'react'
+import type { ChangeEvent, FormEvent } from 'react'
 
 import { useRouter }
     from 'next/navigation'
-import { getDistanceFromLatLonInKm } from "../utils/distance"
 import { API_BASE_URL } from '@/app/utils/api-config'
 import VisitPlanCalendar from './VisitPlanCalendar'
 import TokoCombobox from '@/app/components/TokoCombobox'
@@ -17,6 +17,47 @@ import TokoCombobox from '@/app/components/TokoCombobox'
 // Role lapangan daun -- lihat hanya jadwalnya sendiri (bukan dasbor tim
 // lintas tanggal), sama seperti MD.
 const FIELD_ROLES = ['MD', 'SPG', 'SALES']
+
+// Bentuk minimal yang BENAR-BENAR dipakai di halaman ini -- cuma
+// field yang dibaca langsung di sini, bukan skema lengkap tabelnya.
+// TokoCombobox/VisitPlanCalendar sendiri masih menerima `any[]` (file
+// terpisah), jadi array bertipe lebih spesifik ini tetap cocok dioper
+// ke keduanya.
+interface SalesUser {
+    id: number
+    name: string
+}
+
+interface CustomerOption {
+    id: number
+    name: string
+    address?: string | null
+    latitude?: string | number | null
+    longitude?: string | number | null
+}
+
+interface VisitPlanCustomer {
+    id: number
+    name: string
+    latitude?: string | number | null
+    longitude?: string | number | null
+}
+
+interface VisitPlanRow {
+    id: number
+    user_id: number
+    customer_id: number
+    visit_date: string
+    status: string
+    Customer?: VisitPlanCustomer
+    User?: { id: number; name: string }
+    Visit?: { id: number } | null
+}
+
+interface Coordinates {
+    lat: number
+    lng: number
+}
 
 // "YYYY-MM-DD" hari ini di waktu lokal browser -- dipakai sebagai
 // default filter tanggal (halaman ini defaultnya tampil rencana HARI
@@ -40,20 +81,20 @@ export default function VisitPlansPage() {
         useState('')
 
     const [users, setUsers] =
-        useState<any[]>([])
+        useState<SalesUser[]>([])
 
     const [customers, setCustomers] =
-        useState<any[]>([])
+        useState<CustomerOption[]>([])
 
     const [plans, setPlans] =
-        useState<any[]>([])
+        useState<VisitPlanRow[]>([])
     const [
 
         currentPosition,
 
         setCurrentPosition
 
-    ] = useState<any>(null)
+    ] = useState<Coordinates | null>(null)
 
     const [form, setForm] =
         useState({
@@ -191,6 +232,11 @@ export default function VisitPlansPage() {
                 'role'
             )
 
+        // localStorage cuma ada di browser -- effect ini TIDAK bisa
+        // dipindah ke lazy initializer useState (lint "set-state-in-effect"
+        // biasanya minta itu), karena initializer ikut jalan saat SSR dan
+        // akan meledak "localStorage is not defined" di server.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setRole(userRole || '')
 
         fetchData()
@@ -203,7 +249,7 @@ export default function VisitPlansPage() {
     // CHANGE
     const handleChange = (
 
-        e: any
+        e: ChangeEvent<HTMLInputElement | HTMLSelectElement>
     ) => {
 
         setForm({
@@ -218,7 +264,7 @@ export default function VisitPlansPage() {
 
 
     const handleSubmit = async (
-        e: any
+        e: FormEvent<HTMLFormElement>
     ) => {
 
         e.preventDefault()
@@ -592,7 +638,7 @@ Failed : ${result.failed}`
     // mentah (semua tanggal) sementara tabel sudah menyaring lewat
     // search/status/sales/tanggal, jadi angkanya tidak nyambung dengan
     // baris yang benar-benar tampil.
-    const filteredPlans = plans.filter((p: any) => {
+    const filteredPlans = plans.filter((p: VisitPlanRow) => {
 
         const matchName =
             p.Customer?.name
@@ -740,7 +786,7 @@ Failed : ${result.failed}`
 
                                         {
 
-                                            users.map((u: any) => (
+                                            users.map((u: SalesUser) => (
 
                                                 <option
 
@@ -1004,7 +1050,7 @@ Failed : ${result.failed}`
 
                             filteredPlans.filter(
 
-                                (p: any) =>
+                                (p: VisitPlanRow) =>
 
                                     p.status === 'PENDING'
 
@@ -1030,7 +1076,7 @@ Failed : ${result.failed}`
 
                             filteredPlans.filter(
 
-                                (p: any) =>
+                                (p: VisitPlanRow) =>
 
                                     p.status === 'ON VISIT'
 
@@ -1056,7 +1102,7 @@ Failed : ${result.failed}`
 
                             filteredPlans.filter(
 
-                                (p: any) =>
+                                (p: VisitPlanRow) =>
 
                                     p.status === 'COMPLETED'
 
@@ -1161,7 +1207,7 @@ Failed : ${result.failed}`
 
                     {
 
-                        users.map((u: any) => (
+                        users.map((u: SalesUser) => (
 
                             <option key={u.id} value={u.id}>
                                 {u.name}
@@ -1226,7 +1272,7 @@ Failed : ${result.failed}`
 
                             plansHalamanIni
 
-                                .map((p: any) => {
+                                .map((p: VisitPlanRow) => {
                                     const distance =
 
                                         currentPosition &&
@@ -1301,7 +1347,7 @@ Failed : ${result.failed}`
 
                                                         onClick={() =>
                                                             window.open(
-                                                                `https://www.google.com/maps/dir/?api=1&destination=${p.Customer.latitude},${p.Customer.longitude}`,
+                                                                `https://www.google.com/maps/dir/?api=1&destination=${p.Customer?.latitude},${p.Customer?.longitude}`,
                                                                 '_blank'
                                                             )
                                                         }
@@ -1332,7 +1378,7 @@ Failed : ${result.failed}`
 
                                                                     router.push(
 
-                                                                        `/visit-detail/${p.Visit.id}`
+                                                                        `/visit-detail/${p.Visit?.id}`
 
                                                                     )
 
@@ -1368,7 +1414,7 @@ Failed : ${result.failed}`
 
                                                                     router.push(
 
-                                                                        `/visit-detail/${p.Visit.id}`
+                                                                        `/visit-detail/${p.Visit?.id}`
 
                                                                     )
 
