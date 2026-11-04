@@ -1,21 +1,22 @@
 const RoleMenuOverride = require('../models/roleMenuOverride.model')
 
 /**
- * Gerbang SERVER untuk menu web yang diatur lewat Menu Access.
+ * Gerbang SERVER generik untuk kapabilitas yang diatur lewat Menu
+ * Access (channel_id + platform + role + menu_key).
  *
- * Sidebar cuma menyembunyikan link -- tanpa cek ini, siapa pun yang tahu
- * URL API-nya tetap bisa memakai fitur yang menunya disembunyikan.
- * Aturannya sama persis dengan Sidebar.tsx: ADMINISTRATOR selalu boleh;
- * role lain ikut override (platform WEB + channel + role user itu), dan
- * kalau belum ada override pakai `defaultVisible` (grup ADMIN di
- * sidebar-menu.ts default tersembunyi = false).
+ * Sidebar/QuickMenu cuma menyembunyikan link/tombol -- tanpa cek ini,
+ * siapa pun yang tahu URL API-nya tetap bisa memakai fitur yang
+ * menunya/kapabilitasnya disembunyikan. ADMINISTRATOR selalu boleh;
+ * role lain ikut override (channel + role user itu), dan kalau belum
+ * ada override pakai `defaultVisible`.
  *
  * @param {object} user req.user
- * @param {string} menuKey key menu di sidebar-menu.ts
+ * @param {'WEB'|'MOBILE'} platform
+ * @param {string} menuKey key menu/kapabilitas
  * @param {boolean} defaultVisible
  * @returns {Promise<boolean>}
  */
-const hasWebMenuAccess = async (user, menuKey, defaultVisible = false) => {
+const hasMenuAccess = async (user, platform, menuKey, defaultVisible = false) => {
 
     if (!user) return false
 
@@ -27,7 +28,7 @@ const hasWebMenuAccess = async (user, menuKey, defaultVisible = false) => {
 
     const override = await RoleMenuOverride.findOne({
         where: {
-            platform: 'WEB',
+            platform,
             channel_id: user.channel_id,
             role: user.role,
             menu_key: menuKey,
@@ -38,4 +39,22 @@ const hasWebMenuAccess = async (user, menuKey, defaultVisible = false) => {
 
 }
 
-module.exports = { hasWebMenuAccess }
+/**
+ * Menu web -- dipakai Excel Uploader dkk. Aturannya sama persis dengan
+ * Sidebar.tsx (grup ADMIN di sidebar-menu.ts default tersembunyi).
+ */
+const hasWebMenuAccess = (user, menuKey, defaultVisible = false) =>
+    hasMenuAccess(user, 'WEB', menuKey, defaultVisible)
+
+/**
+ * Kapabilitas mobile -- dipakai Visit Nearby dkk. BEDA dengan menu
+ * QuickMenu biasa (yang defaultnya TAMPIL, lihat isMobileMenuVisibleByDefault
+ * di sfa-web): kapabilitas seperti ini sengaja dipanggil dengan
+ * defaultVisible=false oleh pemanggilnya -- kemampuan baru yang agak
+ * sensitif (bisa bikin kunjungan tanpa jadwal) mulai dari tertutup
+ * sampai admin eksplisit mengaktifkan per channel+jabatan.
+ */
+const hasMobileMenuAccess = (user, menuKey, defaultVisible = false) =>
+    hasMenuAccess(user, 'MOBILE', menuKey, defaultVisible)
+
+module.exports = { hasMenuAccess, hasWebMenuAccess, hasMobileMenuAccess }

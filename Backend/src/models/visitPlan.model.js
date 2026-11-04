@@ -24,6 +24,16 @@ const VisitPlan =
             status: {
                 type: DataTypes.STRING,
                 defaultValue: 'PENDING'
+            },
+
+            // 'SCHEDULED' (dibuat lewat Visit Plan biasa) atau 'ADHOC'
+            // (dibuat otomatis dari Visit Nearby -- lihat
+            // visit.controller.js checkInNearby). Dicatat cuma buat
+            // laporan nanti bisa membedakan kalau perlu; tidak mengubah
+            // alur check-in/activity/checkout yang sudah ada.
+            source: {
+                type: DataTypes.STRING,
+                defaultValue: 'SCHEDULED'
             }
 
         },

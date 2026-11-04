@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 
 import { API_BASE_URL } from '@/app/utils/api-config'
 import { SIDEBAR_MENU_GROUPS, isMenuVisibleByDefault } from '@/app/utils/sidebar-menu'
-import { MOBILE_MENU_GROUPS, isMobileMenuVisibleByDefault } from '@/app/utils/mobile-menu'
+import { MOBILE_MENU_GROUPS, isMobileMenuVisibleByDefault, MOBILE_MENU_CAPABILITIES } from '@/app/utils/mobile-menu'
 
 type Platform = 'WEB' | 'MOBILE'
 
@@ -58,6 +58,12 @@ const buildDefaultAccess = (channels: ChannelRow[]): AccessByKey => {
                 group.items.forEach((item) => {
                     acc[key][item.key] = isMobileMenuVisibleByDefault()
                 })
+            })
+            // Kapabilitas (mis. Visit Nearby) -- default-nya sendiri
+            // per kapabilitas, BUKAN isMobileMenuVisibleByDefault()
+            // seperti menu biasa (lihat komentar di mobile-menu.ts).
+            MOBILE_MENU_CAPABILITIES.forEach((cap) => {
+                acc[key][cap.key] = cap.defaultVisible
             })
         })
 
@@ -155,17 +161,55 @@ export default function MenuAccessPage() {
         setSavedFor(null)
     }
 
+    // Kapabilitas Mobile (mis. Visit Nearby) milik satu menu induk --
+    // dipakai buat mengunci checkbox-nya kalau induknya tidak
+    // dicentang, dan buat mematikannya otomatis begitu induknya
+    // dimatikan (lihat toggleItem).
+    const capabilitiesByParent = MOBILE_MENU_CAPABILITIES.reduce<Record<string, typeof MOBILE_MENU_CAPABILITIES>>(
+        (acc, cap) => {
+            acc[cap.parentKey] = [...(acc[cap.parentKey] || []), cap]
+            return acc
+        },
+        {}
+    )
+
     const toggleItem = (menuKey: string) => {
 
         if (!currentKey) return
 
-        setAccess((prev) => ({
-            ...prev,
-            [currentKey]: {
+        const capability = MOBILE_MENU_CAPABILITIES.find((c) => c.key === menuKey)
+
+        // Kapabilitas terkunci selama menu induknya tidak aktif -- tidak
+        // masuk akal mengaktifkan "Visit Nearby" kalau layar Nearby-nya
+        // sendiri disembunyikan.
+        if (capability && !access[currentKey]?.[capability.parentKey]) {
+            return
+        }
+
+        setAccess((prev) => {
+
+            const nilaiBaru = !prev[currentKey]?.[menuKey]
+
+            const next = {
                 ...prev[currentKey],
-                [menuKey]: !prev[currentKey]?.[menuKey],
-            },
-        }))
+                [menuKey]: nilaiBaru,
+            }
+
+            // Mematikan menu induk ikut mematikan semua kapabilitasnya --
+            // supaya tidak ada kondisi nyangkut "kapabilitas aktif tapi
+            // menunya sendiri disembunyikan".
+            if (!nilaiBaru && capabilitiesByParent[menuKey]) {
+                capabilitiesByParent[menuKey].forEach((cap) => {
+                    next[cap.key] = false
+                })
+            }
+
+            return {
+                ...prev,
+                [currentKey]: next,
+            }
+
+        })
 
         setSavedFor(null)
 
@@ -185,6 +229,18 @@ export default function MenuAccessPage() {
                 visible: !!access[currentKey]?.[item.key],
             }))
         )
+
+        // Kapabilitas (mis. Visit Nearby) ikut dikirim -- tersimpan di
+        // baris role_menu_overrides yang sama, cuma dikelompokkan
+        // terpisah di UI, bukan di payload.
+        if (selectedPlatform === 'MOBILE') {
+            items.push(
+                ...MOBILE_MENU_CAPABILITIES.map((cap) => ({
+                    menu_key: cap.key,
+                    visible: !!access[currentKey]?.[cap.key],
+                }))
+            )
+        }
 
         try {
 
@@ -341,29 +397,73 @@ export default function MenuAccessPage() {
                         {group.items.map((item) => {
                             const Icon = item.icon
                             const checked = !!roleAccess[item.key]
+                            const capabilities = capabilitiesByParent[item.key] || []
 
                             return (
-                                <div
-                                    key={item.key}
-                                    onClick={() => toggleItem(item.key)}
-                                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer hover:bg-slate-50"
-                                >
+                                <div key={item.key}>
+
                                     <div
-                                        className={`w-5 h-5 rounded-md border-[1.8px] flex items-center justify-center flex-shrink-0 ${checked
-                                            ? 'bg-blue-600 border-blue-600'
-                                            : 'bg-white border-slate-300'
-                                            }`}
+                                        onClick={() => toggleItem(item.key)}
+                                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer hover:bg-slate-50"
                                     >
-                                        {checked && (
-                                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                                                <path d="M2 6L5 9L10 3" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                            </svg>
-                                        )}
+                                        <div
+                                            className={`w-5 h-5 rounded-md border-[1.8px] flex items-center justify-center flex-shrink-0 ${checked
+                                                ? 'bg-blue-600 border-blue-600'
+                                                : 'bg-white border-slate-300'
+                                                }`}
+                                        >
+                                            {checked && (
+                                                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                                                    <path d="M2 6L5 9L10 3" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                                </svg>
+                                            )}
+                                        </div>
+                                        <Icon size={17} />
+                                        <div className="text-sm font-semibold text-slate-900">
+                                            {item.label}
+                                        </div>
                                     </div>
-                                    <Icon size={17} />
-                                    <div className="text-sm font-semibold text-slate-900">
-                                        {item.label}
-                                    </div>
+
+                                    {/* Kapabilitas menjorok di bawah menu induknya -- BUKAN
+                                        menu/layar baru, tidak nambah kotak di grid QuickMenu.
+                                        Terkunci abu-abu selama menu induk tidak dicentang. */}
+                                    {capabilities.map((cap) => {
+                                        const capChecked = checked && !!roleAccess[cap.key]
+
+                                        return (
+                                            <div
+                                                key={cap.key}
+                                                onClick={() => toggleItem(cap.key)}
+                                                className={`ml-7 flex items-center gap-3 pl-3 pr-3 py-2.5 rounded-xl border-l-2 ${checked
+                                                    ? 'border-blue-200 cursor-pointer hover:bg-slate-50'
+                                                    : 'border-slate-100 opacity-50 cursor-not-allowed'
+                                                    }`}
+                                            >
+                                                <div
+                                                    className={`w-5 h-5 rounded-md border-[1.8px] flex items-center justify-center flex-shrink-0 ${capChecked
+                                                        ? 'bg-blue-600 border-blue-600'
+                                                        : 'bg-white border-slate-300'
+                                                        }`}
+                                                >
+                                                    {capChecked && (
+                                                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                                                            <path d="M2 6L5 9L10 3" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                                        </svg>
+                                                    )}
+                                                </div>
+                                                <span className="text-slate-400">↳</span>
+                                                <div>
+                                                    <div className="text-sm font-semibold text-slate-900">
+                                                        {cap.label}
+                                                    </div>
+                                                    <div className="text-[11px] text-slate-400">
+                                                        {cap.description}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
+
                                 </div>
                             )
                         })}
@@ -458,11 +558,22 @@ export default function MenuAccessPage() {
                                 .filter((item) => !!roleAccess[item.key])
                                 .map((item) => {
                                     const Icon = item.icon
+                                    // Titik hijau, BUKAN kotak baru -- kapabilitas tidak
+                                    // nambah menu, cuma menandai kartu menu induknya aktif.
+                                    const capActive = (capabilitiesByParent[item.key] || [])
+                                        .some((cap) => !!roleAccess[cap.key])
+
                                     return (
                                         <div
                                             key={item.key}
-                                            className="bg-white rounded-2xl p-3 flex flex-col items-center gap-1.5 shadow-sm"
+                                            className="relative bg-white rounded-2xl p-3 flex flex-col items-center gap-1.5 shadow-sm"
                                         >
+                                            {capActive && (
+                                                <span
+                                                    className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-green-500"
+                                                    title="Visit Nearby aktif"
+                                                />
+                                            )}
                                             <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
                                                 <Icon size={18} />
                                             </div>

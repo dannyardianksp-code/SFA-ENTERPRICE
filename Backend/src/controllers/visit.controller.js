@@ -8,8 +8,10 @@ const { getDistance } = require('geolib')
 const VisitPlan = require('../models/visitPlan.model')
 const VisitActivity = require('../models/visitActivity.model')
 const { Op } = require('sequelize')
+const db = require('../config/database')
 const { localDateString } = require('../utils/date.util')
 const { resolveUserTimezone } = require('../utils/area.util')
+const { hasMobileMenuAccess } = require('../utils/menuAccess.util')
 
 const {
     parseCoordinate,
@@ -264,6 +266,151 @@ exports.checkIn = async (req, res) => {
 
     } catch (err) {
         return sendServerError(res, err, 'VISIT CHECK-IN')
+    }
+
+}
+
+const NEARBY_CHECKIN_MENU_KEY = 'nearbyCheckin'
+
+// CHECK-IN DARI VISIT NEARBY -- tanpa Visit Plan terjadwal. Dipakai
+// layar Nearby mobile (tombol "Visit Nearby"), BEDA endpoint dari
+// checkIn di atas karena tidak ada visit_plan_id yang dikirim klien --
+// satu-satunya input toko adalah customer_id.
+//
+// Begitu lolos semua gerbang, VisitPlan dibuat OTOMATIS (status
+// langsung 'ON VISIT', source 'ADHOC') lalu Visit dibuat menunjuk ke
+// situ -- dengan begitu layar "Kunjungan Berlangsung", Tambah Activity,
+// dan Check-out yang SUDAH ADA jalan apa adanya, tidak perlu kode baru
+// sama sekali buat langkah-langkah sesudah check-in.
+exports.checkInNearby = async (req, res) => {
+
+    try {
+
+        const {
+            customer_id,
+            latitude,
+            longitude,
+            accuracy,
+        } = req.body
+
+        // Gerbang kapabilitas -- diatur lewat Menu Access (platform
+        // MOBILE, menu_key 'nearbyCheckin'). Default TERTUTUP: beda
+        // dengan menu QuickMenu biasa yang defaultnya tampil, kapabilitas
+        // ini sengaja mulai mati sampai admin aktifkan eksplisit per
+        // channel+jabatan (lihat hasMobileMenuAccess).
+        const userDenganArea = await findUserWithAreas(req.user.id)
+
+        const boleh = await hasMobileMenuAccess(
+            userDenganArea,
+            NEARBY_CHECKIN_MENU_KEY,
+            false
+        )
+
+        if (!boleh) {
+            return sendError(
+                res,
+                403,
+                'Visit Nearby belum diaktifkan untuk channel/jabatan Anda.'
+            )
+        }
+
+        const customer = await Customer.findByPk(customer_id)
+
+        if (!customer || customer.status !== 'ACTIVE') {
+            return sendError(res, 404, 'Customer tidak ditemukan.')
+        }
+
+        // Akurasi & koordinat diperiksa sama persis dengan checkIn biasa
+        // di atas -- tidak ada jalan pintas keamanan baru buat Visit
+        // Nearby.
+        if (
+            typeof accuracy !== 'number' ||
+            !Number.isFinite(accuracy) ||
+            accuracy <= 0 ||
+            accuracy > 50
+        ) {
+            return sendError(
+                res,
+                400,
+                `Akurasi lokasi tidak valid atau terlalu rendah (±${accuracy} meter).`
+            )
+        }
+
+        const lat = parseCoordinate(latitude)
+        const lng = parseCoordinate(longitude)
+
+        if (!isValidLatitude(lat) || !isValidLongitude(lng)) {
+            return sendError(res, 400, 'Koordinat tidak valid.')
+        }
+
+        const customerLat = parseCoordinate(customer.latitude)
+        const customerLng = parseCoordinate(customer.longitude)
+
+        if (!isValidLatitude(customerLat) || !isValidLongitude(customerLng)) {
+            return sendError(res, 400, 'Lokasi customer belum tercatat.')
+        }
+
+        const distance = getDistance(
+            { latitude: lat, longitude: lng },
+            { latitude: customerLat, longitude: customerLng }
+        )
+
+        const radiusBerlaku = resolveCheckinRadius(userDenganArea)
+
+        if (distance > radiusBerlaku) {
+            return res.status(400).json({
+                message: `Terlalu jauh dari toko (${distance} meter)`,
+                distance,
+            })
+        }
+
+        // Gerbang area/channel SAMA dengan checkIn biasa -- Nearby
+        // sendiri sudah menyaring ke area+channel user (lihat
+        // getNearbyCustomers), tapi diperiksa lagi di sini supaya tidak
+        // bergantung ke satu-satunya lapisan di klien.
+        const gerbangArea = assertAreaChannelAccess(
+            userDenganArea,
+            customer.area_id,
+            customer.channel_id
+        )
+
+        if (gerbangArea) {
+            return sendError(res, gerbangArea.status, gerbangArea.message)
+        }
+
+        const timezone = await resolveUserTimezone(req.user.id)
+        const tanggal = localDateString(new Date(), timezone)
+
+        const visit = await db.transaction(async (t) => {
+
+            const plan = await VisitPlan.create({
+                user_id: req.user.id,
+                customer_id: customer.id,
+                visit_date: tanggal,
+                status: 'ON VISIT',
+                source: 'ADHOC',
+            }, { transaction: t })
+
+            return Visit.create({
+                user_id: req.user.id,
+                customer_id: customer.id,
+                visit_plan_id: plan.id,
+                latitude,
+                longitude,
+                location_accuracy: accuracy,
+                checkin_time: new Date(),
+            }, { transaction: t })
+
+        })
+
+        res.json({
+            message: 'Check-in berhasil',
+            distance,
+            data: visit,
+        })
+
+    } catch (err) {
+        return sendServerError(res, err, 'VISIT NEARBY CHECK-IN')
     }
 
 }
