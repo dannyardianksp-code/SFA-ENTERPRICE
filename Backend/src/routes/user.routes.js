@@ -67,6 +67,11 @@ const { Op } =
     require('sequelize')
 
 
+const {
+    paksaHurufBesar,
+} = require('../utils/userName.util')
+
+
 /**
  * Jawaban seragam untuk kedua handler saat transaksinya kalah balapan
  * lock.
@@ -358,7 +363,7 @@ router.post(
 
                     code,
 
-                    name,
+                    name: paksaHurufBesar(name),
 
                     email,
 
@@ -1157,7 +1162,7 @@ router.put(
 
                 }
 
-                const perubahan = { name, email, role }
+                const perubahan = { name: paksaHurufBesar(name), email, role }
 
                 // Field yang TIDAK dikirim klien tidak boleh ditulis NULL.
                 // Sequelize membuang key bernilai undefined, tapi pola lama
@@ -1443,7 +1448,7 @@ router.post(
                 if (kosong) continue
 
                 const code = String(row['Code'] ?? '').trim()
-                const name = String(row['Name'] ?? '').trim()
+                const name = paksaHurufBesar(String(row['Name'] ?? ''))
                 const email = String(row['Email'] ?? '').trim()
                 const password = String(row['Password'] ?? '')
                 const role = String(row['Role'] ?? '').trim()
