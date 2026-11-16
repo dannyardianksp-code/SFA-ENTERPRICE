@@ -139,12 +139,6 @@ Mount lengkapnya ada di `src/app.js`.
 | PUT | `/customer-groups/:id` | Admin-only. |
 | DELETE | `/customer-groups/:id` | Admin-only. |
 
-## Customer Product (mapping)
-
-| Method | Path | Keterangan |
-|---|---|---|
-| POST | `/customer-products` | Simpan mapping produk per customer (hapus-lalu-tulis-ulang). |
-
 ## Activity (master activity + field builder)
 
 | Method | Path | Keterangan |

@@ -4,7 +4,6 @@ const Product = require('./product.model')
 const GroupProduct = require('./groupProduct.model')
 const Visit = require('./visit.model')
 const User = require('./user.model')
-const CustomerProduct = require('./customerProduct.model')
 const VisitPlan = require('./visitPlan.model')
 const Area = require('./area.model')
 const Channel = require('./channel.model')
@@ -44,21 +43,6 @@ Visit.belongsTo(User, {
     foreignKey: 'user_id'
 })
 
-Customer.belongsToMany(Product, {
-
-    through: CustomerProduct,
-
-    foreignKey: 'customer_id'
-
-})
-
-Product.belongsToMany(Customer, {
-
-    through: CustomerProduct,
-
-    foreignKey: 'product_id'
-
-})
 VisitPlan.belongsTo(User, {
     foreignKey: 'user_id'
 })

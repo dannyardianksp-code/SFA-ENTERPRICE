@@ -59,9 +59,6 @@ const VisitPlan =
 const SalesOrder =
     require('../models/salesOrder.model')
 
-const CustomerProduct =
-    require('../models/customerProduct.model')
-
 /**
  * Relasi yang selalu disertakan pada respons satu customer.
  *
@@ -1328,8 +1325,6 @@ exports.delete = async (req, res) => {
                 'Customer ini sudah punya riwayat kunjungan/jadwal/order -- tidak bisa dihapus.'
             )
         }
-
-        await CustomerProduct.destroy({ where: { customer_id: customer.id } })
 
         await customer.destroy()
 

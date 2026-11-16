@@ -873,34 +873,6 @@ export default function Sidebar({
 //                     )
 
 //                 }
-//                 {/* Mapping Product*/}
-//                 {
-
-//                     hasAccess([
-//                         'ADMINISTRATOR'
-
-
-//                     ])
-
-//                     && (
-
-//                         <li>
-
-//                             <Link
-//                                 href="/customer-products"
-//                                 style={{
-//                                     color: '#fff'
-//                                 }}
-//                             >
-//                                 Mapping Product
-//                             </Link>
-
-//                         </li>
-
-//                     )
-
-//                 }
-
 
 //                 {/* USERS */}
 //                 {
