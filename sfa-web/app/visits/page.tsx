@@ -263,7 +263,7 @@ export default function VisitHistoryPage() {
                         label="Area"
                         options={areas.map((a: any) => ({ id: a.id, label: `${a.code} -- ${a.name}` }))}
                         selected={areaFilter}
-                        onChange={(ids) => { setAreaFilter(ids); setPage(1) }}
+                        onChange={(ids) => { setAreaFilter(ids as number[]); setPage(1) }}
                         emptyText="Belum ada data area."
                     />
 
@@ -272,7 +272,7 @@ export default function VisitHistoryPage() {
                         label="Sales"
                         options={users.map((u: any) => ({ id: u.id, label: u.name }))}
                         selected={salesFilter}
-                        onChange={(ids) => { setSalesFilter(ids); setPage(1) }}
+                        onChange={(ids) => { setSalesFilter(ids as number[]); setPage(1) }}
                         searchable
                         emptyText="Belum ada data sales."
                     />

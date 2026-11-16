@@ -310,7 +310,7 @@ export default function ActivityListPage() {
                         label="Area"
                         options={areas.map((a: any) => ({ id: a.id, label: `${a.code} -- ${a.name}` }))}
                         selected={areaFilter}
-                        onChange={(ids) => { setAreaFilter(ids); setPage(1) }}
+                        onChange={(ids) => { setAreaFilter(ids as number[]); setPage(1) }}
                         emptyText="Belum ada data area."
                     />
 
@@ -319,7 +319,7 @@ export default function ActivityListPage() {
                         label="Sales"
                         options={salesUsers.map((u: any) => ({ id: u.id, label: u.name }))}
                         selected={salesFilter}
-                        onChange={(ids) => { setSalesFilter(ids); setPage(1) }}
+                        onChange={(ids) => { setSalesFilter(ids as number[]); setPage(1) }}
                         searchable
                         emptyText="Belum ada data sales."
                     />
@@ -329,7 +329,7 @@ export default function ActivityListPage() {
                         label="Kegiatan"
                         options={activityTypes.map((t: any) => ({ id: t.id, label: t.name }))}
                         selected={activityFilter}
-                        onChange={(ids) => { setActivityFilter(ids); setPage(1) }}
+                        onChange={(ids) => { setActivityFilter(ids as number[]); setPage(1) }}
                         searchable
                         emptyText="Belum ada data kegiatan."
                     />

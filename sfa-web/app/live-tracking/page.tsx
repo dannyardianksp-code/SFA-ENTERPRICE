@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { API_BASE_URL } from '@/app/utils/api-config'
+import MultiSelectFilter from '@/app/components/MultiSelectFilter'
 
 const LiveTrackingMap = dynamic(() => import('../components/LiveTrackingMap'), {
     ssr: false
@@ -38,6 +39,12 @@ export default function LiveTrackingPage() {
     const [locations, setLocations] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [lastFetch, setLastFetch] = useState<Date | null>(null)
+    const [role, setRole] = useState('')
+    const [roleFilter, setRoleFilter] = useState<string[]>([])
+
+    useEffect(() => {
+        setRole(localStorage.getItem('role') || '')
+    }, [])
 
     // ts selalu beda tiap klik -- referensi object baru, jadi efek di
     // LiveTrackingMap tetap kepicu walau baris yang sama diklik dua kali
@@ -77,6 +84,21 @@ export default function LiveTrackingPage() {
 
     }, [])
 
+    const roleOptions = Array.from(
+        new Set(
+            locations
+                .map((loc: any) => loc.User?.role)
+                .filter(Boolean)
+        )
+    )
+        .sort()
+        .map((r: string) => ({ id: r, label: r }))
+
+    const filteredLocations =
+        roleFilter.length === 0
+            ? locations
+            : locations.filter((loc: any) => roleFilter.includes(loc.User?.role))
+
     return (
         <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
 
@@ -105,8 +127,20 @@ export default function LiveTrackingPage() {
             <div className="bg-white rounded-3xl p-4 shadow flex gap-6 items-center text-sm text-slate-600">
                 <span>🟢 Update &lt; 5 menit lalu</span>
                 <span>⚪ Lebih lama</span>
+
+                {role === 'ADMINISTRATOR' && (
+                    <MultiSelectFilter
+                        icon="🧑‍💼"
+                        label="Jabatan"
+                        options={roleOptions}
+                        selected={roleFilter}
+                        onChange={(ids) => setRoleFilter(ids as string[])}
+                        emptyText="Belum ada data jabatan."
+                    />
+                )}
+
                 <span className="ml-auto text-slate-400">
-                    {locations.length} user
+                    {filteredLocations.length} user
                 </span>
             </div>
 
@@ -120,13 +154,15 @@ export default function LiveTrackingPage() {
                     <div className="p-10 text-center text-slate-400">
                         Memuat...
                     </div>
-                ) : locations.length === 0 ? (
+                ) : filteredLocations.length === 0 ? (
                     <div className="p-10 text-center text-slate-400">
-                        Belum ada posisi terkirim.
+                        {locations.length === 0
+                            ? 'Belum ada posisi terkirim.'
+                            : 'Tidak ada yang cocok dengan filter jabatan.'}
                     </div>
                 ) : (
                     <LiveTrackingMap
-                        locations={locations}
+                        locations={filteredLocations}
                         focusRequest={focusRequest}
                     />
                 )}
@@ -134,7 +170,7 @@ export default function LiveTrackingPage() {
             </div>
 
             {/* LIST */}
-            {!loading && locations.length > 0 && (
+            {!loading && filteredLocations.length > 0 && (
 
                 <div className="bg-white rounded-3xl shadow-lg overflow-hidden">
 
@@ -153,7 +189,7 @@ export default function LiveTrackingPage() {
 
                         <tbody>
 
-                            {locations.map((loc: any) => {
+                            {filteredLocations.map((loc: any) => {
 
                                 const segar =
                                     (Date.now() - new Date(loc.updated_at).getTime()) / 1000

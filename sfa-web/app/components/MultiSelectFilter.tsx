@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 export type MultiSelectOption = {
-    id: number
+    id: number | string
     label: string
 }
 
@@ -27,8 +27,8 @@ export default function MultiSelectFilter({
     icon: string
     label: string
     options: MultiSelectOption[]
-    selected: number[]
-    onChange: (ids: number[]) => void
+    selected: (number | string)[]
+    onChange: (ids: (number | string)[]) => void
     searchable?: boolean
     emptyText?: string
 }) {
@@ -52,7 +52,7 @@ export default function MultiSelectFilter({
 
     }, [open])
 
-    const toggle = (id: number) =>
+    const toggle = (id: number | string) =>
         onChange(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id])
 
     const visible = options.filter((o) =>
