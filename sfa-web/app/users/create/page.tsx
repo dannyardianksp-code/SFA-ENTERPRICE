@@ -478,7 +478,7 @@ export default function CreateUserPage() {
 
                     alert(
 
-                        data.error ||
+                        data.message ||
 
                         'Gagal create user'
 

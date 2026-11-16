@@ -401,7 +401,8 @@ export default function EditUserPage() {
             if (!res.ok) {
 
                 alert(
-                    data.error
+                    data.message ||
+                    'Gagal update user'
                 )
 
                 return
