@@ -6,6 +6,7 @@ const upload = require('../middleware/upload.middleware')
 router.post('/checkin', auth, upload.single('photo'), controller.checkIn)
 router.post('/checkout', auth, upload.single('photo'), controller.checkOut)
 router.get('/today', auth, controller.getToday)
+router.get('/report', auth, controller.getReport)
 router.get('/', auth, controller.getAll)
 
 module.exports = router

@@ -2,6 +2,7 @@ const fs = require('fs')
 const { Op } = require('sequelize')
 const Attendance = require('../models/attendance.model')
 const User = require('../models/user.model')
+const Area = require('../models/area.model')
 const { localDateString } = require('../utils/date.util')
 const { resolveUserTimezone } = require('../utils/area.util')
 const {
@@ -13,7 +14,13 @@ const { sendError, sendServerError } = require('../utils/response.util')
 const {
     resolveSubordinateUserIds,
     ownerWhere,
+    USER_ROLES,
 } = require('../utils/access.util')
+const {
+    resolveTimezoneFromUser,
+    buildReportRow,
+    summarize,
+} = require('../utils/attendanceReport.util')
 
 exports.checkIn = async (req, res) => {
 
@@ -289,6 +296,162 @@ exports.getAll = async (req, res) => {
 
     } catch (err) {
         return sendServerError(res, err, 'ATTENDANCE GET ALL')
+    }
+
+}
+
+
+// ======================
+// GET REPORT -- endpoint BARU, BERDIRI SENDIRI. Tidak dipakai dan
+// tidak mengubah apa pun di getAll/getToday/checkIn/checkOut di atas,
+// dan BELUM dipakai web/mobile yang sudah ada -- murni tambahan.
+//
+// Beda dengan getAll (baris mentah): di sini tanggal/jam sudah
+// diformat di zona waktu PEGAWAI masing-masing (bukan dipaksa WIB),
+// status (LENGKAP/BELUM_PULANG) sudah dihitung, dan ada rekap
+// (summary) di atas daftarnya -- pemanggil tinggal render, tidak perlu
+// fetch /users + /areas terpisah atau hitung ulang sendiri.
+//
+// Query (semua opsional): ?mine=1, ?from=YYYY-MM-DD&to=YYYY-MM-DD,
+// ?area_id=, ?user_id=, ?role= (satu atau lebih, dipisah koma, mis.
+// "MD,SPG" -- bukan dikunci di kode, supaya pemanggil yang menentukan
+// jabatan mana saja tanpa perlu ubah endpoint tiap kebutuhannya beda)
+// ======================
+exports.getReport = async (req, res) => {
+
+    try {
+
+        const bolehDilihat = await resolveSubordinateUserIds(req.user)
+
+        const where = ownerWhere(bolehDilihat)
+
+        if (req.query.mine === '1') {
+            where.user_id = req.user.id
+        }
+
+        // ?user_id eksplisit WAJIB tetap di dalam subtree yang boleh
+        // dilihat pemanggil -- bolehDilihat null berarti tidak
+        // dibatasi (ADMINISTRATOR dkk), jadi langsung dipakai apa
+        // adanya kalau begitu.
+        const userIdDiminta = Number(req.query.user_id)
+
+        if (Number.isInteger(userIdDiminta) && userIdDiminta > 0) {
+
+            if (bolehDilihat !== null && !bolehDilihat.includes(userIdDiminta)) {
+                return res.json({ summary: { hadir: 0, belum_pulang: 0 }, rows: [] })
+            }
+
+            where.user_id = userIdDiminta
+
+        }
+
+        const cocokTanggal = (nilai) =>
+            typeof nilai === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(nilai)
+
+        const dari = cocokTanggal(req.query.from) ? req.query.from : null
+        const sampai = cocokTanggal(req.query.to) ? req.query.to : null
+
+        if (dari && sampai) {
+            where.tanggal = { [Op.between]: [dari, sampai] }
+        }
+
+        const data = await Attendance.findAll({
+            where,
+            order: [['tanggal', 'DESC']],
+        })
+
+        if (data.length === 0) {
+            return res.json({ summary: { hadir: 0, belum_pulang: 0 }, rows: [] })
+        }
+
+        // User + area-nya di-bulk-fetch SATU query buat semua baris
+        // sekaligus -- bukan satu query per baris -- supaya laporan
+        // sebulan penuh buat satu tim tidak menghasilkan ratusan query
+        // database hanya untuk tahu zona waktu tiap orang.
+        const userIds = [...new Set(data.map((a) => a.user_id))]
+
+        const users = await User.findAll({
+            where: { id: { [Op.in]: userIds } },
+            attributes: ['id', 'name', 'role', 'area_id'],
+            include: [
+                {
+                    model: Area,
+                    as: 'AssignedAreas',
+                    attributes: ['id', 'name', 'timezone'],
+                    through: { attributes: [] },
+                },
+                {
+                    model: Area,
+                    attributes: ['id', 'name', 'timezone'],
+                },
+            ],
+        })
+
+        const userById = new Map(users.map((u) => [u.id, u]))
+
+        // area_id dari query -- disaring di JS (BUKAN di SQL), karena
+        // "area milik user" bisa dari AssignedAreas (bisa lebih dari
+        // satu) ATAU area_id legacy, sama pola dengan filter Area di
+        // web Report Attendance sekarang.
+        const areaIdDiminta = Number(req.query.area_id)
+        const areaFilterAktif = Number.isInteger(areaIdDiminta) && areaIdDiminta > 0
+
+        const cocokAreaFilter = (user) => {
+
+            if (!areaFilterAktif) return true
+
+            if (user?.AssignedAreas?.length) {
+                return user.AssignedAreas.some((ar) => ar.id === areaIdDiminta)
+            }
+
+            return user?.area_id === areaIdDiminta
+
+        }
+
+        // Nilai yang tidak dikenal (salah ketik, role yang sudah tidak
+        // ada) diam-diam dibuang -- bukan 400. ?role=MD,xxx tetap
+        // jalan sebagai "MD saja", bukan gagal total gara-gara satu
+        // token yang salah.
+        const roleDiminta = new Set(
+            String(req.query.role ?? '')
+                .split(',')
+                .map((r) => r.trim().toUpperCase())
+                .filter((r) => USER_ROLES.includes(r))
+        )
+
+        const roleFilterAktif = roleDiminta.size > 0
+
+        const cocokRoleFilter = (user) =>
+            !roleFilterAktif || roleDiminta.has(user?.role)
+
+        const rows = []
+
+        for (const baris of data) {
+
+            const user = userById.get(baris.user_id) ?? null
+
+            if (!cocokAreaFilter(user)) continue
+            if (!cocokRoleFilter(user)) continue
+
+            const timezone = resolveTimezoneFromUser(user)
+
+            const areaUntukNama =
+                user?.AssignedAreas?.[0] ?? user?.Area ?? null
+
+            rows.push(
+                buildReportRow(
+                    baris.toJSON(),
+                    { name: user?.name ?? null, area_name: areaUntukNama?.name ?? null },
+                    timezone
+                )
+            )
+
+        }
+
+        res.json({ summary: summarize(rows), rows })
+
+    } catch (err) {
+        return sendServerError(res, err, 'ATTENDANCE GET REPORT')
     }
 
 }
