@@ -287,10 +287,6 @@ export default function CustomersPage() {
                     return
 
                 }
-                console.log(
-                    data.data.id
-                )
-
                 window.location.href =
                     `/visit-detail/${data.data.id}`
 

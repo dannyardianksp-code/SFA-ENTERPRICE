@@ -194,10 +194,7 @@ export default function CreateCustomerPage() {
 
         const data = await res.json()
 
-        // 🚨 WAJIB CEK INI
         if (!res.ok) {
-
-            console.log('ERROR BACKEND:', data)
 
             alert(data.message || data.error)
 

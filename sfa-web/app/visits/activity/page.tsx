@@ -67,7 +67,6 @@ function VisitActivityContent() {
             setActivities(Array.isArray(data) ? data : [])
 
         } catch (err) {
-            console.log(err)
         }
 
     }
@@ -85,7 +84,7 @@ function VisitActivityContent() {
         })
             .then(res => res.json())
             .then(data => setProducts(Array.isArray(data) ? data : []))
-            .catch((err) => console.log(err))
+            .catch(() => {})
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
@@ -179,7 +178,6 @@ function VisitActivityContent() {
 
         } catch (err) {
 
-            console.log(err)
             alert('Terjadi kesalahan')
 
         } finally {

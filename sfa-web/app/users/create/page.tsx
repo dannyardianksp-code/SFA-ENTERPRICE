@@ -270,11 +270,6 @@ export default function CreateUserPage() {
                     const userData =
                         await userRes.json()
 
-                    console.log(
-                        'USERS:',
-                        userData
-                    )
-
                     // NORMALIZE ARRAY
                     const users =
 
@@ -328,8 +323,6 @@ export default function CreateUserPage() {
                 }
 
                 catch (err) {
-
-                    console.log(err)
 
                 }
 
@@ -497,8 +490,6 @@ export default function CreateUserPage() {
             }
 
             catch (err) {
-
-                console.log(err)
 
                 alert(
                     'Terjadi kesalahan'
