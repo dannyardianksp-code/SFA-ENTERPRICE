@@ -581,7 +581,13 @@ describe('penjaga identitas diri sendiri pada PUT /api/users/:id', () => {
 
         // Namanya harus benar-benar tersimpan. Tanpa ini tesnya juga lulus
         // pada handler yang mengembalikan 200 tanpa menulis apa pun.
-        assert.strictEqual(await kolomDi(idAdminSendiri, 'name'), namaBaru)
+        // Dibandingkan HURUF BESAR SEMUA, bukan namaBaru apa adanya --
+        // nama user dipaksa uppercase (lihat paksaHurufBesar di
+        // user.routes.js), jadi "diubah" tersimpan sebagai "DIUBAH".
+        assert.strictEqual(
+            await kolomDi(idAdminSendiri, 'name'),
+            namaBaru.toUpperCase()
+        )
 
         assert.strictEqual(
             await kolomDi(idAdminSendiri, 'role'),

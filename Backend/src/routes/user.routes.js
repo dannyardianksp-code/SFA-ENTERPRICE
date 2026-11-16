@@ -259,14 +259,7 @@ router.get(
 
         catch (err) {
 
-            console.log(err)
-
-            res.status(500).json({
-
-                error:
-                    err.message
-
-            })
+            return sendServerError(res, err, 'GET USERS')
 
         }
 
@@ -429,17 +422,7 @@ router.post(
 
         catch (err) {
 
-            console.log(err)
-
-            res.status(500).json({
-
-                error:
-                    err.message,
-
-                detail:
-                    err.errors
-
-            })
+            return sendServerError(res, err, 'CREATE USER')
 
         }
 
@@ -603,14 +586,7 @@ router.put(
                 return sendLockConflict(res)
             }
 
-            console.log(err)
-
-            res.status(500).json({
-
-                error:
-                    err.message
-
-            })
+            return sendServerError(res, err, 'UPDATE USER STATUS')
 
         }
 
@@ -934,14 +910,7 @@ router.get(
 
         catch (err) {
 
-            console.log(err)
-
-            res.status(500).json({
-
-                error:
-                    err.message
-
-            })
+            return sendServerError(res, err, 'GET USER BY ID')
 
         }
 
@@ -1262,14 +1231,7 @@ router.put(
                 return sendLockConflict(res)
             }
 
-            console.log(err)
-
-            res.status(500).json({
-
-                error:
-                    err.message
-
-            })
+            return sendServerError(res, err, 'UPDATE USER')
 
         }
 

@@ -7,6 +7,9 @@ const auth =
 const CustomerProduct =
     require('../models/customerProduct.model')
 
+const { sendServerError } =
+    require('../utils/response.util')
+
 // SAVE MAPPING
 router.post(
     '/',
@@ -46,9 +49,7 @@ router.post(
 
         } catch (err) {
 
-            res.status(500).json({
-                error: err.message
-            })
+            return sendServerError(res, err, 'SAVE CUSTOMER PRODUCT MAPPING')
 
         }
 
