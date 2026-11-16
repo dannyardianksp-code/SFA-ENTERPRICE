@@ -817,34 +817,6 @@ export default function Sidebar({
 
 //                 }
 
-//                 {/* VISIT MAP */}
-//                 {
-
-//                     hasAccess([
-//                         'ADMINISTRATOR',
-//                         'MANAGER',
-//                         'SUPERVISOR'
-//                     ])
-
-//                     && (
-
-//                         <li>
-
-//                             <Link
-//                                 href="/visits/map"
-//                                 style={{
-//                                     color: '#fff'
-//                                 }}
-//                             >
-//                                 Visits Map
-//                             </Link>
-
-//                         </li>
-
-//                     )
-
-//                 }
-
 //                 {/* ACTIVITY HISTORY */}
 //                 {
 
