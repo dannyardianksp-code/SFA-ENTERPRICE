@@ -196,7 +196,7 @@ export default function CreateCustomerPage() {
 
         if (!res.ok) {
 
-            alert(data.message || data.error)
+            alert(data.message)
 
             return
         }
