@@ -77,7 +77,7 @@ export default function MultiSelectFilter({
 
             {open && (
 
-                <div className="absolute left-0 top-full mt-2 w-72 bg-white rounded-2xl shadow-lg border border-slate-200 p-3 z-20">
+                <div className="absolute left-0 top-full mt-2 w-72 bg-white rounded-2xl shadow-lg border border-slate-200 p-3 z-[1100]">
 
                     <div className="flex items-center justify-between mb-2">
 
