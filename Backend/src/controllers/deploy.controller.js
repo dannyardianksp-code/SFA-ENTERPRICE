@@ -29,20 +29,21 @@ const verifySignature = (req) => {
     return a.length === b.length && crypto.timingSafeEqual(a, b)
 }
 
-// GitHub kirim webhook lalu langsung lanjut proses lain -- respons harus
-// dibalas dulu (200), deploy jalan di belakang setelahnya. Kalau deploy
-// gagal, tidak ada yang tahu lewat HTTP response (sudah terkirim); log
-// ke /tmp/deploy.log jadi satu-satunya jejak buat debug manual.
-const deployWebhook = (req, res) => {
-    if (!verifySignature(req)) {
-        return res.status(401).json({ message: 'Invalid signature' })
-    }
+// Push beruntun (beberapa commit dalam hitungan menit) bikin GitHub kirim
+// webhook beberapa kali sebelum deploy sebelumnya selesai -- dua "npm run
+// build" nimpa folder .next/ yang sama secara bersamaan, hasilnya build
+// korup (error "client reference manifest does not exist" dkk, baru
+// kejadian 2026-11-17). isDeploying mencegah dua rantai deploy jalan
+// bersamaan; pendingRerun memastikan push yang masuk SELAGI sibuk tidak
+// hilang begitu saja -- begitu rantai yang jalan selesai, langsung jalan
+// SEKALI LAGI (git pull otomatis ambil HEAD origin/main yang terbaru, jadi
+// satu rerun itu sudah mencakup semua push yang numpuk selama sibuk).
+let isDeploying = false
+let pendingRerun = false
 
-    if (req.body.ref !== 'refs/heads/main') {
-        return res.json({ ok: true, skipped: 'not main branch' })
-    }
+const jalankanDeploy = () => {
 
-    res.json({ ok: true, deploying: true })
+    isDeploying = true
 
     // sfa-web dibangun ulang & di-restart DULUAN -- proses itu independen
     // dari proses yang lagi jalanin script ini. sfa-backend restart
@@ -68,7 +69,37 @@ const deployWebhook = (req, res) => {
             `[${new Date().toISOString()}]\n${stdout}\n${stderr}\n` +
             (err ? `ERROR: ${err.message}\n` : 'OK\n')
         fs.appendFile('/tmp/deploy.log', log, () => {})
+
+        isDeploying = false
+
+        if (pendingRerun) {
+            pendingRerun = false
+            jalankanDeploy()
+        }
     })
+}
+
+// GitHub kirim webhook lalu langsung lanjut proses lain -- respons harus
+// dibalas dulu (200), deploy jalan di belakang setelahnya. Kalau deploy
+// gagal, tidak ada yang tahu lewat HTTP response (sudah terkirim); log
+// ke /tmp/deploy.log jadi satu-satunya jejak buat debug manual.
+const deployWebhook = (req, res) => {
+    if (!verifySignature(req)) {
+        return res.status(401).json({ message: 'Invalid signature' })
+    }
+
+    if (req.body.ref !== 'refs/heads/main') {
+        return res.json({ ok: true, skipped: 'not main branch' })
+    }
+
+    if (isDeploying) {
+        pendingRerun = true
+        return res.json({ ok: true, queued: true })
+    }
+
+    res.json({ ok: true, deploying: true })
+
+    jalankanDeploy()
 }
 
 module.exports = { deployWebhook }
