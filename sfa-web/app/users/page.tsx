@@ -10,6 +10,7 @@ import {
 } from 'next/navigation'
 
 import { API_BASE_URL } from '@/app/utils/api-config'
+import MultiSelectFilter from '@/app/components/MultiSelectFilter'
 
 export default function UsersPage() {
 
@@ -24,6 +25,13 @@ export default function UsersPage() {
     // "user ini ke-assign semua area" di kolom tabel butuh angka ini.
     const [areas, setAreas] =
         useState<any[]>([])
+
+    const [channels, setChannels] =
+        useState<any[]>([])
+
+    const [channelFilter, setChannelFilter] = useState<number[]>([])
+    const [areaFilter, setAreaFilter] = useState<number[]>([])
+    const [supervisorFilter, setSupervisorFilter] = useState<number[]>([])
 
     const fetchUsers =
         async () => {
@@ -97,10 +105,48 @@ export default function UsersPage() {
 
         }
 
+    const fetchChannels =
+        async () => {
+
+            const token =
+                localStorage.getItem(
+                    'token'
+                )
+
+            const res =
+                await fetch(
+
+                    `${API_BASE_URL}/channels`,
+
+                    {
+
+                        headers: {
+
+                            Authorization:
+                                `Bearer ${token}`
+
+                        }
+
+                    }
+
+                )
+
+            const data =
+                await res.json()
+
+            setChannels(
+                Array.isArray(data)
+                    ? data
+                    : []
+            )
+
+        }
+
     useEffect(() => {
 
         fetchUsers()
         fetchAreas()
+        fetchChannels()
 
     }, [])
 
@@ -307,11 +353,26 @@ export default function UsersPage() {
     const PAGE_SIZE = 10
     const [page, setPage] = useState(1)
 
+    // Supervisor diturunkan dari daftar user yang sudah di-fetch (siapa
+    // saja yang pernah dipasang sebagai atasan user lain) -- bukan
+    // fetch terpisah, karena GET /users sudah menyertakan Supervisor
+    // tiap baris.
+    const supervisorOptions = Array.from(
+        new Map(
+            users
+                .map((u: any) => u.Supervisor)
+                .filter(Boolean)
+                .map((s: any) => [s.id, s])
+        ).values()
+    )
+        .sort((a: any, b: any) => a.name.localeCompare(b.name))
+        .map((s: any) => ({ id: s.id, label: s.name }))
+
     const filteredUsers = users.filter((u: any) => {
 
         const keyword = search.toLowerCase()
 
-        return (
+        const cocokKeyword =
             u.name?.toLowerCase().includes(keyword) ||
             u.email?.toLowerCase().includes(keyword) ||
             u.role?.toLowerCase().includes(keyword) ||
@@ -320,7 +381,27 @@ export default function UsersPage() {
                 a.code?.toLowerCase().includes(keyword)
             ) ||
             u.Channel?.code?.toLowerCase().includes(keyword)
-        )
+
+        const cocokChannel =
+            channelFilter.length === 0 ||
+            channelFilter.includes(u.Channel?.id)
+
+        const userAreaIds =
+            u.AssignedAreas && u.AssignedAreas.length > 0
+                ? u.AssignedAreas.map((a: any) => a.id)
+                : u.Area?.id
+                    ? [u.Area.id]
+                    : []
+
+        const cocokArea =
+            areaFilter.length === 0 ||
+            userAreaIds.some((id: number) => areaFilter.includes(id))
+
+        const cocokSupervisor =
+            supervisorFilter.length === 0 ||
+            supervisorFilter.includes(u.Supervisor?.id)
+
+        return cocokKeyword && cocokChannel && cocokArea && cocokSupervisor
     })
 
     const totalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE))
@@ -413,14 +494,42 @@ export default function UsersPage() {
                 </div>
             )}
 
-            <div className="bg-white rounded-3xl p-4 shadow flex gap-3 items-center">
+            <div className="bg-white rounded-3xl p-4 shadow flex gap-3 items-center flex-wrap">
 
                 <input
                     type="text"
                     placeholder="🔍 Search name, email, role..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="flex-1 border rounded-2xl p-3"
+                    className="flex-1 border rounded-2xl p-3 min-w-[200px]"
+                />
+
+                <MultiSelectFilter
+                    icon="🏷️"
+                    label="Channel"
+                    options={channels.map((c: any) => ({ id: c.id, label: c.name }))}
+                    selected={channelFilter}
+                    onChange={(ids) => { setChannelFilter(ids as number[]); setPage(1) }}
+                    emptyText="Belum ada data channel."
+                />
+
+                <MultiSelectFilter
+                    icon="📍"
+                    label="Area"
+                    options={areas.map((a: any) => ({ id: a.id, label: `${a.code} -- ${a.name}` }))}
+                    selected={areaFilter}
+                    onChange={(ids) => { setAreaFilter(ids as number[]); setPage(1) }}
+                    emptyText="Belum ada data area."
+                />
+
+                <MultiSelectFilter
+                    icon="🧑‍💼"
+                    label="Supervisor"
+                    options={supervisorOptions}
+                    selected={supervisorFilter}
+                    onChange={(ids) => { setSupervisorFilter(ids as number[]); setPage(1) }}
+                    searchable
+                    emptyText="Belum ada data supervisor."
                 />
 
             </div>
