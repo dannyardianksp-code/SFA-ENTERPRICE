@@ -18,6 +18,7 @@ import {
     Clock,
     Smartphone,
     FileSpreadsheet,
+    Building2,
 } from 'lucide-react'
 
 // Dipisah dari LucideIcon (tidak konsisten diekspor tiap versi paket) --
@@ -77,6 +78,7 @@ export const SIDEBAR_MENU_GROUPS: SidebarMenuGroup[] = [
             { key: 'users', href: '/users', label: 'Users', icon: UserCog },
             { key: 'activityMaster', href: '/activity/create', label: 'Activity Master', icon: Settings },
             { key: 'areas', href: '/areas', label: 'Areas', icon: MapPin },
+            { key: 'channels', href: '/channels', label: 'Channels', icon: Building2 },
             { key: 'classes', href: '/classes', label: 'Classes', icon: Tag },
             { key: 'customerGroups', href: '/customer-groups', label: 'Customer Groups', icon: Layers },
             { key: 'menuAccess', href: '/menu-access', label: 'Menu Access', icon: Lock },

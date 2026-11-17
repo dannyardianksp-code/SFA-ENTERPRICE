@@ -119,6 +119,9 @@ Mount lengkapnya ada di `src/app.js`.
 | Method | Path | Keterangan |
 |---|---|---|
 | GET | `/channels` | |
+| POST | `/channels` | Admin-only. Field: `code, name`. |
+| PUT | `/channels/:id` | Admin-only. |
+| DELETE | `/channels/:id` | Admin-only, ditolak kalau masih dipakai Area/Class/Activity/User. |
 
 ## Class
 *(klasifikasi toko -- PASAR/GROSIR/dll, beda dari Channel)*
